@@ -48,7 +48,7 @@ st.markdown('''
     .stTextInput input, div[data-baseweb="select"] { background-color: #130b2e !important; color: #ffffff !important; border: 1px solid rgba(179, 71, 255, 0.3) !important; border-radius: 8px !important; }
     .stTextArea textarea { background-color: #1a1038 !important; color: #00e5ff !important; border: 1px solid rgba(179, 71, 255, 0.5) !important; font-family: 'JetBrains Mono', monospace; line-height: 1.6; }
     .setting-panel { background: #0d0820; border: 1px solid rgba(179, 71, 255, 0.15); border-radius: 15px; padding: 25px; margin-bottom: 20px; box-shadow: 0 16px 48px rgba(0,0,0,0.6); }
-    .stButton>button { background: linear-gradient(135deg, #b347ff 0%, #7c4dff 50%, #448aff(100%)) !important; color: #ffffff !important; font-weight: 800 !important; font-size: 16px !important; border-radius: 10px !important; border: none !important; width: 100%; padding: 15px !important; transition: 0.3s; }
+    .stButton>button { background: linear-gradient(135deg, #b347ff 0%, #7c4dff 50%, #448aff 100%) !important; color: #ffffff !important; font-weight: 800 !important; font-size: 16px !important; border-radius: 10px !important; border: none !important; width: 100%; padding: 15px !important; transition: 0.3s; }
     .stButton>button:hover { transform: translateY(-2px); box-shadow: 0px 8px 30px rgba(179, 71, 255, 0.6); }
     </style>
 ''', unsafe_allow_html=True)
@@ -211,12 +211,20 @@ def parse_and_save_real_srt(raw_srt_text, output_file):
 def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_bypass=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)"):
     try:
         a_dur = get_file_duration(in_a)
+        v_max_dur = get_file_duration(in_v)
         segments = []
         total_v_dur = 0.0
         
         for start_sec, end_sec, _ in parsed_timestamps:
-            total_v_dur += (end_sec - start_sec)
-            v_part = ffmpeg.input(in_v, ss=start_sec, to=end_sec).video
+            if start_sec >= v_max_dur:
+                continue
+            safe_start = start_sec
+            safe_end = min(end_sec, v_max_dur)
+            if safe_end - safe_start < 0.1:
+                continue
+                
+            total_v_dur += (safe_end - safe_start)
+            v_part = ffmpeg.input(in_v, ss=safe_start, to=safe_end).video
             if use_bypass:
                 v_part = ffmpeg.filter(v_part, 'scale', '2*trunc(iw*1.08/2)', '2*trunc(ih*1.08/2)')
                 v_part = ffmpeg.filter(v_part, 'crop', 'iw/1.08', 'ih/1.08')
@@ -227,8 +235,9 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         video = ffmpeg.concat(*segments)
         audio = ffmpeg.input(in_a).audio
         
-        if total_v_dur > 0 and a_dur > 0:
-            speed_factor = a_dur / total_v_dur
+        if total_v_dur > 1.0 and a_dur > 0:
+            target_a_dur = total_v_dur - 0.5
+            speed_factor = a_dur / target_a_dur
             if 0.5 <= speed_factor <= 2.0:
                 audio = ffmpeg.filter(audio, 'atempo', speed_factor)
         
