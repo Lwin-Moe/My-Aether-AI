@@ -173,20 +173,35 @@ def parse_and_save_real_srt(raw_srt_text, output_file):
     clean_srt = raw_srt_text.replace("```srt", "").replace("```", "").strip()
     with open(output_file, "w", encoding="utf-8") as f: f.write(clean_srt)
         
-    pattern = re.compile(r'\\d+\\s+(\\d{2}:\\d{2}:\\d{2},\\d{3}) --> (\\d{2}:\\d{2}:\\d{2},\\d{3})\\s+(.*?)(?=\\n\\n|\\n\\d+\\s+\\d{2}|\\Z)', re.DOTALL)
-    matches = pattern.findall(clean_srt)
-    
     parsed_lines = []
     full_speech = []
-    for start_str, end_str, text in matches:
-        def to_sec(t):
-            h, m, s_ms = t.split(':')
-            s, ms = s_ms.split(',')
-            return int(h)*3600 + int(m)*60 + int(s) + int(ms)/1000.0
-        clean_text = text.strip().replace('\\n', ' ')
-        parsed_lines.append((to_sec(start_str), to_sec(end_str), clean_text))
-        full_speech.append(clean_text)
+    matches = list(re.finditer(r'(\d{2}:\d{2}:\d{2},\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2},\d{3})', clean_srt))
+    
+    for i in range(len(matches)):
+        start_str = matches[i].group(1)
+        end_str = matches[i].group(2)
+        text_start = matches[i].end()
         
+        if i + 1 < len(matches):
+            text_end = matches[i+1].start()
+            block = clean_srt[text_start:text_end].strip()
+            lines = block.split('\n')
+            if len(lines) > 0 and lines[-1].strip().isdigit():
+                lines.pop()
+            block = " ".join(lines)
+        else:
+            block = clean_srt[text_start:].strip().replace('\n', ' ')
+            
+        if block:
+            try:
+                def to_sec(t):
+                    h, m, s_ms = t.split(':')
+                    s, ms = s_ms.split(',')
+                    return int(h)*3600 + int(m)*60 + int(s) + int(ms)/1000.0
+                parsed_lines.append((to_sec(start_str), to_sec(end_str), block.strip()))
+                full_speech.append(block.strip())
+            except: pass
+            
     if not parsed_lines:
         parsed_lines.append((0.0, 10.0, "[pause=1.0] စာတန်းထိုး အပြောင်းအလဲလုပ်နေပါသည်။"))
         full_speech.append("[pause=1.0] စာတန်းထိုး အပြောင်းအလဲလုပ်နေပါသည်။")
