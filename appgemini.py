@@ -1,10 +1,8 @@
+```python
 # =====================================================================
-# 📌 AETHER FILMWORKS AI // STUDIO V51 (FINAL PRODUCTION READY)
+# 📌 AETHER FILMWORKS AI // STUDIO V51 (ULTIMATE MOBILE-SAFE VERSION)
 # =====================================================================
 
-# =====================================================================
-# 📌 အပိုင်း (၁): Library များနှင့် ကနဦးပြင်ဆင်မှုများ (Imports & API Setup)
-# =====================================================================
 import streamlit as st
 import google.generativeai as genai
 import os
@@ -40,7 +38,7 @@ def save_key(file_path, key):
     with open(file_path, "w", encoding="utf-8") as f: f.write(key)
 
 # =====================================================================
-# 📌 အပိုင်း (၂): App ၏ ဒီဇိုင်းနှင့် အသွင်အပြင် (Theme & Styling)
+# 📌 Theme & Styling
 # =====================================================================
 st.set_page_config(page_title="AETHER FILMWORKS AI // STUDIO V51", layout="wide")
 
@@ -55,14 +53,14 @@ st.markdown('''
     .stButton>button { background: linear-gradient(135deg, #b347ff 0%, #7c4dff 50%, #448aff 100%) !important; color: #ffffff !important; font-weight: 800 !important; font-size: 16px !important; border-radius: 10px !important; border: none !important; width: 100%; padding: 15px !important; transition: 0.3s; }
     .stButton>button:hover { transform: translateY(-2px); box-shadow: 0px 8px 30px rgba(179, 71, 255, 0.6); }
     </style>
-    ''', unsafe_allow_html=True)
+''', unsafe_allow_html=True)
 
 if "render_success" not in st.session_state: st.session_state.render_success = False
 if "generated_script" not in st.session_state: st.session_state.generated_script = ""
 if "original_transcript" not in st.session_state: st.session_state.original_transcript = ""
 
 # =====================================================================
-# 📌 အပိုင်း (၃): မီဒီယာပိုင်းဆိုင်ရာ နှင့် စာတန်းထိုးစနစ် (Media & SRT Parser)
+# 📌 Media & SRT Parser
 # =====================================================================
 def get_file_duration(file_path):
     try:
@@ -107,8 +105,8 @@ def parse_and_save_real_srt(raw_srt_text, output_file):
         if i + 1 < len(matches):
             text_end = matches[i+1].start()
             block = clean_srt[text_start:text_end].strip()
-            block = re.sub(r'
-\d+$', '', block).strip()
+            # SAFE LINE: Using chr(10) to avoid newline string literal errors on mobile copy
+            block = re.sub(chr(10) + r'\d+$', '', block).strip()
         else:
             block = clean_srt[text_start:].strip()
         if block:
@@ -127,7 +125,7 @@ def parse_and_save_real_srt(raw_srt_text, output_file):
     return parsed_lines, " ".join(full_speech)
 
 # =====================================================================
-# 📌 အပိုင်း (၄): အသံထွက်နှင့် အချိန်ကိုက်စနစ် (V49 AUTO-COOLDOWN TTS)
+# 📌 TTS & Auto-Sync 
 # =====================================================================
 async def generate_single_tts(text, voice_model, output_file, engine, ttsmaker_key="", eleven_key="", custom_eleven_id="", gemini_key=""):
     if not text.strip():
@@ -138,9 +136,8 @@ async def generate_single_tts(text, voice_model, output_file, engine, ttsmaker_k
         if not gemini_key: raise Exception("Gemini Synergy TTS API Key လိုအပ်ပါသည်။")
         keys_list = [k.strip() for k in gemini_key.split(",") if k.strip()]
         voice_name = "Puck" if "Puck" in voice_model else ("Charon" if "Charon" in voice_model else "Aoede")
-        prompt_text = "You are a professional Burmese movie narrator. Read the following text naturally and expressively.
-
-" + text
+        # SAFE LINE: Using chr(10) for newlines
+        prompt_text = "You are a professional Burmese movie narrator. Read the following text naturally and expressively." + chr(10) + chr(10) + text
         payload = {
             "contents": [{"parts": [{"text": prompt_text}]}],
             "safetySettings": [{"category": c, "threshold": "BLOCK_NONE"} for c in ["HARM_CATEGORY_HARASSMENT", "HARM_CATEGORY_HATE_SPEECH", "HARM_CATEGORY_SEXUALLY_EXPLICIT", "HARM_CATEGORY_DANGEROUS_CONTENT"]],
@@ -148,7 +145,7 @@ async def generate_single_tts(text, voice_model, output_file, engine, ttsmaker_k
         }
         
         last_err = ""
-        for retry in range(4): # 4 Cycles of Retries
+        for retry in range(4):
             for current_key in keys_list:
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key={current_key}"
                 res = requests.post(url, json=payload)
@@ -159,11 +156,11 @@ async def generate_single_tts(text, voice_model, output_file, engine, ttsmaker_k
                         audio_b64 = res_json["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
                         with wave.open(output_file, "wb") as wf:
                             wf.setnchannels(1); wf.setsampwidth(2); wf.setframerate(24000); wf.writeframes(base64.b64decode(audio_b64))
-                        return # Success
+                        return
                     except Exception as e: raise Exception(f"Parse Error: {e}")
                 elif res.status_code == 429:
                     last_err = "API Skip: 429 (Quota Exceeded)"
-                    continue # Skip to next key
+                    continue
                 elif res.status_code == 403:
                     last_err = "API Skip: 403 (Invalid Key)"
                     continue
@@ -171,9 +168,8 @@ async def generate_single_tts(text, voice_model, output_file, engine, ttsmaker_k
                     last_err = f"API Error: {res.status_code}"
                     continue
             
-            # If all keys failed in this cycle, and it's a 429 limit, let's just WAIT it out instead of failing!
             if "429" in last_err:
-                time.sleep(15) # Wait 15 seconds to let RPM limit reset
+                time.sleep(15)
             else:
                 time.sleep(3)
                 
@@ -198,8 +194,8 @@ async def compile_synced_audio(parsed_timestamps, voice_char, final_audio_out, e
             if gap > 0.1:
                 gap_file = os.path.join(temp_dir, f"gap_{idx}.wav")
                 (ffmpeg.input('anullsrc', f='lavfi', t=gap).output(gap_file, acodec='pcm_s16le', ac=1, ar='24000').run(cmd=FFMPEG_BINARY, overwrite_output=True, quiet=True))
-                f.write("file '" + os.path.abspath(gap_file) + "'
-")
+                # SAFE LINE
+                f.write(f"file '{os.path.abspath(gap_file)}'{chr(10)}")
                 current_time += gap
             await generate_single_tts(text, voice_char, raw_seg_file, engine, ttsmaker_key, eleven_key, custom_id, gemini_key)
             if "Synergy" in engine: time.sleep(4.5) 
@@ -214,23 +210,22 @@ async def compile_synced_audio(parsed_timestamps, voice_char, final_audio_out, e
                 pad_file = os.path.join(temp_dir, f"pad_{idx}.wav")
                 (ffmpeg.input('anullsrc', f='lavfi', t=pad_duration).output(pad_file, acodec='pcm_s16le', ac=1, ar='24000').run(cmd=FFMPEG_BINARY, overwrite_output=True, quiet=True))
                 with open("temp_pad_list.txt", "w", encoding="utf-8") as pf:
-                    pf.write("file '" + os.path.abspath(norm_seg_file) + "'
-")
-                    pf.write("file '" + os.path.abspath(pad_file) + "'
-")
+                    # SAFE LINE
+                    pf.write(f"file '{os.path.abspath(norm_seg_file)}'{chr(10)}")
+                    pf.write(f"file '{os.path.abspath(pad_file)}'{chr(10)}")
                 (ffmpeg.input('temp_pad_list.txt', format='concat', safe=0).output(final_seg_file, acodec='pcm_s16le', ac=1, ar='24000').run(cmd=FFMPEG_BINARY, overwrite_output=True, quiet=True))
                 final_dur = target_duration
             else:
                 shutil.copy(norm_seg_file, final_seg_file)
                 final_dur = actual_duration
-            f.write("file '" + os.path.abspath(final_seg_file) + "'
-")
+            # SAFE LINE
+            f.write(f"file '{os.path.abspath(final_seg_file)}'{chr(10)}")
             current_time += final_dur 
     try: (ffmpeg.input(concat_list_file, format='concat', safe=0).output(final_audio_out, acodec='libmp3lame', ar='44100').run(cmd=FFMPEG_BINARY, overwrite_output=True, quiet=True))
     except Exception as e: raise Exception(f"Concat Error: {e}")
 
 # =====================================================================
-# 📌 အပိုင်း (၅): ဗီဒီယို ပေါင်းစပ်ထုတ်လုပ်ခြင်း (Video Rendering)
+# 📌 Video Rendering
 # =====================================================================
 def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_bypass=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)"):
     try:
@@ -251,7 +246,7 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
     except ffmpeg.Error as e: return False, str(e)
 
 # =====================================================================
-# 📌 အပိုင်း (၆): အဓိက Menu နှင့် API ထည့်သွင်းခြင်း (UI & Navigation)
+# 📌 UI & Navigation
 # =====================================================================
 st.markdown('<h1 style="text-align:center; margin-bottom: 30px;">▲ AETHER FILMWORKS AI // STUDIO V51</h1>', unsafe_allow_html=True)
 
@@ -266,7 +261,7 @@ with st.sidebar:
     st.caption("✨ AI Studio Key (AIzaSy...) ကို သုံးပါ။ ဇာတ်ညွှန်း၊ Veo နှင့် Lyria အတွက် လိုအပ်ပါသည်။")
 
 # =====================================================================
-# 📌 အပိုင်း (၇): MODE 1 - MOVIE DUBBING
+# 📌 MODE 1 - MOVIE DUBBING
 # =====================================================================
 if app_mode == "🎙️ Movie Dubbing Studio":
     with st.sidebar:
@@ -274,7 +269,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         st.markdown("### 🔊 Voice Engine")
         audio_engine_choice = st.radio("Select Voice Platform", ["Edge-TTS (Default Free)", "Google Synergy TTS (Flash 3.1)"])
         
-        # V49 Synergy Key Input Integration
         if "Synergy" in audio_engine_choice:
             st.caption("✨ AI Studio Key (AIzaSy...) များစွာကို ကော်မာခံ၍ ထည့်နိုင်သည်။")
             synergy_key = st.text_input("Enter Keys for Synergy TTS", type="password", value=saved_gemini)
@@ -340,7 +334,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     with open("AETHER_RECAP_FINAL.mp4", "rb") as vf: st.download_button("📥 Download Video", vf, "Aether_Recap_Synced.mp4")
 
 # =====================================================================
-# 📌 အပိုင်း (၈): MODE 2 - VEO VIDEO STUDIO
+# 📌 MODE 2 - VEO VIDEO STUDIO
 # =====================================================================
 elif app_mode == "🎥 Veo Video Studio":
     st.markdown('<div class="setting-panel"><h3>🎥 Veo 2.0 Cinematic Video Generator</h3>', unsafe_allow_html=True)
@@ -371,7 +365,7 @@ elif app_mode == "🎥 Veo Video Studio":
                 except Exception as e: st.error(f"Error: {e}")
 
 # =====================================================================
-# 📌 အပိုင်း (၉): MODE 3 - LYRIA MUSIC STUDIO
+# 📌 MODE 3 - LYRIA MUSIC STUDIO
 # =====================================================================
 elif app_mode == "🎵 Lyria Music Studio":
     st.markdown('<div class="setting-panel"><h3>🎵 Lyria 3 Pro Music Generator</h3>', unsafe_allow_html=True)
