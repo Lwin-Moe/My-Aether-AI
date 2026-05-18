@@ -58,12 +58,20 @@ if "generated_script" not in st.session_state: st.session_state.generated_script
 if "original_transcript" not in st.session_state: st.session_state.original_transcript = ""
 
 # --- 2. CORE AUTOMATION FLOW ENGINES ---
+import subprocess
+
 def get_file_duration(file_path):
     try:
-        probe = ffmpeg.probe(file_path, cmd=FFMPEG_BINARY)
-        stream = next((stream for stream in probe['streams'] if stream['codec_type'] in ['video', 'audio']), None)
-        return float(stream['duration'])
-    except: return 60.0
+        # ffprobe မလိုဘဲ FFMPEG_BINARY သုံးပြီး ကြာချိန်ကို Regex နဲ့ တိုက်ရိုက် စက္ကန့်အလိုက် ဖတ်မည့်စနစ်
+        cmd = [FFMPEG_BINARY, "-i", file_path]
+        result = subprocess.run(cmd, capture_output=True, text=True, errors='ignore')
+        match = re.search(r"Duration:\s*(\d+):(\d+):(\d+\.\d+)", result.stderr)
+        if match:
+            h, m, s = match.groups()
+            return int(h) * 3600 + int(m) * 60 + float(s)
+    except:
+        pass
+    return 600.0 # Error တက်ခဲ့ရင်တောင် ၁၀ မိနစ်အထိ အရှည်ပေးထားမည်
 
 def download_video_from_url(url, output_path="input_temp.mp4"):
     if os.path.exists(output_path): os.remove(output_path)
