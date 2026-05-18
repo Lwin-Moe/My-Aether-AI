@@ -137,9 +137,7 @@ async def generate_single_tts(text, voice_model, output_file, engine, ttsmaker_k
         if not gemini_key: raise Exception("Gemini Synergy TTS API Key လိုအပ်ပါသည်။")
         keys_list = [k.strip() for k in gemini_key.split(",") if k.strip()]
         voice_name = "Puck" if "Puck" in voice_model else ("Charon" if "Charon" in voice_model else "Aoede")
-        prompt_text = f"You are a professional Burmese movie narrator. Read the following text naturally and expressively.
-
-{text}"
+        prompt_text = f"You are a professional Burmese movie narrator. Read the following text naturally and expressively.\n\n{text}"
         payload = {
             "contents": [{"parts": [{"text": prompt_text}]}],
             "safetySettings": [{"category": c, "threshold": "BLOCK_NONE"} for c in ["HARM_CATEGORY_HARASSMENT", "HARM_CATEGORY_HATE_SPEECH", "HARM_CATEGORY_SEXUALLY_EXPLICIT", "HARM_CATEGORY_DANGEROUS_CONTENT"]],
