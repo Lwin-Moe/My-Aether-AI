@@ -1,5 +1,5 @@
 # =====================================================================
-# 📌 AETHER FILMWORKS AI // STUDIO V51 (VEO & LYRIA INTEGRATED)
+# 📌 AETHER FILMWORKS AI // STUDIO V51 (FINAL PRODUCTION READY)
 # =====================================================================
 
 # =====================================================================
@@ -107,7 +107,8 @@ def parse_and_save_real_srt(raw_srt_text, output_file):
         if i + 1 < len(matches):
             text_end = matches[i+1].start()
             block = clean_srt[text_start:text_end].strip()
-            block = re.sub(r'\n\d+$', '', block).strip()
+            block = re.sub(r'
+\d+$', '', block).strip()
         else:
             block = clean_srt[text_start:].strip()
         if block:
@@ -126,7 +127,7 @@ def parse_and_save_real_srt(raw_srt_text, output_file):
     return parsed_lines, " ".join(full_speech)
 
 # =====================================================================
-# 📌 အပိုင်း (၄): အသံထွက်နှင့် အချိန်ကိုက်စနစ် (TTS & Auto-Sync Engine)
+# 📌 အပိုင်း (၄): အသံထွက်နှင့် အချိန်ကိုက်စနစ် (V49 AUTO-COOLDOWN TTS)
 # =====================================================================
 async def generate_single_tts(text, voice_model, output_file, engine, ttsmaker_key="", eleven_key="", custom_eleven_id="", gemini_key=""):
     if not text.strip():
@@ -137,14 +138,17 @@ async def generate_single_tts(text, voice_model, output_file, engine, ttsmaker_k
         if not gemini_key: raise Exception("Gemini Synergy TTS API Key လိုအပ်ပါသည်။")
         keys_list = [k.strip() for k in gemini_key.split(",") if k.strip()]
         voice_name = "Puck" if "Puck" in voice_model else ("Charon" if "Charon" in voice_model else "Aoede")
-        prompt_text = f"You are a professional Burmese movie narrator. Read the following text naturally and expressively.\n\n{text}"
+        prompt_text = "You are a professional Burmese movie narrator. Read the following text naturally and expressively.
+
+" + text
         payload = {
             "contents": [{"parts": [{"text": prompt_text}]}],
             "safetySettings": [{"category": c, "threshold": "BLOCK_NONE"} for c in ["HARM_CATEGORY_HARASSMENT", "HARM_CATEGORY_HATE_SPEECH", "HARM_CATEGORY_SEXUALLY_EXPLICIT", "HARM_CATEGORY_DANGEROUS_CONTENT"]],
             "generationConfig": {"responseModalities": ["AUDIO"], "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": voice_name}}}}
         }
+        
         last_err = ""
-        for retry in range(4):
+        for retry in range(4): # 4 Cycles of Retries
             for current_key in keys_list:
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key={current_key}"
                 res = requests.post(url, json=payload)
@@ -155,14 +159,26 @@ async def generate_single_tts(text, voice_model, output_file, engine, ttsmaker_k
                         audio_b64 = res_json["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
                         with wave.open(output_file, "wb") as wf:
                             wf.setnchannels(1); wf.setsampwidth(2); wf.setframerate(24000); wf.writeframes(base64.b64decode(audio_b64))
-                        return
+                        return # Success
                     except Exception as e: raise Exception(f"Parse Error: {e}")
-                elif res.status_code == 429: last_err = "API Skip: 429"; continue
-                elif res.status_code == 403: last_err = "API Skip: 403"; continue
-                else: last_err = f"API Error: {res.status_code}"; continue
-            if "429" in last_err: time.sleep(15)
-            else: time.sleep(3)
-        raise Exception(f"ထည့်သွင်းထားသော Key များအားလုံး အလုပ်မလုပ်ပါ (သို့) Limit ကုန်သွားပါပြီ။ (Last state: {last_err})")
+                elif res.status_code == 429:
+                    last_err = "API Skip: 429 (Quota Exceeded)"
+                    continue # Skip to next key
+                elif res.status_code == 403:
+                    last_err = "API Skip: 403 (Invalid Key)"
+                    continue
+                else:
+                    last_err = f"API Error: {res.status_code}"
+                    continue
+            
+            # If all keys failed in this cycle, and it's a 429 limit, let's just WAIT it out instead of failing!
+            if "429" in last_err:
+                time.sleep(15) # Wait 15 seconds to let RPM limit reset
+            else:
+                time.sleep(3)
+                
+        raise Exception(f"ထည့်သွင်းထားသော Key များအားလုံး အလုပ်မလုပ်ပါ (သို့) Limit ကုန်သွားပါပြီ။ မှန်ကန်သော AI Studio Key များ ထပ်ထည့်ပေးပါ။ (Last state: {last_err})")
+
     else:
         voice = "my-MM-ThihaNeural" if "Male" in voice_model else "my-MM-NilarNeural"
         await edge_tts.Communicate(text, voice).save(output_file)
@@ -182,7 +198,8 @@ async def compile_synced_audio(parsed_timestamps, voice_char, final_audio_out, e
             if gap > 0.1:
                 gap_file = os.path.join(temp_dir, f"gap_{idx}.wav")
                 (ffmpeg.input('anullsrc', f='lavfi', t=gap).output(gap_file, acodec='pcm_s16le', ac=1, ar='24000').run(cmd=FFMPEG_BINARY, overwrite_output=True, quiet=True))
-                f.write("file '" + os.path.abspath(gap_file) + "'\n")
+                f.write("file '" + os.path.abspath(gap_file) + "'
+")
                 current_time += gap
             await generate_single_tts(text, voice_char, raw_seg_file, engine, ttsmaker_key, eleven_key, custom_id, gemini_key)
             if "Synergy" in engine: time.sleep(4.5) 
@@ -197,14 +214,17 @@ async def compile_synced_audio(parsed_timestamps, voice_char, final_audio_out, e
                 pad_file = os.path.join(temp_dir, f"pad_{idx}.wav")
                 (ffmpeg.input('anullsrc', f='lavfi', t=pad_duration).output(pad_file, acodec='pcm_s16le', ac=1, ar='24000').run(cmd=FFMPEG_BINARY, overwrite_output=True, quiet=True))
                 with open("temp_pad_list.txt", "w", encoding="utf-8") as pf:
-                    pf.write("file '" + os.path.abspath(norm_seg_file) + "'\n")
-                    pf.write("file '" + os.path.abspath(pad_file) + "'\n")
+                    pf.write("file '" + os.path.abspath(norm_seg_file) + "'
+")
+                    pf.write("file '" + os.path.abspath(pad_file) + "'
+")
                 (ffmpeg.input('temp_pad_list.txt', format='concat', safe=0).output(final_seg_file, acodec='pcm_s16le', ac=1, ar='24000').run(cmd=FFMPEG_BINARY, overwrite_output=True, quiet=True))
                 final_dur = target_duration
             else:
                 shutil.copy(norm_seg_file, final_seg_file)
                 final_dur = actual_duration
-            f.write("file '" + os.path.abspath(final_seg_file) + "'\n")
+            f.write("file '" + os.path.abspath(final_seg_file) + "'
+")
             current_time += final_dur 
     try: (ffmpeg.input(concat_list_file, format='concat', safe=0).output(final_audio_out, acodec='libmp3lame', ar='44100').run(cmd=FFMPEG_BINARY, overwrite_output=True, quiet=True))
     except Exception as e: raise Exception(f"Concat Error: {e}")
@@ -243,7 +263,7 @@ with st.sidebar:
     saved_gemini = load_key(API_KEY_FILE)
     api_key_input = st.text_input("Gemini / AI Studio Keys (Comma separated)", type="password", value=saved_gemini)
     if api_key_input and api_key_input != saved_gemini: save_key(API_KEY_FILE, api_key_input)
-    st.caption("✨ AI Studio Key (AIzaSy...) ကို သုံးပါ။ Veo နှင့် Lyria အတွက် လိုအပ်ပါသည်။")
+    st.caption("✨ AI Studio Key (AIzaSy...) ကို သုံးပါ။ ဇာတ်ညွှန်း၊ Veo နှင့် Lyria အတွက် လိုအပ်ပါသည်။")
 
 # =====================================================================
 # 📌 အပိုင်း (၇): MODE 1 - MOVIE DUBBING
@@ -253,6 +273,14 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         st.markdown("---")
         st.markdown("### 🔊 Voice Engine")
         audio_engine_choice = st.radio("Select Voice Platform", ["Edge-TTS (Default Free)", "Google Synergy TTS (Flash 3.1)"])
+        
+        # V49 Synergy Key Input Integration
+        if "Synergy" in audio_engine_choice:
+            st.caption("✨ AI Studio Key (AIzaSy...) များစွာကို ကော်မာခံ၍ ထည့်နိုင်သည်။")
+            synergy_key = st.text_input("Enter Keys for Synergy TTS", type="password", value=saved_gemini)
+        else:
+            synergy_key = ""
+
         st.markdown("---")
         st.markdown("### 📐 Layout Settings")
         video_ratio = st.selectbox("Crop Ratio", ["Original", "9:16 (TikTok/Shorts)", "16:9 (YouTube)"])
@@ -300,8 +328,9 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     parsed_timestamps, _ = parse_and_save_real_srt(st.session_state.generated_script, srt_final)
                 except Exception as e: st.error(f"Error: {e}"); st.stop()
 
-            with st.spinner("⏳ [အဆင့် ၄/၆] AI Time-Sync Engine အား လည်ပတ်နေပါသည်..."):
-                asyncio.run(compile_synced_audio(parsed_timestamps, voice_char, a_generated, audio_engine_choice, "", "", "", api_key_input))
+            with st.spinner("⏳ [အဆင့် ၄/၆] AI Time-Sync Engine အား လည်ပတ်နေပါသည် (ဤအဆင့်သည် Limit မပြည့်စေရန် အချိန်အနည်းငယ် ယူပါမည်)..."):
+                synergy_k = synergy_key if synergy_key else api_key_input
+                asyncio.run(compile_synced_audio(parsed_timestamps, voice_char, a_generated, audio_engine_choice, "", "", "", synergy_k))
 
             with st.spinner("⏳ [အဆင့် ၅+၆] ဗီဒီယိုနှင့် စာတန်းထိုး ဖန်တီးနေပါသည်..."):
                 success, err_msg = render_premium_saas_video(v_input, a_generated, parsed_timestamps, v_final, video_ratio, cb_bypass, cb_blur, watermark_text, subtitle_mode)
