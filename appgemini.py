@@ -182,8 +182,7 @@ async def compile_synced_audio(parsed_timestamps, voice_char, final_audio_out, e
             if gap > 0.1:
                 gap_file = os.path.join(temp_dir, f"gap_{idx}.wav")
                 (ffmpeg.input('anullsrc', f='lavfi', t=gap).output(gap_file, acodec='pcm_s16le', ac=1, ar='24000').run(cmd=FFMPEG_BINARY, overwrite_output=True, quiet=True))
-                f.write(f"file '{os.path.abspath(gap_file)}'\n")
-
+                f.write("file '" + os.path.abspath(gap_file) + "'\n")
                 current_time += gap
             await generate_single_tts(text, voice_char, raw_seg_file, engine, ttsmaker_key, eleven_key, custom_id, gemini_key)
             if "Synergy" in engine: time.sleep(4.5) 
@@ -197,16 +196,15 @@ async def compile_synced_audio(parsed_timestamps, voice_char, final_audio_out, e
                 pad_duration = target_duration - actual_duration
                 pad_file = os.path.join(temp_dir, f"pad_{idx}.wav")
                 (ffmpeg.input('anullsrc', f='lavfi', t=pad_duration).output(pad_file, acodec='pcm_s16le', ac=1, ar='24000').run(cmd=FFMPEG_BINARY, overwrite_output=True, quiet=True))
-                with open("temp_pad_list.txt", "w", encoding="utf-8") as pf: pf.write(f"file '{os.path.abspath(norm_seg_file)}'\nfile '{os.path.abspath(pad_file)}'\n")
-
-")
+                with open("temp_pad_list.txt", "w", encoding="utf-8") as pf:
+                    pf.write("file '" + os.path.abspath(norm_seg_file) + "'\n")
+                    pf.write("file '" + os.path.abspath(pad_file) + "'\n")
                 (ffmpeg.input('temp_pad_list.txt', format='concat', safe=0).output(final_seg_file, acodec='pcm_s16le', ac=1, ar='24000').run(cmd=FFMPEG_BINARY, overwrite_output=True, quiet=True))
                 final_dur = target_duration
             else:
                 shutil.copy(norm_seg_file, final_seg_file)
                 final_dur = actual_duration
-            f.write(f"file '{os.path.abspath(final_seg_file)}'\n")
-
+            f.write("file '" + os.path.abspath(final_seg_file) + "'\n")
             current_time += final_dur 
     try: (ffmpeg.input(concat_list_file, format='concat', safe=0).output(final_audio_out, acodec='libmp3lame', ar='44100').run(cmd=FFMPEG_BINARY, overwrite_output=True, quiet=True))
     except Exception as e: raise Exception(f"Concat Error: {e}")
