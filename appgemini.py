@@ -211,34 +211,23 @@ def parse_and_save_real_srt(raw_srt_text, output_file):
 def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_bypass=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)"):
     try:
         a_dur = get_file_duration(in_a)
-        v_max_dur = get_file_duration(in_v)
-        segments = []
-        total_v_dur = 0.0
+        v_max_dur = get_file_duration(in_v) # မူရင်းဗီဒီယိုရဲ့ တကယ့်ကြာချိန် (၁ မိနစ် ၅ စက္ကန့်) ကို အတိအကျ ယူမယ်
         
-        # 🔥 FIX 1: V42 ရဲ့ မူရင်း ဗီဒီယိုဖြတ်တောက်ဆက်စပ်မှုစနစ်ကို ပြန်သုံးပြီး ရုပ်နဲ့အသံကို တစ်ဆက်တည်းဖြစ်အောင် လုပ်မယ်
-        for start_sec, end_sec, _ in parsed_timestamps:
-            if start_sec >= v_max_dur:
-                continue
-            safe_start = start_sec
-            safe_end = min(end_sec, v_max_dur)
-            if safe_end - safe_start < 0.1:
-                continue
-                
-            total_v_dur += (safe_end - safe_start)
-            v_part = ffmpeg.input(in_v, ss=safe_start, to=safe_end).video
-            if use_bypass:
-                v_part = ffmpeg.filter(v_part, 'scale', '2*trunc(iw*1.08/2)', '2*trunc(ih*1.08/2)')
-                v_part = ffmpeg.filter(v_part, 'crop', 'iw/1.08', 'ih/1.08')
-            v_part = ffmpeg.filter(v_part, 'scale', 'trunc(oh*a/2)*2', 720)
-            segments.append(v_part)
-            
-        if len(segments) == 0: return False, "No valid timestamps parsed."
-        video = ffmpeg.concat(*segments)
+        # 🔥 FIX 1: ဗီဒီယိုကို အပိုင်းပိုင်း ညှပ်မပစ်တော့ဘဲ မူရင်းအတိုင်း တစ်ဆက်တည်း တိုက်ရိုက်သုံးမယ်
+        # ဒါကြောင့် ဗီဒီယိုအရှည်က ၃၃ စက္ကန့် ဖြစ်မသွားတော့ဘဲ မူရင်းကြာချိန်အတိုင်း အပြည့်ထွက်လာပါလိမ့်မယ်
+        video = ffmpeg.input(in_v).video
+        
+        if use_bypass:
+            video = ffmpeg.filter(video, 'scale', '2*trunc(iw*1.08/2)', '2*trunc(ih*1.08/2)')
+            video = ffmpeg.filter(video, 'crop', 'iw/1.08', 'ih/1.08')
+        
+        video = ffmpeg.filter(video, 'scale', 'trunc(oh*a/2)*2', 720)
         audio = ffmpeg.input(in_a).audio
         
-        # 🔥 FIX 2: AI အသံထွက်လာတဲ့ ကြာချိန်ကို ဖြတ်တောက်ထားတဲ့ ဗီဒီယိုကြာချိန်နဲ့ ကွက်တိကျအောင် နှုန်းညှိပေးတဲ့စနစ်
-        if total_v_dur > 1.0 and a_dur > 0:
-            speed_factor = a_dur / total_v_dur
+        # 🔥 FIX 2: ဇာတ်ကြောင်းပြောသံတစ်ခုလုံးကို ဗီဒီယိုအရှည် (၁ မိနစ် ၅ စက္ကန့်) နဲ့ ကွက်တိကိုက်ဖြစ်အောင် အော်တို နှုန်းမြှင့်ညှိပေးသည့်စနစ်
+        if v_max_dur > 1.0 and a_dur > 0:
+            target_a_dur = v_max_dur - 0.5
+            speed_factor = a_dur / target_a_dur
             if 0.5 <= speed_factor <= 2.0:
                 audio = ffmpeg.filter(audio, 'atempo', speed_factor)
         
@@ -250,12 +239,12 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
             if watermark: video = ffmpeg.filter(video, 'drawtext', text=watermark, x='w-tw-15', y='15', fontsize=26, fontcolor='white@0.4')
         except: pass
         
-        # 🔥 FIX 3: FontName=sans-serif သုံးပြီး မြန်မာစာလုံးတွေ အကွက်⬜ ပေါ်တာကို ရာနှုန်းပြည့် ဖြေရှင်းမယ်
+        # 🔥 FIX 3: Font ကန့်သတ်ချက်ကို ဖယ်ရှားပြီး Linux ရဲ့ စနစ်အတိုင်း အော်တို ရည်ညွှန်းစေခြင်းဖြင့် စာတန်းထိုး မြန်မာစာလုံးတွေ အကွက် ⬜ ပေါ်တာကို ရာနှုန်းပြည့် ဖြေရှင်းမယ်
         if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"] and os.path.exists("subtitles.srt"):
             safe_srt_path = os.path.abspath("subtitles.srt")
-            video = ffmpeg.filter(video, 'subtitles', safe_srt_path, force_style="FontName=sans-serif,FontSize=16,PrimaryColour=&H00FFFF&,Outline=2,Alignment=2")
+            video = ffmpeg.filter(video, 'subtitles', safe_srt_path, force_style="FontSize=18,PrimaryColour=&H00FFFF&,Outline=2,Alignment=2")
 
-        out = ffmpeg.output(video, audio, out_v, vcodec='libx264', acodec='aac', preset='ultrafast', t=total_v_dur)
+        out = ffmpeg.output(video, audio, out_v, vcodec='libx264', acodec='aac', preset='ultrafast', t=v_max_dur)
         out.run(cmd=FFMPEG_BINARY, overwrite_output=True, capture_stdout=True, capture_stderr=True)
         return True, "Success"
     except ffmpeg.Error as e: return False, e.stderr.decode('utf-8', errors='ignore') if e.stderr else str(e)
