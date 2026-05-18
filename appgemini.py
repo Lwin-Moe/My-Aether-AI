@@ -239,10 +239,9 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         except: pass
         
         # 🔥 FIX 3: FontName=sans-serif ထည့်သွင်းပြီး Linux ရဲ့ မြန်မာစာစနစ် (System Fallback) ကို အတင်းမောင်းနှင်ပြီး အကွက်ပျောက်အောင်လုပ်မယ်
-        if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"] and os.path.exists("subtitles.srt"):
-            safe_srt_path = os.path.abspath("subtitles.srt") # 🔥 လမ်းကြောင်းအပြည့်ကို အော်တိုဆွဲယူမည့်စနစ်
+       if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"] and os.path.exists("subtitles.srt"):
+            safe_srt_path = os.path.abspath("subtitles.srt")
             video = ffmpeg.filter(video, 'subtitles', safe_srt_path, force_style="FontName=sans-serif,FontSize=16,PrimaryColour=&H00FFFF&,Outline=2,Alignment=2")
-            video = ffmpeg.filter(video, 'subtitles', 'subtitles.srt', force_style="FontName=sans-serif,FontSize=16,PrimaryColour=&H00FFFF&,Outline=2,Alignment=2")
 
         out = ffmpeg.output(video, audio, out_v, vcodec='libx264', acodec='aac', preset='ultrafast', t=v_max_dur)
         out.run(cmd=FFMPEG_BINARY, overwrite_output=True, capture_stdout=True, capture_stderr=True)
