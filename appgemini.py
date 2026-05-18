@@ -211,32 +211,21 @@ def parse_and_save_real_srt(raw_srt_text, output_file):
 def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_bypass=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)"):
     try:
         a_dur = get_file_duration(in_a)
-        v_max_dur = get_file_duration(in_v)
-        segments = []
-        total_v_dur = 0.0
+        v_max_dur = get_file_duration(in_v) # မူရင်းဗီဒီယိုရဲ့ တကယ့်အရှည်ကို တိုင်းယူမယ်
         
-        for start_sec, end_sec, _ in parsed_timestamps:
-            if start_sec >= v_max_dur:
-                continue
-            safe_start = start_sec
-            safe_end = min(end_sec, v_max_dur)
-            if safe_end - safe_start < 0.1:
-                continue
-                
-            total_v_dur += (safe_end - safe_start)
-            v_part = ffmpeg.input(in_v, ss=safe_start, to=safe_end).video
-            if use_bypass:
-                v_part = ffmpeg.filter(v_part, 'scale', '2*trunc(iw*1.08/2)', '2*trunc(ih*1.08/2)')
-                v_part = ffmpeg.filter(v_part, 'crop', 'iw/1.08', 'ih/1.08')
-            v_part = ffmpeg.filter(v_part, 'scale', 'trunc(oh*a/2)*2', 720)
-            segments.append(v_part)
-            
-        if len(segments) == 0: return False, "No valid timestamps parsed."
-        video = ffmpeg.concat(*segments)
+        # 🔥 FIX 1: ဗီဒီယိုကို အပိုင်းပိုင်း ညှပ်မပစ်တော့ဘဲ မူရင်း clip အရှည်အတိုင်း တစ်ဆက်တည်း တိုက်ရိုက်သုံးပြီး Continuity ထိန်းမယ်
+        video = ffmpeg.input(in_v).video
+        
+        if use_bypass:
+            video = ffmpeg.filter(video, 'scale', '2*trunc(iw*1.08/2)', '2*trunc(ih*1.08/2)')
+            video = ffmpeg.filter(video, 'crop', 'iw/1.08', 'ih-crop' if False else 'ih/1.08')
+        
+        video = ffmpeg.filter(video, 'scale', 'trunc(oh*a/2)*2', 720)
         audio = ffmpeg.input(in_a).audio
         
-        if total_v_dur > 1.0 and a_dur > 0:
-            target_a_dur = total_v_dur - 0.5
+        # 🔥 FIX 2: ဇာတ်ကြောင်းပြောသံတစ်ခုလုံးကို ဗီဒီယိုမပြီးခင် ၀.၅ စက္ကန့် အလိုမှာ ကွက်တိပြီးအောင် အော်တိုနှုန်းမြှင့်ညှိပေးသည့်စနစ်
+        if v_max_dur > 1.0 and a_dur > 0:
+            target_a_dur = v_max_dur - 0.5
             speed_factor = a_dur / target_a_dur
             if 0.5 <= speed_factor <= 2.0:
                 audio = ffmpeg.filter(audio, 'atempo', speed_factor)
@@ -249,14 +238,14 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
             if watermark: video = ffmpeg.filter(video, 'drawtext', text=watermark, x='w-tw-15', y='15', fontsize=26, fontcolor='white@0.4')
         except: pass
         
+        # 🔥 FIX 3: FontName=sans-serif ထည့်သွင်းပြီး Linux ရဲ့ မြန်မာစာစနစ် (System Fallback) ကို အတင်းမောင်းနှင်ပြီး အကွက်ပျောက်အောင်လုပ်မယ်
         if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"] and os.path.exists("subtitles.srt"):
-            video = ffmpeg.filter(video, 'subtitles', 'subtitles.srt', force_style="FontSize=16,PrimaryColour=&H00FFFF&,Outline=2,Alignment=2")
+            video = ffmpeg.filter(video, 'subtitles', 'subtitles.srt', force_style="FontName=sans-serif,FontSize=16,PrimaryColour=&H00FFFF&,Outline=2,Alignment=2")
 
-        out = ffmpeg.output(video, audio, out_v, vcodec='libx264', acodec='aac', preset='ultrafast', t=total_v_dur)
+        out = ffmpeg.output(video, audio, out_v, vcodec='libx264', acodec='aac', preset='ultrafast', t=v_max_dur)
         out.run(cmd=FFMPEG_BINARY, overwrite_output=True, capture_stdout=True, capture_stderr=True)
         return True, "Success"
     except ffmpeg.Error as e: return False, e.stderr.decode('utf-8', errors='ignore') if e.stderr else str(e)
-
 # --- 3. UI INTERFACE & NAVIGATION ---
 st.markdown('<h1 style="text-align:center; margin-bottom: 30px;">▲ AETHER FILMWORKS AI // STUDIO V52</h1>', unsafe_allow_html=True)
 
