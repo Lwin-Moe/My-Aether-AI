@@ -445,7 +445,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                 with open("AETHER_RECAP_FINAL.mp4", "rb") as vf: 
                     st.download_button("📥 Download Recap Video (MP4)", vf, "Aether_Recap.mp4", key="final_v")
                 if os.path.exists("subtitles.srt"):
-                    with open("subtitles.srt", "rb", encoding="utf-8") as sf: 
+                    with open("subtitles.srt", "rb") as sf: 
                         st.download_button("📥 Download Subtitles (.SRT)", sf, "Aether_Subs.srt", key="final_s")
                 st.markdown('</div>', unsafe_allow_html=True)
                 
