@@ -1,5 +1,5 @@
 # =====================================================================
-# 📌 AETHER FILMWORKS AI // STUDIO V52 (FINAL STABLE CORE)
+# 📌 AETHER FILMWORKS AI // STUDIO V52 (FINAL PRODUCTION READY)
 # =====================================================================
 
 import streamlit as st
@@ -48,7 +48,7 @@ st.markdown('''
     .stTextInput input, div[data-baseweb="select"] { background-color: #130b2e !important; color: #ffffff !important; border: 1px solid rgba(179, 71, 255, 0.3) !important; border-radius: 8px !important; }
     .stTextArea textarea { background-color: #1a1038 !important; color: #00e5ff !important; border: 1px solid rgba(179, 71, 255, 0.5) !important; font-family: 'JetBrains Mono', monospace; line-height: 1.6; }
     .setting-panel { background: #0d0820; border: 1px solid rgba(179, 71, 255, 0.15); border-radius: 15px; padding: 25px; margin-bottom: 20px; box-shadow: 0 16px 48px rgba(0,0,0,0.6); }
-    .stButton>button { background: linear-gradient(135deg, #b347ff 0%, #7c4dff 50%, #448aff 100%) !important; color: #ffffff !important; font-weight: 800 !important; font-size: 16px !important; border-radius: 10px !important; border: none !important; width: 100%; padding: 15px !important; transition: 0.3s; }
+    .stButton>button { background: linear-gradient(135deg, #b347ff 0%, #7c4dff 50%, #448aff(100%)) !important; color: #ffffff !important; font-weight: 800 !important; font-size: 16px !important; border-radius: 10px !important; border: none !important; width: 100%; padding: 15px !important; transition: 0.3s; }
     .stButton>button:hover { transform: translateY(-2px); box-shadow: 0px 8px 30px rgba(179, 71, 255, 0.6); }
     </style>
 ''', unsafe_allow_html=True)
@@ -212,7 +212,10 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
     try:
         a_dur = get_file_duration(in_a)
         segments = []
+        total_v_dur = 0.0
+        
         for start_sec, end_sec, _ in parsed_timestamps:
+            total_v_dur += (end_sec - start_sec)
             v_part = ffmpeg.input(in_v, ss=start_sec, to=end_sec).video
             if use_bypass:
                 v_part = ffmpeg.filter(v_part, 'scale', '2*trunc(iw*1.08/2)', '2*trunc(ih*1.08/2)')
@@ -223,6 +226,11 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         if len(segments) == 0: return False, "No valid timestamps parsed."
         video = ffmpeg.concat(*segments)
         audio = ffmpeg.input(in_a).audio
+        
+        if total_v_dur > 0 and a_dur > 0:
+            speed_factor = a_dur / total_v_dur
+            if 0.5 <= speed_factor <= 2.0:
+                audio = ffmpeg.filter(audio, 'atempo', speed_factor)
         
         if use_blur: video = ffmpeg.filter(video, 'drawbox', x=0, y='ih-90', w='iw', h=90, color='black@0.95', thickness='fill')
         if ratio == "9:16 (TikTok/Shorts)": video = ffmpeg.filter(video, 'crop', 'min(iw, ih*9/16)', 'ih')
@@ -235,7 +243,7 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"] and os.path.exists("subtitles.srt"):
             video = ffmpeg.filter(video, 'subtitles', 'subtitles.srt', force_style="FontSize=16,PrimaryColour=&H00FFFF&,Outline=2,Alignment=2")
 
-        out = ffmpeg.output(video, audio, out_v, vcodec='libx264', acodec='aac', preset='ultrafast', t=a_dur)
+        out = ffmpeg.output(video, audio, out_v, vcodec='libx264', acodec='aac', preset='ultrafast', t=total_v_dur)
         out.run(cmd=FFMPEG_BINARY, overwrite_output=True, capture_stdout=True, capture_stderr=True)
         return True, "Success"
     except ffmpeg.Error as e: return False, e.stderr.decode('utf-8', errors='ignore') if e.stderr else str(e)
@@ -372,7 +380,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                                         {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
                                     ]
                                 )
-                                gemini_prompt = "Listen to the audio and generate an SRT subtitle file in natural spoken Burmese (မြန်မာစကားပြောဟန်) summarizing the story. STRICT RULES: 1. You MUST include Synergy Audio Tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers] in the Burmese text to guide the TTS engine. 2. NO ENGLISH TRANSLITERATION: Translate meanings correctly. 3. Output ONLY valid SRT format."
+                                gemini_prompt = "Listen to the ENTIRE audio file from the absolute beginning to the very last second. Do NOT truncate, skip, or summarize the ending. You MUST generate a complete SRT subtitle file in natural spoken Burmese (မြန်မာစကားပြောဟန်) covering the WHOLE video duration until the very end. 🛑 STRICT RULES: 1. Include Synergy Audio Tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers] to guide the voice naturally. 2. NO ENGLISH TRANSLITERATION. 3. Output ONLY valid SRT format."
                                 response = model.generate_content([audio_file, gemini_prompt])
                                 raw_output_text = response.text.strip()
                                 genai.delete_file(audio_file.name)
@@ -401,7 +409,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                                 end_t = seg.get('end', 0) if isinstance(seg, dict) else getattr(seg, 'end', 0)
                                 text_seg = seg.get('text', '') if isinstance(seg, dict) else getattr(seg, 'text', '')
                                 def fmt_t(s): return f"{int(s//3600):02d}:{int((s%3600)//60):02d}:{int(s%60):02d},{int((s-int(s))*1000):03d}"
-                                transcript_srt += f"{i}\\n{fmt_t(start_t)} --> {fmt_t(end_t)}\\n{text_seg.strip()}\\n\\n"
+                                transcript_srt += f"{i}\n{fmt_t(start_t)} --> {fmt_t(end_t)}\n{text_seg.strip()}\n\n"
                         else: transcript_srt = getattr(transcription, 'text', str(transcription))
                         
                         st.session_state.original_transcript = transcript_srt
