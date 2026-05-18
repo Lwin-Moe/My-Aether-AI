@@ -1,5 +1,5 @@
 # =====================================================================
-# 📌 AETHER FILMWORKS AI // STUDIO V51 (BASED ON STABLE V42 CORE)
+# 📌 AETHER FILMWORKS AI // STUDIO V52 (PURE V42 CORE + AUTO-SWITCH)
 # =====================================================================
 
 import streamlit as st
@@ -37,9 +37,9 @@ def save_key(file_path, key):
     with open(file_path, "w", encoding="utf-8") as f: f.write(key)
 
 # --- 1. THEME & STYLING ---
-st.set_page_config(page_title="AETHER FILMWORKS AI // STUDIO V51", layout="wide")
+st.set_page_config(page_title="AETHER FILMWORKS AI // STUDIO V52", layout="wide")
 
-st.markdown("""
+st.markdown('''
     <style>
     .stApp { background: linear-gradient(135deg, #080510 0%, #0d0820 40%, #130b2e 100%) !important; color: #f0e6ff !important; font-family: 'Inter', sans-serif; }
     section[data-testid="stSidebar"] { background-color: #080510 !important; border-right: 1px solid rgba(179, 71, 255, 0.2) !important; }
@@ -51,7 +51,7 @@ st.markdown("""
     .stButton>button { background: linear-gradient(135deg, #b347ff 0%, #7c4dff 50%, #448aff 100%) !important; color: #ffffff !important; font-weight: 800 !important; font-size: 16px !important; border-radius: 10px !important; border: none !important; width: 100%; padding: 15px !important; transition: 0.3s; }
     .stButton>button:hover { transform: translateY(-2px); box-shadow: 0px 8px 30px rgba(179, 71, 255, 0.6); }
     </style>
-    """, unsafe_allow_html=True)
+''', unsafe_allow_html=True)
 
 if "render_success" not in st.session_state: st.session_state.render_success = False
 if "generated_script" not in st.session_state: st.session_state.generated_script = ""
@@ -86,16 +86,16 @@ def extract_audio_fast(video_in, audio_out="temp_extracted.mp3"):
         return audio_out
     except: return None
 
-async def generate_tts(text, voice_model, output_file, pitch_val=0, speed_val=0, engine="Edge-TTS (Default Free)", ttsmaker_key="", eleven_key="", custom_eleven_id="", gemini_key=""):
+# 🚀 V42 PURE TTS ENGINE WITH AUTO-SWITCH (ONE SHOT)
+async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default Free)", ttsmaker_key="", eleven_key="", custom_eleven_id="", gemini_key=""):
+    if not text.strip(): return
+
     if "Synergy" in engine:
-        if not gemini_key: raise Exception("Gemini Synergy TTS အား အသုံးပြုရန် Gemini API Key လိုအပ်ပါသည်။")
+        if not gemini_key: raise Exception("Gemini Synergy TTS အား အသုံးပြုရန် API Key လိုအပ်ပါသည်။")
+        keys_list = [k.strip() for k in gemini_key.split(",") if k.strip()]
         
-        if "Puck" in voice_model: voice_name = "Puck"
-        elif "Charon" in voice_model: voice_name = "Charon"
-        else: voice_name = "Aoede"
-            
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key={gemini_key.split(',')[0].strip()}"
-        prompt_text = "You are a professional Burmese movie narrator. Read the following text naturally and expressively.\n\n" + text
+        voice_name = "Puck" if "Puck" in voice_model else ("Charon" if "Charon" in voice_model else "Aoede")
+        prompt_text = "You are a professional Burmese movie narrator. Read the following text naturally and expressively." + chr(10) + chr(10) + text
         
         payload = {
             "contents": [{"parts": [{"text": prompt_text}]}],
@@ -107,30 +107,40 @@ async def generate_tts(text, voice_model, output_file, pitch_val=0, speed_val=0,
             ],
             "generationConfig": {
                 "responseModalities": ["AUDIO"],
-                "speechConfig": {
-                    "voiceConfig": { "prebuiltVoiceConfig": { "voiceName": voice_name } }
-                }
+                "speechConfig": { "voiceConfig": { "prebuiltVoiceConfig": { "voiceName": voice_name } } }
             }
         }
-        res = requests.post(url, json=payload)
-        if res.status_code == 200:
-            res_json = res.json()
+        
+        last_err = ""
+        for idx, current_key in enumerate(keys_list):
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key={current_key}"
             try:
-                candidate = res_json.get("candidates", [{}])[0]
-                if candidate.get("finishReason") == "SAFETY":
-                    raise Exception("Safety Error: ဇာတ်ညွှန်းတွင် အကြမ်းဖက်မှု/မသင့်လျော်သော စကားလုံးများ ပါဝင်နေသဖြင့် AI မှ အသံထွက်ပေးရန် ငြင်းဆိုလိုက်ပါသည်။")
-                
-                audio_b64 = candidate["content"]["parts"][0]["inlineData"]["data"]
-                pcm_data = base64.b64decode(audio_b64)
-                with wave.open(output_file, "wb") as wf:
-                    wf.setnchannels(1)
-                    wf.setsampwidth(2)
-                    wf.setframerate(24000)
-                    wf.writeframes(pcm_data)
-                return
+                res = requests.post(url, json=payload)
+                if res.status_code == 200:
+                    candidate = res.json().get("candidates", [{}])[0]
+                    if candidate.get("finishReason") == "SAFETY":
+                        raise Exception("Safety Error: AI မှ အသံထွက်ပေးရန် ငြင်းဆိုလိုက်ပါသည်။")
+                    
+                    audio_b64 = candidate["content"]["parts"][0]["inlineData"]["data"]
+                    pcm_data = base64.b64decode(audio_b64)
+                    with wave.open(output_file, "wb") as wf:
+                        wf.setnchannels(1)
+                        wf.setsampwidth(2)
+                        wf.setframerate(24000)
+                        wf.writeframes(pcm_data)
+                    return
+                elif res.status_code == 429:
+                    last_err = f"Key {current_key[-4:]} ၏ တစ်နေ့စာ Limit (10 ခါ) ပြည့်သွားပါပြီ။"
+                    continue
+                else:
+                    last_err = f"Gemini API Error ({res.status_code}): {res.text}"
+                    continue
             except Exception as e: 
-                raise Exception(f"Parse Error ({e})\n\nAPI မှပြန်လာသောစာသား: {str(res_json)[:300]}")
-        else: raise Exception(f"Gemini API Error ({res.status_code}): {res.text}")
+                last_err = str(e)
+                continue
+                
+        raise Exception(f"ထည့်သွင်းထားသော Key များအားလုံး Limit ပြည့်သွားပါပြီ။ Key အသစ် ထပ်ထည့်ပါ။
+နောက်ဆုံး Error: {last_err}")
 
     elif "ElevenLabs" in engine:
         if not eleven_key: raise Exception("ElevenLabs API Key လိုအပ်ပါသည်။")
@@ -158,15 +168,17 @@ async def generate_tts(text, voice_model, output_file, pitch_val=0, speed_val=0,
 
     else:
         voice = "my-MM-ThihaNeural" if "Male" in voice_model else "my-MM-NilarNeural"
-        communicate = edge_tts.Communicate(text, voice, rate=f"{speed_val:+}%", pitch=f"{pitch_val:+}Hz")
+        communicate = edge_tts.Communicate(text, voice)
         await communicate.save(output_file)
 
 def parse_and_save_real_srt(raw_srt_text, output_file):
     clean_srt = raw_srt_text.replace("```srt", "").replace("```", "").strip()
-    with open(output_file, "w", encoding="utf-8") as f:
-        f.write(clean_srt)
+    with open(output_file, "w", encoding="utf-8") as f: f.write(clean_srt)
         
-    pattern = re.compile(r'\d+\s+(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\s+(.*?)(?=\n\n|\n\d+\s+\d{2}|\Z)', re.DOTALL)
+    pattern = re.compile(r'\d+\s+(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\s+(.*?)(?=
+
+|
+\d+\s+\d{2}|\Z)', re.DOTALL)
     matches = pattern.findall(clean_srt)
     
     parsed_lines = []
@@ -176,7 +188,8 @@ def parse_and_save_real_srt(raw_srt_text, output_file):
             h, m, s_ms = t.split(':')
             s, ms = s_ms.split(',')
             return int(h)*3600 + int(m)*60 + int(s) + int(ms)/1000.0
-        clean_text = text.strip().replace('\n', ' ')
+        clean_text = text.strip().replace('
+', ' ')
         parsed_lines.append((to_sec(start_str), to_sec(end_str), clean_text))
         full_speech.append(clean_text)
         
@@ -203,11 +216,9 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         audio = ffmpeg.input(in_a).audio
         
         if use_blur: video = ffmpeg.filter(video, 'drawbox', x=0, y='ih-90', w='iw', h=90, color='black@0.95', thickness='fill')
-            
         if ratio == "9:16 (TikTok/Shorts)": video = ffmpeg.filter(video, 'crop', 'min(iw, ih*9/16)', 'ih')
         elif ratio == "16:9 (YouTube)": video = ffmpeg.filter(video, 'crop', 'iw', 'min(ih, iw*9/16)')
         
-        # FINAL WATERMARK FIX: Just try-except the drawtext to ensure it never crashes the render
         try:
             if watermark: video = ffmpeg.filter(video, 'drawtext', text=watermark, x='w-tw-15', y='15', fontsize=26, fontcolor='white@0.4')
         except: pass
@@ -221,7 +232,7 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
     except ffmpeg.Error as e: return False, e.stderr.decode('utf-8', errors='ignore') if e.stderr else str(e)
 
 # --- 3. UI INTERFACE & NAVIGATION ---
-st.markdown('<h1 style="text-align:center; margin-bottom: 30px;">▲ AETHER FILMWORKS AI // STUDIO V51</h1>', unsafe_allow_html=True)
+st.markdown('<h1 style="text-align:center; margin-bottom: 30px;">▲ AETHER FILMWORKS AI // STUDIO V52 (V42 Core)</h1>', unsafe_allow_html=True)
 
 with st.sidebar:
     st.markdown("### 🧭 Navigation Menu")
@@ -245,7 +256,7 @@ with st.sidebar:
         if api_key_input and api_key_input != saved_openai: save_key(OPENAI_KEY_FILE, api_key_input)
 
 # =====================================================================
-# 📌 MODE 1 - MOVIE DUBBING (V42 CORE)
+# 📌 MODE 1 - MOVIE DUBBING (V42 CORE ONE-SHOT TTS)
 # =====================================================================
 if app_mode == "🎙️ Movie Dubbing Studio":
     with st.sidebar:
@@ -278,7 +289,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         video_ratio = st.selectbox("Crop Ratio", ["Original", "9:16 (TikTok/Shorts)", "16:9 (YouTube)"])
         cb_bypass = st.checkbox("🔒 Copyright Bypass Mode (Smart Zoom)", value=True)
         cb_blur = st.checkbox("👁️ Cinematic Black Mask (Hide Chinese Subs)", value=True)
-        watermark_text = st.text_input("Text Watermark", "@Recapmaster")
+        watermark_text = st.text_input("Text Watermark", "")
 
         st.markdown("---")
         st.markdown("### 📝 5. Subtitle Mode")
@@ -328,15 +339,22 @@ if app_mode == "🎙️ Movie Dubbing Studio":
             with st.spinner(f"⏳ [အဆင့် ၂/၆] {ai_provider} ကိုအသုံးပြု၍ Audio Tags များပါဝင်သော ဇာတ်ညွှန်း ရေးသားနေပါသည်..."):
                 try:
                     base_prompt = (
-                        "You are an expert Myanmar (Burmese) TikTok movie recap narrator, highly skilled in crafting voiceover scripts for AI TTS systems (like Google Synergy/ElevenLabs).\n"
-                        "I am providing you with an English SRT file translated from the original audio.\n"
-                        "Translate and adapt the text into highly engaging, natural spoken Burmese (မြန်မာစကားပြောဟန်).\n\n"
-                        "🛑 STRICT RULES FOR AUDIO TAGS & LOCALIZATION:\n"
-                        "1. SYNERGY AUDIO TAGS: You MUST include inline audio tags to direct the TTS voice. Use tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers], [reluctantly] at the beginning of relevant sentences to add emotion and dramatic pacing.\n"
-                        "   Example: [pause=0.5] [excited] ဒီဇာတ်လမ်းလေးမှာတော့.. မင်းသားက ရုတ်တရက်ဆိုသလိုပဲ.. [pause=1.0] [whispers] တံခါးကို ဖွင့်လိုက်ပါတယ်။\n"
-                        "2. NO ENGLISH TRANSLITERATION: Translate meanings naturally (e.g., 'President' -> 'သမ္မတ').\n"
-                        "3. FORMAT: Keep the EXACT original SRT timecodes and indices.\n"
-                        "4. Output ONLY the raw SRT format. No explanations."
+                        "You are an expert Myanmar (Burmese) TikTok movie recap narrator, highly skilled in crafting voiceover scripts for AI TTS systems (like Google Synergy/ElevenLabs).
+"
+                        "I am providing you with an English SRT file translated from the original audio.
+"
+                        "Translate and adapt the text into highly engaging, natural spoken Burmese (မြန်မာစကားပြောဟန်).
+
+"
+                        "🛑 STRICT RULES FOR AUDIO TAGS & LOCALIZATION:
+"
+                        "1. SYNERGY AUDIO TAGS: You MUST include inline audio tags to direct the TTS voice. Use tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers], [reluctantly] at the beginning of relevant sentences to add emotion and dramatic pacing.
+"
+                        "2. NO ENGLISH TRANSLITERATION: Translate meanings naturally.
+"
+                        "3. FORMAT: Keep the EXACT original SRT timecodes and indices.
+"
+                        "4. Output ONLY the raw SRT format."
                     )
 
                     if "Gemini" in ai_provider:
@@ -363,10 +381,14 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                                     ]
                                 )
                                 gemini_prompt = (
-                                    "Listen to the audio and generate an SRT subtitle file in natural spoken Burmese (မြန်မာစကားပြောဟန်) summarizing the story.\n"
-                                    "🛑 STRICT RULES FOR AUDIO TAGS & LOCALIZATION:\n"
-                                    "1. You MUST include Synergy Audio Tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers] in the Burmese text to guide the TTS engine.\n"
-                                    "2. NO ENGLISH TRANSLITERATION: Translate meanings correctly.\n"
+                                    "Listen to the audio and generate an SRT subtitle file in natural spoken Burmese (မြန်မာစကားပြောဟန်) summarizing the story.
+"
+                                    "🛑 STRICT RULES FOR AUDIO TAGS & LOCALIZATION:
+"
+                                    "1. You MUST include Synergy Audio Tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers] in the Burmese text to guide the TTS engine.
+"
+                                    "2. NO ENGLISH TRANSLITERATION: Translate meanings correctly.
+"
                                     "3. Output ONLY valid SRT format."
                                 )
                                 response = model.generate_content([audio_file, gemini_prompt])
@@ -374,17 +396,14 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                                 genai.delete_file(audio_file.name)
                                 success_gemini = True
                                 break 
-                                
                             except Exception as e:
                                 last_err = str(e)
                                 if "429" in last_err or "quota" in last_err.lower() or "exhausted" in last_err.lower() or "limit" in last_err.lower():
                                     st.toast(f"⚠️ Key {idx+1} Limit ကုန်သွားပါပြီ။ နောက် Key ကို ပြောင်းလဲချိတ်ဆက်နေပါသည်...", icon="🔄")
                                     continue
-                                else:
-                                    break
+                                else: break
 
-                        if not success_gemini:
-                            raise Exception(f"Gemini API များကို အသုံးပြု၍မရပါ: {last_err}")
+                        if not success_gemini: raise Exception(f"Gemini API များကို အသုံးပြု၍မရပါ: {last_err}")
 
                     elif "Groq" in ai_provider:
                         client = Groq(api_key=api_key_input)
@@ -394,18 +413,17 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                         transcript_srt = ""
                         segments = getattr(transcription, 'segments', None)
                         if not segments and isinstance(transcription, dict): segments = transcription.get('segments')
-                            
                         if segments:
                             for i, seg in enumerate(segments, start=1):
                                 start_t = seg.get('start', 0) if isinstance(seg, dict) else getattr(seg, 'start', 0)
                                 end_t = seg.get('end', 0) if isinstance(seg, dict) else getattr(seg, 'end', 0)
                                 text_seg = seg.get('text', '') if isinstance(seg, dict) else getattr(seg, 'text', '')
                                 def fmt_t(s): return f"{int(s//3600):02d}:{int((s%3600)//60):02d}:{int(s%60):02d},{int((s-int(s))*1000):03d}"
-                                transcript_srt += f"{i}\n{fmt_t(start_t)} --> {fmt_t(end_t)}\n{text_seg.strip()}\n\n"
+                                transcript_srt += f"{i}{chr(10)}{fmt_t(start_t)} --> {fmt_t(end_t)}{chr(10)}{text_seg.strip()}{chr(10)}{chr(10)}"
                         else: transcript_srt = getattr(transcription, 'text', str(transcription))
                         
                         st.session_state.original_transcript = transcript_srt
-                        completion = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role": "system", "content": "You are a professional Burmese movie recap narrator."}, {"role": "user", "content": f"{base_prompt}\n\n--- ORIGINAL SRT ---\n{transcript_srt}"}])
+                        completion = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role": "system", "content": "You are a professional Burmese movie recap narrator."}, {"role": "user", "content": f"{base_prompt}{chr(10)}{chr(10)}--- ORIGINAL SRT ---{chr(10)}{transcript_srt}"}])
                         raw_output_text = completion.choices[0].message.content
 
                     else: # OpenAI
@@ -413,7 +431,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                         with open(a_extracted, "rb") as file: transcription = openai.audio.translations.create(model="whisper-1", file=file, response_format="srt")
                         transcript_srt = transcription if isinstance(transcription, str) else transcription.text
                         st.session_state.original_transcript = transcript_srt
-                        response = openai.chat.completions.create(model="gpt-5.5-pro" if "5.5" in ai_provider else "gpt-4o", messages=[{"role": "system", "content": "You are an expert Burmese content creator."}, {"role": "user", "content": f"{base_prompt}\n\n--- ORIGINAL SRT ---\n{transcript_srt}"}])
+                        response = openai.chat.completions.create(model="gpt-5.5-pro" if "5.5" in ai_provider else "gpt-4o", messages=[{"role": "system", "content": "You are an expert Burmese content creator."}, {"role": "user", "content": f"{base_prompt}{chr(10)}{chr(10)}--- ORIGINAL SRT ---{chr(10)}{transcript_srt}"}])
                         raw_output_text = response.choices[0].message.content
                     
                     parsed_timestamps, speech_text = parse_and_save_real_srt(raw_output_text, srt_final)
@@ -426,7 +444,8 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     final_gemini_key = locals().get('synergy_key', api_key_input)
                     asyncio.run(generate_tts(" ".join([t for _,_,t in parsed_timestamps]), voice_char, a_generated, engine=audio_engine_choice, ttsmaker_key=key_ttsmaker, eleven_key=locals().get('eleven_key_input', ''), custom_eleven_id=custom_id, gemini_key=final_gemini_key))
                 except Exception as e:
-                    st.error(f"❌ အသံထုတ်လုပ်ခြင်း မအောင်မြင်ပါ:\n{e}")
+                    st.error(f"❌ အသံထုတ်လုပ်ခြင်း မအောင်မြင်ပါ:
+{e}")
                     st.stop()
 
             with st.spinner("⏳ [အဆင့် ၅+၆] ဗီဒီယိုနှင့် စာတန်းထိုးအား ရွေးချယ်ထားသော စနစ်အတိုင်း ဖန်တီးနေပါသည်..."):
@@ -436,9 +455,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
 
     if st.session_state.render_success:
         st.balloons(); st.success(f"🎉 One-Click ဗီဒီယိုနှင့် စာတန်းထိုး အောင်မြင်စွာ ထွက်လာပါပြီ!")
-        
         col_out1, col_out2 = st.columns([1, 1])
-        
         with col_out1:
             if os.path.exists("AETHER_RECAP_FINAL.mp4"): 
                 st.video("AETHER_RECAP_FINAL.mp4")
