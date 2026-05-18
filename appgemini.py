@@ -1,5 +1,5 @@
 # =====================================================================
-# 📌 AETHER FILMWORKS AI // STUDIO V52 (PURE V42 CORE + AUTO-SWITCH)
+# 📌 AETHER FILMWORKS AI // STUDIO V52 (ULTIMATE MOBILE-SAFE V42 CORE)
 # =====================================================================
 
 import streamlit as st
@@ -86,7 +86,7 @@ def extract_audio_fast(video_in, audio_out="temp_extracted.mp3"):
         return audio_out
     except: return None
 
-# 🚀 V42 PURE TTS ENGINE WITH AUTO-SWITCH (ONE SHOT)
+# 🚀 V42 PURE TTS ENGINE WITH AUTO-SWITCH (ONE SHOT) - 100% MOBILE SAFE
 async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default Free)", ttsmaker_key="", eleven_key="", custom_eleven_id="", gemini_key=""):
     if not text.strip(): return
 
@@ -139,8 +139,7 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
                 last_err = str(e)
                 continue
                 
-        raise Exception(f"ထည့်သွင်းထားသော Key များအားလုံး Limit ပြည့်သွားပါပြီ။ Key အသစ် ထပ်ထည့်ပါ။
-နောက်ဆုံး Error: {last_err}")
+        raise Exception(f"ထည့်သွင်းထားသော Key များအားလုံး Limit ပြည့်သွားပါပြီ။ Key အသစ် ထပ်ထည့်ပါ။" + chr(10) + f"နောက်ဆုံး Error: {last_err}")
 
     elif "ElevenLabs" in engine:
         if not eleven_key: raise Exception("ElevenLabs API Key လိုအပ်ပါသည်။")
@@ -175,10 +174,7 @@ def parse_and_save_real_srt(raw_srt_text, output_file):
     clean_srt = raw_srt_text.replace("```srt", "").replace("```", "").strip()
     with open(output_file, "w", encoding="utf-8") as f: f.write(clean_srt)
         
-    pattern = re.compile(r'\d+\s+(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\s+(.*?)(?=
-
-|
-\d+\s+\d{2}|\Z)', re.DOTALL)
+    pattern = re.compile(r'\d+\s+(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\s+(.*?)(?=' + chr(10) + chr(10) + r'|' + chr(10) + r'\d+\s+\d{2}|\Z)', re.DOTALL)
     matches = pattern.findall(clean_srt)
     
     parsed_lines = []
@@ -188,8 +184,7 @@ def parse_and_save_real_srt(raw_srt_text, output_file):
             h, m, s_ms = t.split(':')
             s, ms = s_ms.split(',')
             return int(h)*3600 + int(m)*60 + int(s) + int(ms)/1000.0
-        clean_text = text.strip().replace('
-', ' ')
+        clean_text = text.strip().replace(chr(10), ' ')
         parsed_lines.append((to_sec(start_str), to_sec(end_str), clean_text))
         full_speech.append(clean_text)
         
@@ -339,21 +334,13 @@ if app_mode == "🎙️ Movie Dubbing Studio":
             with st.spinner(f"⏳ [အဆင့် ၂/၆] {ai_provider} ကိုအသုံးပြု၍ Audio Tags များပါဝင်သော ဇာတ်ညွှန်း ရေးသားနေပါသည်..."):
                 try:
                     base_prompt = (
-                        "You are an expert Myanmar (Burmese) TikTok movie recap narrator, highly skilled in crafting voiceover scripts for AI TTS systems (like Google Synergy/ElevenLabs).
-"
-                        "I am providing you with an English SRT file translated from the original audio.
-"
-                        "Translate and adapt the text into highly engaging, natural spoken Burmese (မြန်မာစကားပြောဟန်).
-
-"
-                        "🛑 STRICT RULES FOR AUDIO TAGS & LOCALIZATION:
-"
-                        "1. SYNERGY AUDIO TAGS: You MUST include inline audio tags to direct the TTS voice. Use tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers], [reluctantly] at the beginning of relevant sentences to add emotion and dramatic pacing.
-"
-                        "2. NO ENGLISH TRANSLITERATION: Translate meanings naturally.
-"
-                        "3. FORMAT: Keep the EXACT original SRT timecodes and indices.
-"
+                        "You are an expert Myanmar (Burmese) TikTok movie recap narrator, highly skilled in crafting voiceover scripts for AI TTS systems (like Google Synergy/ElevenLabs)." + chr(10) +
+                        "I am providing you with an English SRT file translated from the original audio." + chr(10) +
+                        "Translate and adapt the text into highly engaging, natural spoken Burmese (မြန်မာစကားပြောဟန်)." + chr(10) + chr(10) +
+                        "🛑 STRICT RULES FOR AUDIO TAGS & LOCALIZATION:" + chr(10) +
+                        "1. SYNERGY AUDIO TAGS: You MUST include inline audio tags to direct the TTS voice. Use tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers], [reluctantly] at the beginning of relevant sentences to add emotion and dramatic pacing." + chr(10) +
+                        "2. NO ENGLISH TRANSLITERATION: Translate meanings naturally." + chr(10) +
+                        "3. FORMAT: Keep the EXACT original SRT timecodes and indices." + chr(10) +
                         "4. Output ONLY the raw SRT format."
                     )
 
@@ -381,14 +368,10 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                                     ]
                                 )
                                 gemini_prompt = (
-                                    "Listen to the audio and generate an SRT subtitle file in natural spoken Burmese (မြန်မာစကားပြောဟန်) summarizing the story.
-"
-                                    "🛑 STRICT RULES FOR AUDIO TAGS & LOCALIZATION:
-"
-                                    "1. You MUST include Synergy Audio Tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers] in the Burmese text to guide the TTS engine.
-"
-                                    "2. NO ENGLISH TRANSLITERATION: Translate meanings correctly.
-"
+                                    "Listen to the audio and generate an SRT subtitle file in natural spoken Burmese (မြန်မာစကားပြောဟန်) summarizing the story." + chr(10) +
+                                    "🛑 STRICT RULES FOR AUDIO TAGS & LOCALIZATION:" + chr(10) +
+                                    "1. You MUST include Synergy Audio Tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers] in the Burmese text to guide the TTS engine." + chr(10) +
+                                    "2. NO ENGLISH TRANSLITERATION: Translate meanings correctly." + chr(10) +
                                     "3. Output ONLY valid SRT format."
                                 )
                                 response = model.generate_content([audio_file, gemini_prompt])
