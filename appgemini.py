@@ -18,6 +18,7 @@ from groq import Groq
 import openai
 import base64
 import wave
+import subprocess
 
 FFMPEG_BINARY = imageio_ffmpeg.get_ffmpeg_exe()
 
@@ -58,7 +59,6 @@ if "generated_script" not in st.session_state: st.session_state.generated_script
 if "original_transcript" not in st.session_state: st.session_state.original_transcript = ""
 
 # --- 2. CORE AUTOMATION FLOW ENGINES ---
-import subprocess
 
 def get_file_duration(file_path):
     try:
@@ -182,11 +182,12 @@ def parse_and_save_real_srt(raw_srt_text, output_file):
         
     parsed_lines = []
     full_speech = []
-    matches = list(re.finditer(r'(\d{2}:\d{2}:\d{2},\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2},\d{3})', clean_srt))
+    # ပိုမို အကြမ်းခံသော Regex
+    matches = list(re.finditer(r'(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})', clean_srt))
     
     for i in range(len(matches)):
-        start_str = matches[i].group(1)
-        end_str = matches[i].group(2)
+        start_str = matches[i].group(1).replace('.', ',')
+        end_str = matches[i].group(2).replace('.', ',')
         text_start = matches[i].end()
         
         if i + 1 < len(matches):
@@ -204,14 +205,21 @@ def parse_and_save_real_srt(raw_srt_text, output_file):
                 def to_sec(t):
                     h, m, s_ms = t.split(':')
                     s, ms = s_ms.split(',')
+                    ms = ms.ljust(3, '0')
                     return int(h)*3600 + int(m)*60 + int(s) + int(ms)/1000.0
                 parsed_lines.append((to_sec(start_str), to_sec(end_str), block.strip()))
                 full_speech.append(block.strip())
             except: pass
             
     if not parsed_lines:
-        parsed_lines.append((0.0, 10.0, "[pause=1.0] စာတန်းထိုး အပြောင်းအလဲလုပ်နေပါသည်။"))
-        full_speech.append("[pause=1.0] စာတန်းထိုး အပြောင်းအလဲလုပ်နေပါသည်။")
+        text_only = re.sub(r'^\d+\s*$', '', clean_srt, flags=re.MULTILINE)
+        text_only = text_only.strip()
+        if text_only:
+             parsed_lines.append((0.0, min(10.0, len(text_only)*0.1), text_only))
+             full_speech.append(text_only)
+        else:
+             parsed_lines.append((0.0, 10.0, "[pause=1.0] စာတန်းထိုး အပြောင်းအလဲလုပ်နေပါသည်။"))
+             full_speech.append("[pause=1.0] စာတန်းထိုး အပြောင်းအလဲလုပ်နေပါသည်။")
         
     return parsed_lines, " ".join(full_speech)
 
@@ -220,25 +228,23 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         a_dur = get_file_duration(in_a)
         v_max_dur = get_file_duration(in_v)
         
-        # --- SAFE END & SUBTITLE LOOP FIX (Core Logic Update) ---
+        # --- SAFE END & SUBTITLE LOOP FIX ---
         safe_srt_path = os.path.abspath("subtitles.srt").replace('\\', '/')
-        safe_srt_path_escaped = safe_srt_path.replace(':', '\\:') # Windows Error Fix
+        safe_srt_path_escaped = safe_srt_path.replace(':', '\\:')
         
         with open("subtitles.srt", "w", encoding="utf-8") as f:
             for i, (start, end, text) in enumerate(parsed_timestamps, start=1):
                 if start >= v_max_dur: continue
-                safe_end = min(end, v_max_dur) # Filter not to exceed video duration
+                safe_end = min(end, v_max_dur)
                 def fmt_t(s): 
                     return f"{int(s//3600):02d}:{int((s%3600)//60):02d}:{int(s%60):02d},{int((s-int(s))*1000):03d}"
                 f.write(f"{i}\n{fmt_t(start)} --> {fmt_t(safe_end)}\n{text}\n\n")
-        # ---------------------------------------------------------
         
         video = ffmpeg.input(in_v).video
         if use_bypass:
             video = ffmpeg.filter(video, 'scale', '2*trunc(iw*1.08/2)', '2*trunc(ih*1.08/2)')
             video = ffmpeg.filter(video, 'crop', 'iw/1.08', 'ih/1.08')
         
-        # Quality Enhancement: Scaled up to 1080 with bicubic filter
         video = ffmpeg.filter(video, 'scale', 'trunc(oh*a/2)*2', 1080, flags='bicubic')
         audio = ffmpeg.input(in_a).audio
         
@@ -262,10 +268,9 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         except: pass
         
         if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"] and os.path.exists("subtitles.srt"):
-            # Beautiful TikTok Yellow Subtitle Styling
-            video = ffmpeg.filter(video, 'subtitles', safe_srt_path_escaped, force_style="FontName=Arial,FontSize=22,PrimaryColour=&H0000FFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2.5,Shadow=1,Alignment=2,MarginV=25")
+            # မြန်မာဖောင့် Pyidaungsu အသုံးပြုထားပါသည်
+            video = ffmpeg.filter(video, 'subtitles', safe_srt_path_escaped, force_style="FontName=Pyidaungsu,FontSize=22,PrimaryColour=&H0000FFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2.5,Shadow=1,Alignment=2,MarginV=25")
 
-        # Quality Enhancement: preset='fast' and crf=21 for high quality rendering
         out = ffmpeg.output(video, audio, out_v, vcodec='libx264', acodec='aac', preset='fast', crf=21, t=v_max_dur)
         out.run(cmd=FFMPEG_BINARY, overwrite_output=True, capture_stdout=True, capture_stderr=True)
         return True, "Success"
