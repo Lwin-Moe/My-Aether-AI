@@ -456,7 +456,15 @@ bypass_color = st.checkbox("🎨 Color & Brightness Tweaking (အလင်းအ
                     st.stop()
 
             with st.spinner("⏳ [အဆင့် ၅+၆] ဗီဒီယိုနှင့် စာတန်းထိုးအား ရွေးချယ်ထားသော စနစ်အတိုင်း ဖန်တီးနေပါသည်..."):
-                success, err_msg = render_premium_saas_video(v_input, a_generated, parsed_timestamps, v_final, video_ratio, cb_bypass, cb_blur, watermark_text, subtitle_mode)
+                with st.spinner("⏳ [အဆင့် ၅+၆] ဗီဒီယိုနှင့် စာတန်းထိုးအား ရွေးချယ်ထားသော စနစ်အတိုင်း ဖန်တီးနေပါသည်..."):
+                # 👇 ဒီလိုင်းအသစ်နဲ့ အစားထိုးလဲလိုက်တာပါဗျာ
+                success, err_msg = render_premium_saas_video(
+                    v_input, a_generated, parsed_timestamps, v_final, video_ratio, 
+                    bypass_zoom, bypass_flip, bypass_color, 
+                    cb_blur, watermark_text, subtitle_mode
+                )
+                if success: st.session_state.render_success = True
+                else: st.error(f"Rendering Sync Failure: {err_msg}")
                 if success: st.session_state.render_success = True
                 else: st.error(f"Rendering Sync Failure: {err_msg}")
 
