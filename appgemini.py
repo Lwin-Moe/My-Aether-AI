@@ -62,7 +62,6 @@ import subprocess
 
 def get_file_duration(file_path):
     try:
-        # ffprobe မလိုဘဲ FFMPEG_BINARY သုံးပြီး ကြာချိန်ကို Regex နဲ့ တိုက်ရိုက် စက္ကန့်အလိုက် ဖတ်မည့်စနစ်
         cmd = [FFMPEG_BINARY, "-i", file_path]
         result = subprocess.run(cmd, capture_output=True, text=True, errors='ignore')
         match = re.search(r"Duration:\s*(\d+):(\d+):(\d+\.\d+)", result.stderr)
@@ -71,7 +70,7 @@ def get_file_duration(file_path):
             return int(h) * 3600 + int(m) * 60 + float(s)
     except:
         pass
-    return 600.0 # Error တက်ခဲ့ရင်တောင် ၁၀ မိနစ်အထိ အရှည်ပေးထားမည်
+    return 600.0 
 
 def download_video_from_url(url, output_path="input_temp.mp4"):
     if os.path.exists(output_path): os.remove(output_path)
@@ -221,12 +220,26 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         a_dur = get_file_duration(in_a)
         v_max_dur = get_file_duration(in_v)
         
+        # --- SAFE END & SUBTITLE LOOP FIX (Core Logic Update) ---
+        safe_srt_path = os.path.abspath("subtitles.srt").replace('\\', '/')
+        safe_srt_path_escaped = safe_srt_path.replace(':', '\\:') # Windows Error Fix
+        
+        with open("subtitles.srt", "w", encoding="utf-8") as f:
+            for i, (start, end, text) in enumerate(parsed_timestamps, start=1):
+                if start >= v_max_dur: continue
+                safe_end = min(end, v_max_dur) # Filter not to exceed video duration
+                def fmt_t(s): 
+                    return f"{int(s//3600):02d}:{int((s%3600)//60):02d}:{int(s%60):02d},{int((s-int(s))*1000):03d}"
+                f.write(f"{i}\n{fmt_t(start)} --> {fmt_t(safe_end)}\n{text}\n\n")
+        # ---------------------------------------------------------
+        
         video = ffmpeg.input(in_v).video
         if use_bypass:
             video = ffmpeg.filter(video, 'scale', '2*trunc(iw*1.08/2)', '2*trunc(ih*1.08/2)')
             video = ffmpeg.filter(video, 'crop', 'iw/1.08', 'ih/1.08')
         
-        video = ffmpeg.filter(video, 'scale', 'trunc(oh*a/2)*2', 720)
+        # Quality Enhancement: Scaled up to 1080 with bicubic filter
+        video = ffmpeg.filter(video, 'scale', 'trunc(oh*a/2)*2', 1080, flags='bicubic')
         audio = ffmpeg.input(in_a).audio
         
         if v_max_dur > 1.0 and a_dur > 0:
@@ -235,22 +248,30 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
             if 0.5 <= speed_factor <= 2.0:
                 audio = ffmpeg.filter(audio, 'atempo', speed_factor)
         
-        if use_blur: video = ffmpeg.filter(video, 'drawbox', x=0, y='ih-90', w='iw', h=90, color='black@0.95', thickness='fill')
-        if ratio == "9:16 (TikTok/Shorts)": video = ffmpeg.filter(video, 'crop', 'min(iw, ih*9/16)', 'ih')
-        elif ratio == "16:9 (YouTube)": video = ffmpeg.filter(video, 'crop', 'iw', 'min(ih, iw*9/16)')
+        if use_blur: 
+            video = ffmpeg.filter(video, 'drawbox', x=0, y='ih-90', w='iw', h=90, color='black@0.95', thickness='fill')
+            
+        if ratio == "9:16 (TikTok/Shorts)": 
+            video = ffmpeg.filter(video, 'crop', 'min(iw, ih*9/16)', 'ih')
+        elif ratio == "16:9 (YouTube)": 
+            video = ffmpeg.filter(video, 'crop', 'iw', 'min(ih, iw*9/16)')
         
         try:
-            if watermark: video = ffmpeg.filter(video, 'drawtext', text=watermark, x='w-tw-15', y='15', fontsize=26, fontcolor='white@0.4')
+            if watermark: 
+                video = ffmpeg.filter(video, 'drawtext', text=watermark, x='w-tw-15', y='15', fontsize=30, fontcolor='white@0.5')
         except: pass
         
         if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"] and os.path.exists("subtitles.srt"):
-            safe_srt_path = os.path.abspath("subtitles.srt")
-            video = ffmpeg.filter(video, 'subtitles', safe_srt_path, force_style="FontSize=18,PrimaryColour=&H00FFFF&,Outline=2,Alignment=2")
+            # Beautiful TikTok Yellow Subtitle Styling
+            video = ffmpeg.filter(video, 'subtitles', safe_srt_path_escaped, force_style="FontName=Arial,FontSize=22,PrimaryColour=&H0000FFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2.5,Shadow=1,Alignment=2,MarginV=25")
 
-        out = ffmpeg.output(video, audio, out_v, vcodec='libx264', acodec='aac', preset='ultrafast', t=v_max_dur)
+        # Quality Enhancement: preset='fast' and crf=21 for high quality rendering
+        out = ffmpeg.output(video, audio, out_v, vcodec='libx264', acodec='aac', preset='fast', crf=21, t=v_max_dur)
         out.run(cmd=FFMPEG_BINARY, overwrite_output=True, capture_stdout=True, capture_stderr=True)
         return True, "Success"
-    except ffmpeg.Error as e: return False, e.stderr.decode('utf-8', errors='ignore') if e.stderr else str(e)
+    except ffmpeg.Error as e: 
+        return False, e.stderr.decode('utf-8', errors='ignore') if e.stderr else str(e)
+
 # --- 3. UI INTERFACE & NAVIGATION ---
 st.markdown('<h1 style="text-align:center; margin-bottom: 30px;">▲ AETHER FILMWORKS AI // STUDIO V52</h1>', unsafe_allow_html=True)
 
