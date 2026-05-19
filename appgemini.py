@@ -307,12 +307,16 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         st.markdown("---")
         st.markdown("### 📐 4. Layout & Protection")
         video_ratio = st.selectbox("Crop Ratio", ["Original", "9:16 (TikTok/Shorts)", "16:9 (YouTube)"])
-        cb_bypass = st.checkbox("🔒 Copyright Bypass Mode (Smart Zoom)", value=True)
-        cb_blur = st.checkbox("👁️ Cinematic Black Mask (Hide Chinese Subs)", value=True)
-        watermark_text = st.text_input("Text Watermark", "")
+       st.markdown("### 📐 4. Layout & Protection")
+video_ratio = st.selectbox("Crop Ratio", ["Original", "9:16 (TikTok/Shorts)", "16:9 (YouTube)"])
+cb_blur = st.checkbox("👁️ Cinematic Black Mask (Hide Chinese Subs)", value=True)
+watermark_text = st.text_input("Text Watermark", "")
 
-        st.markdown("---")
-        st.markdown("### 📝 5. Subtitle Mode")
+st.markdown("**🔒 Copyright Bypass Features:**")
+# 👇 တစ်ခုချင်းစီ ခွဲပြီး ဖွင့်/ပိတ် လုပ်မယ့် Checkbox များ
+bypass_zoom = st.checkbox("🔍 Smart Zoom (8% Scale & Crop)", value=True)
+bypass_flip = st.checkbox("🔄 Horizontal Flip (ဘယ်ပြန်ညာပြန်လှန်)", value=False)
+bypass_color = st.checkbox("🎨 Color & Brightness Tweaking (အလင်းအမှောင်ကစား)", value=True)
         subtitle_mode = st.radio("Choose Subtitle Output", ["Both (Burn + SRT)", "Export SRT File Only", "Burn into Video"])
 
     st.markdown('<div class="setting-panel"><h3>📺 Media Acquisition & Setup</h3>', unsafe_allow_html=True)
