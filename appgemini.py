@@ -216,26 +216,15 @@ def parse_and_save_real_srt(raw_srt_text, output_file):
         
     return parsed_lines, " ".join(full_speech)
 
-# 👇 Parameter ထဲမှာ use_bypass နေရာမှာ variable ၃ ခု ပြောင်းပေးလိုက်ပါတယ်
-def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, bypass_zoom=False, bypass_flip=False, bypass_color=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)"):
+def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_bypass=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)"):
     try:
         a_dur = get_file_duration(in_a)
         v_max_dur = get_file_duration(in_v)
         
         video = ffmpeg.input(in_v).video
-        
-        # 🔍 ၁။ Smart Zoom (On / Off လုပ်ရန်)
-        if bypass_zoom:
+        if use_bypass:
             video = ffmpeg.filter(video, 'scale', '2*trunc(iw*1.08/2)', '2*trunc(ih*1.08/2)')
             video = ffmpeg.filter(video, 'crop', 'iw/1.08', 'ih/1.08')
-            
-        # 🔄 ၂။ Horizontal Flip ဘယ်ပြန်ညာပြန်လှန်ခြင်း (On / Off လုပ်ရန်)
-        if bypass_flip:
-            video = ffmpeg.filter(video, 'hflip')
-            
-        # 🎨 ၃။ Color & Brightness အလင်းအမှောင်ကစားခြင်း (On / Off လုပ်ရန်)
-        if bypass_color:
-            video = ffmpeg.filter(video, 'eq', contrast=1.03, brightness=0.01, saturation=1.02)
         
         video = ffmpeg.filter(video, 'scale', 'trunc(oh*a/2)*2', 720)
         audio = ffmpeg.input(in_a).audio
@@ -318,16 +307,12 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         st.markdown("---")
         st.markdown("### 📐 4. Layout & Protection")
         video_ratio = st.selectbox("Crop Ratio", ["Original", "9:16 (TikTok/Shorts)", "16:9 (YouTube)"])
-       st.markdown("### 📐 4. Layout & Protection")
-video_ratio = st.selectbox("Crop Ratio", ["Original", "9:16 (TikTok/Shorts)", "16:9 (YouTube)"])
-cb_blur = st.checkbox("👁️ Cinematic Black Mask (Hide Chinese Subs)", value=True)
-watermark_text = st.text_input("Text Watermark", "")
+        cb_bypass = st.checkbox("🔒 Copyright Bypass Mode (Smart Zoom)", value=True)
+        cb_blur = st.checkbox("👁️ Cinematic Black Mask (Hide Chinese Subs)", value=True)
+        watermark_text = st.text_input("Text Watermark", "")
 
-st.markdown("**🔒 Copyright Bypass Features:**")
-# 👇 တစ်ခုချင်းစီ ခွဲပြီး ဖွင့်/ပိတ် လုပ်မယ့် Checkbox များ
-bypass_zoom = st.checkbox("🔍 Smart Zoom (8% Scale & Crop)", value=True)
-bypass_flip = st.checkbox("🔄 Horizontal Flip (ဘယ်ပြန်ညာပြန်လှန်)", value=False)
-bypass_color = st.checkbox("🎨 Color & Brightness Tweaking (အလင်းအမှောင်ကစား)", value=True)
+        st.markdown("---")
+        st.markdown("### 📝 5. Subtitle Mode")
         subtitle_mode = st.radio("Choose Subtitle Output", ["Both (Burn + SRT)", "Export SRT File Only", "Burn into Video"])
 
     st.markdown('<div class="setting-panel"><h3>📺 Media Acquisition & Setup</h3>', unsafe_allow_html=True)
@@ -456,15 +441,7 @@ bypass_color = st.checkbox("🎨 Color & Brightness Tweaking (အလင်းအ
                     st.stop()
 
             with st.spinner("⏳ [အဆင့် ၅+၆] ဗီဒီယိုနှင့် စာတန်းထိုးအား ရွေးချယ်ထားသော စနစ်အတိုင်း ဖန်တီးနေပါသည်..."):
-                with st.spinner("⏳ [အဆင့် ၅+၆] ဗီဒီယိုနှင့် စာတန်းထိုးအား ရွေးချယ်ထားသော စနစ်အတိုင်း ဖန်တီးနေပါသည်..."):
-                # 👇 ဒီလိုင်းအသစ်နဲ့ အစားထိုးလဲလိုက်တာပါဗျာ
-                success, err_msg = render_premium_saas_video(
-                    v_input, a_generated, parsed_timestamps, v_final, video_ratio, 
-                    bypass_zoom, bypass_flip, bypass_color, 
-                    cb_blur, watermark_text, subtitle_mode
-                )
-                if success: st.session_state.render_success = True
-                else: st.error(f"Rendering Sync Failure: {err_msg}")
+                success, err_msg = render_premium_saas_video(v_input, a_generated, parsed_timestamps, v_final, video_ratio, cb_bypass, cb_blur, watermark_text, subtitle_mode)
                 if success: st.session_state.render_success = True
                 else: st.error(f"Rendering Sync Failure: {err_msg}")
 
