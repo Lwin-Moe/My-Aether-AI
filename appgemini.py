@@ -216,15 +216,26 @@ def parse_and_save_real_srt(raw_srt_text, output_file):
         
     return parsed_lines, " ".join(full_speech)
 
-def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_bypass=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)"):
+# 👇 Parameter ထဲမှာ use_bypass နေရာမှာ variable ၃ ခု ပြောင်းပေးလိုက်ပါတယ်
+def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, bypass_zoom=False, bypass_flip=False, bypass_color=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)"):
     try:
         a_dur = get_file_duration(in_a)
         v_max_dur = get_file_duration(in_v)
         
         video = ffmpeg.input(in_v).video
-        if use_bypass:
+        
+        # 🔍 ၁။ Smart Zoom (On / Off လုပ်ရန်)
+        if bypass_zoom:
             video = ffmpeg.filter(video, 'scale', '2*trunc(iw*1.08/2)', '2*trunc(ih*1.08/2)')
             video = ffmpeg.filter(video, 'crop', 'iw/1.08', 'ih/1.08')
+            
+        # 🔄 ၂။ Horizontal Flip ဘယ်ပြန်ညာပြန်လှန်ခြင်း (On / Off လုပ်ရန်)
+        if bypass_flip:
+            video = ffmpeg.filter(video, 'hflip')
+            
+        # 🎨 ၃။ Color & Brightness အလင်းအမှောင်ကစားခြင်း (On / Off လုပ်ရန်)
+        if bypass_color:
+            video = ffmpeg.filter(video, 'eq', contrast=1.03, brightness=0.01, saturation=1.02)
         
         video = ffmpeg.filter(video, 'scale', 'trunc(oh*a/2)*2', 720)
         audio = ffmpeg.input(in_a).audio
