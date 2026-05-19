@@ -178,11 +178,13 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
 
 def parse_and_save_real_srt(raw_srt_text, output_file):
     clean_srt = raw_srt_text.replace("```srt", "").replace("```", "").strip()
-    with open(output_file, "w", encoding="utf-8") as f: f.write(clean_srt)
+    
+    # ပြင်ဆင်ချက် ၁: Linux FFmpeg အတွက် utf-8-sig ဖြင့် သိမ်းခြင်း
+    with open(output_file, "w", encoding="utf-8-sig") as f: 
+        f.write(clean_srt)
         
     parsed_lines = []
     full_speech = []
-    # ပိုမို အကြမ်းခံသော Regex
     matches = list(re.finditer(r'(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})', clean_srt))
     
     for i in range(len(matches)):
@@ -228,11 +230,11 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         a_dur = get_file_duration(in_a)
         v_max_dur = get_file_duration(in_v)
         
-        # --- SAFE END & SUBTITLE LOOP FIX ---
         safe_srt_path = os.path.abspath("subtitles.srt").replace('\\', '/')
         safe_srt_path_escaped = safe_srt_path.replace(':', '\\:')
         
-        with open("subtitles.srt", "w", encoding="utf-8") as f:
+        # ပြင်ဆင်ချက် ၁ (ဆက်လက်): Safe filter ပိုင်းကိုလည်း utf-8-sig ဖြင့် သိမ်းခြင်း
+        with open("subtitles.srt", "w", encoding="utf-8-sig") as f:
             for i, (start, end, text) in enumerate(parsed_timestamps, start=1):
                 if start >= v_max_dur: continue
                 safe_end = min(end, v_max_dur)
@@ -268,8 +270,8 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         except: pass
         
         if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"] and os.path.exists("subtitles.srt"):
-            # မြန်မာဖောင့် Pyidaungsu အသုံးပြုထားပါသည်
-            video = ffmpeg.filter(video, 'subtitles', safe_srt_path_escaped, force_style="FontName=Pyidaungsu,FontSize=22,PrimaryColour=&H0000FFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2.5,Shadow=1,Alignment=2,MarginV=25")
+            # ပြင်ဆင်ချက် ၂: charenc='UTF-8' နှင့် fontsdir='.' ကို အတင်းအကျပ် ထည့်သွင်းခြင်း
+            video = ffmpeg.filter(video, 'subtitles', safe_srt_path_escaped, charenc='UTF-8', fontsdir='.', force_style="FontName=Pyidaungsu,FontSize=22,PrimaryColour=&H0000FFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2.5,Shadow=1,Alignment=2,MarginV=25")
 
         out = ffmpeg.output(video, audio, out_v, vcodec='libx264', acodec='aac', preset='fast', crf=21, t=v_max_dur)
         out.run(cmd=FFMPEG_BINARY, overwrite_output=True, capture_stdout=True, capture_stderr=True)
