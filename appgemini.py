@@ -591,27 +591,30 @@ elif app_mode == "⚡ Translation/Transcript Studio":
             "Both (SRT ရော ဗီဒီယိုရော ထုတ်မည်)"
         ])
     
-    # ---------------------------------------------------------
-    # 🚀 MAIN PROCESSING LOGIC
+# ---------------------------------------------------------
+    # 🚀 MAIN PROCESSING LOGIC WITH AUTO-KEY ROTATION
     # ---------------------------------------------------------
     if st.button("🚀 စတင်လုပ်ဆောင်မည်"):
-        gemini_api_key = load_key(API_KEY_FILE) 
-        if gemini_api_key:
-            gemini_api_key = gemini_api_key.split(",")[0].strip()
-            
-        if not gemini_api_key:
+        # ဘယ်ဘက် Menu မှ သိမ်းထားသော ကော်မာခံထားသည့် Key များအားလုံးကို ယူပြီး List တစ်ခုအဖြစ် ပြောင်းခြင်း
+        raw_keys = load_key(API_KEY_FILE)
+        api_keys = [k.strip() for k in raw_keys.split(",") if k.strip()] if raw_keys else []
+        
+        if not api_keys:
             st.error("⚠️ ကျေးဇူးပြု၍ ဘယ်ဘက် Menu တွင် Gemini API Key ကို အရင်ထည့်ပါ။")
         elif not video_url:
             st.error("⚠️ URL ထည့်သွင်းရန် လိုအပ်ပါသည်။")
         else:
             with st.spinner("🔄 အလုပ်လုပ်နေပါသည်... (ကျေးဇူးပြု၍ စောင့်ပါ)"):
+                # လိုအပ်တဲ့ ပတ်လမ်းကြောင်းဆိုင်ရာ ဖိုင်တွဲများ ကြိုတင်သတ်မှတ်ခြင်း
+                downloaded_file = None
+                audio_path = None
+                wm_path = None
+                
                 try:
-                    genai.configure(api_key=gemini_api_key)
                     project_id = "project_" + str(int(time.time()))
                     
                     # 1. Download Video and Audio
                     st.info("⬇️ ဗီဒီယို ဒေါင်းလုဒ်ဆွဲနေပါသည်...")
-                    # Render လုပ်မှာဖြစ်လို့ Video ရော Audio ရော အကောင်းဆုံးဆွဲပါမယ်
                     ydl_opts = {
                         'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4' if "Burn" in render_mode or "Both" in render_mode else 'bestaudio/best',
                         'outtmpl': f'{project_id}.%(ext)s',
@@ -629,32 +632,55 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                         .overwrite_output().run(quiet=True)
                     )
 
-                    # 3. Gemini Translation
+                    # 3. Gemini Translation Loop (Key တစ်ခုပျက်ရင် နောက်တစ်ခု အလိုအလျောက်ပြောင်းမည့်အပိုင်း) 🔄
                     st.info("🤖 Gemini 2.5 Flash ဖြင့် မြန်မာစာတန်းထိုး ထုတ်နေပါသည်...")
-                    uploaded_audio = genai.upload_file(path=audio_path)
                     
+                    subtitles_json = None
                     prompt = """
                     Listen to this audio and generate translated Myanmar (Burmese) subtitles.
                     Output MUST be ONLY a valid JSON array. Do not include ```json.
                     Format: [{"start": 0.0, "end": 2.5, "text": "မြန်မာစာ"}]
                     """
-                    model = genai.GenerativeModel('gemini-2.5-flash')
-                    response = model.generate_content([prompt, uploaded_audio])
-                    genai.delete_file(uploaded_audio.name)
                     
-                    raw_text = response.text.strip().replace("```json", "").replace("```", "")
-                    subtitles_json = json.loads(raw_text)
+                    # ထည့်ထားသမျှ Key အားလုံးကို ပတ်ပြီး အလုပ်လုပ်ခိုင်းခြင်း
+                    for index, current_key in enumerate(api_keys):
+                        try:
+                            st.write(f"🔑 Key ({index + 1}/{len(api_keys)}) ကို အသုံးပြု၍ ကြိုးစားနေပါသည်...")
+                            genai.configure(api_key=current_key)
+                            
+                            # Gemini ပေါ်သို့ ဖိုင်တင်ခြင်း
+                            uploaded_audio = genai.upload_file(path=audio_path)
+                            
+                            model = genai.GenerativeModel('gemini-2.5-flash')
+                            response = model.generate_content([prompt, uploaded_audio])
+                            
+                            # အောင်မြင်စွာ ရရှိပြီးပါက Cloud ပေါ်မှ ဖိုင်အား ပြန်ဖျက်ခြင်း
+                            genai.delete_file(uploaded_audio.name)
+                            
+                            raw_text = response.text.strip().replace("```json", "").replace("```", "")
+                            subtitles_json = json.loads(raw_text)
+                            
+                            # အကယ်၍ JSON Parsing အောင်မြင်ပြီး အချက်အလက်ရလျှင် Loop ကို ရပ်မည်
+                            st.success(f"✅ Key {index + 1} ဖြင့် အောင်မြင်စွာ တုံ့ပြန်မှု ရရှိပါပြီ။")
+                            break
+                            
+                        except Exception as api_error:
+                            # 429 Quota သို့မဟုတ် အခြား API Error တက်ပါက သတိပေးချက်ပြပြီး နောက် Key တစ်ခုသို့ ကူးမည်
+                            st.warning(f"⚠️ Key {index + 1} တင် Error ဖြစ်ပွားပါသည်- ({str(api_error)})။ နောက် Key တစ်ခုဖြင့် ထပ်မံကြိုးစားနေပါသည်...")
+                            continue
+                    
+                    # ကီးအားလုံး စမ်းလို့မှ မရခဲ့ရင် Error ထုတ်မည်
+                    if subtitles_json is None:
+                        raise Exception("ထည့်သွင်းထားသော Gemini API Key များအားလုံး Limit ပြည့်နေပါသည် (သို့မဟုတ်) Error ဖြစ်နေပါသည်။")
 
                     # 4. JSON ကို SRT ပြောင်းခြင်း
                     srt_path = f"{project_id}.srt"
                     with open(srt_path, "w", encoding="utf-8") as f:
                         for i, sub in enumerate(subtitles_json):
-                            # Convert seconds to HH:MM:SS,mmm
                             start_td = datetime.timedelta(seconds=float(sub['start']))
                             end_td = datetime.timedelta(seconds=float(sub['end']))
                             start_str = str(start_td)[:-3].replace('.', ',') if '.' in str(start_td) else str(start_td) + ",000"
                             end_str = str(end_td)[:-3].replace('.', ',') if '.' in str(end_td) else str(end_td) + ",000"
-                            # Padding zeros (e.g. 0:00:01,000 -> 00:00:01,000)
                             if len(start_str.split(':')[0]) == 1: start_str = "0" + start_str
                             if len(end_str.split(':')[0]) == 1: end_str = "0" + end_str
                             
@@ -665,54 +691,45 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                     if "Burn" in render_mode or "Both" in render_mode:
                         st.info("🎬 ဗီဒီယို Render လုပ်နေပါပြီ (အနည်းငယ် ကြာနိုင်ပါသည်)...")
                         
-                        # Video Stream
                         video_stream = ffmpeg.input(downloaded_file)
                         audio_stream = video_stream.audio
                         
-                        # Apply Bypass Filters
                         if apply_flip:
                             video_stream = video_stream.hflip()
                         if apply_zoom:
-                            # Crop 5% of edges and scale back to original (Bypass Hash)
                             video_stream = video_stream.crop(x='iw*0.025', y='ih*0.025', width='iw*0.95', height='ih*0.95')
                             video_stream = video_stream.filter('scale', w='iw', h='ih')
                         
-                        # Apply Subtitles
                         video_stream = video_stream.filter('subtitles', srt_path)
                         
-                        # Apply Watermark
                         if watermark_file is not None:
                             wm_path = f"wm_{project_id}.png"
                             with open(wm_path, "wb") as f:
                                 f.write(watermark_file.read())
                             
                             wm_stream = ffmpeg.input(wm_path)
-                            # Position Logic
                             if wm_position == "Top Right":
                                 overlay_xy = {'x': 'main_w-overlay_w-10', 'y': '10'}
                             elif wm_position == "Top Left":
                                 overlay_xy = {'x': '10', 'y': '10'}
                             elif wm_position == "Bottom Right":
                                 overlay_xy = {'x': 'main_w-overlay_w-10', 'y': 'main_h-overlay_h-10'}
-                            else: # Bottom Left
+                            else:
                                 overlay_xy = {'x': '10', 'y': 'main_h-overlay_h-10'}
                                 
                             video_stream = ffmpeg.overlay(video_stream, wm_stream, **overlay_xy)
 
-                        # Output Rendering
                         (
                             ffmpeg
                             .output(video_stream, audio_stream, output_video_path, vcodec='libx264', crf=23, preset='fast', acodec='aac')
                             .overwrite_output()
                             .run(quiet=True)
                         )
-                        
-                        # Watermark ဖိုင်အမှိုက်ရှင်းခြင်း
-                        if watermark_file is not None: os.remove(wm_path)
+                        if watermark_file is not None and os.path.exists(wm_path): os.remove(wm_path)
 
                     st.success("🎉 အောင်မြင်စွာ လုပ်ဆောင်ပြီးစီးပါပြီ!")
 
-                    # 6. Download Buttons ပြသခြင်း
+                    # 6. Download Buttons
                     if "SRT" in render_mode or "Both" in render_mode:
                         with open(srt_path, "rb") as file:
                             st.download_button(label="📥 Download Subtitle (.srt)", data=file, file_name="myanmar_subtitles.srt", mime="text/plain")
@@ -721,12 +738,13 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                         with open(output_video_path, "rb") as file:
                             st.download_button(label="🎬 Download Rendered Video (.mp4)", data=file, file_name="rendered_video.mp4", mime="video/mp4")
 
-                    # Storage အမှိုက်ရှင်းခြင်း
-                    if os.path.exists(downloaded_file): os.remove(downloaded_file)
-                    if os.path.exists(audio_path): os.remove(audio_path)
-                    
                     st.markdown("### 📝 Preview Subtitles:")
                     st.json(subtitles_json)
 
                 except Exception as e:
                     st.error(f"❌ Error ဖြစ်သွားပါသည်: {str(e)}")
+                
+                finally:
+                    # 🗑️ Local Storage အမှိုက်သိမ်းခြင်း (Error တက်တက်၊ မတက်တက် ဖျက်မည်)
+                    if downloaded_file and os.path.exists(downloaded_file): os.remove(downloaded_file)
+                    if audio_path and os.path.exists(audio_path): os.remove(audio_path)
