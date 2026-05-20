@@ -571,7 +571,11 @@ elif app_mode == "⚡ Translation/Transcript Studio":
     if st.button("🚀 ချက်ချင်း ဘာသာပြန်မည်"):
         # ဘယ်ဘက် Menu မှာ သိမ်းထားတဲ့ Gemini API Key ကို လှမ်းယူခြင်း
         # (မင်းရဲ့ Code ထဲက load_key function နဲ့ သက်ဆိုင်ရာ Key File ကို ယူပါမယ်)
-        gemini_api_key = load_key(API_KEY_FILE) 
+        # ဘယ်ဘက် Menu မှ သိမ်းထားသော Key များအားလုံးကို ယူခြင်း
+        raw_keys = load_key(API_KEY_FILE)
+        
+        # ကော်မာ (,) ဖြင့် ခွဲထုတ်ပြီး ပထမဆုံး Key (Index 0) ကိုသာ ရွေးချယ်အသုံးပြုခြင်း
+        gemini_api_key = raw_keys.split(",")[0].strip() if raw_keys else "" 
         
         if not gemini_api_key:
             st.error("⚠️ ကျေးဇူးပြု၍ ဘယ်ဘက် Menu တွင် Gemini API Key ကို အရင်ထည့်ပါ။")
