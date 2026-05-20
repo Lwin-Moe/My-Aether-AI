@@ -284,7 +284,7 @@ st.markdown('<h1 style="text-align:center; margin-bottom: 30px;">▲ AETHER FILM
 
 with st.sidebar:
     st.markdown("### 🧭 Navigation Menu")
-    app_mode = st.radio("Select Studio Mode:", ["🎙️ Movie Dubbing Studio", "🎥 Veo Video Studio", "🎵 Lyria Music Studio"])
+    app_mode = st.radio("Select Studio Mode:", ["🎙️ Movie Dubbing Studio", "🎥 Veo Video Studio", "🎵 Lyria Music Studio",""⚡ Translation/Transcript Studio"])
     st.markdown("---")
     st.markdown("### 🧠 1. Select AI Core Engine")
     ai_provider = st.selectbox("Choose AI Provider", ["Google Gemini (Flash - Recommended)", "OpenAI (GPT-5.5 Pro)", "Groq API (Fast & Free)"])
@@ -557,3 +557,81 @@ elif app_mode == "🎵 Lyria Music Studio":
                         with open("lyria_output.mp3", "rb") as f: st.download_button("📥 Download Music", f, "Lyria_Generated.mp3")
                     else: st.error("❌ API Request Failed. Lyria မော်ဒယ်အား ယခု Key ဖြင့် သုံး၍မရသေးပါ။")
                 except Exception as e: st.error(f"Error: {e}")
+
+# =====================================================================
+# 📌 MODE 4: CLOUD BACKEND STUDIO (FastAPI နှင့် ချိတ်ဆက်သော အပိုင်း)
+# =====================================================================
+elif app_mode == "⚡ Cloud Backend Studio":
+    st.markdown('<h2 style="color:#00e5ff;">⚡ Cloud Subtitle Factory</h2>', unsafe_allow_html=True)
+    st.markdown("နောက်ကွယ်ရှိ FastAPI + Gemini 2.5 ဖြင့် Video များကို အလိုအလျောက် ဘာသာပြန်ခြင်း")
+
+    # FastAPI Server URL (Local မှာ Run ထားရင် ဒီအတိုင်းထားပါ)
+    FASTAPI_URL = st.text_input("🔗 FastAPI Server URL:", value="http://127.0.0.1:8000")
+    
+    st.markdown("### 📥 1. Video URL ထည့်ရန်")
+    video_url = st.text_input("YouTube / FB / TikTok URL ထည့်ပါ:")
+    
+    if st.button("🚀 Backend သို့ ပေးပို့မည်"):
+        if not video_url:
+            st.error("URL ထည့်သွင်းရန် လိုအပ်ပါသည်။")
+        else:
+            with st.spinner("FastAPI ဆာဗာသို့ ပေးပို့နေပါသည်..."):
+                try:
+                    # ၁။ FastAPI ဆီကို Video URL လှမ်းပို့ခြင်း (POST Request)
+                    api_endpoint = f"{FASTAPI_URL}/api/v1/projects/import"
+                    payload = {"url": video_url}
+                    response = requests.post(api_endpoint, json=payload)
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        project_id = data.get("project_id")
+                        
+                        # Backend က ပြန်ပို့ပေးတဲ့ Task ID ကို ဆွဲထုတ်ခြင်း
+                        msg = data.get("message", "")
+                        task_id = msg.split("Task ")[1].split(" started")[0] if "Task" in msg else None
+                        
+                        st.success(f"✅ အောင်မြင်စွာ ပေးပို့ပြီးပါပြီ! (Project ID: {project_id})")
+                        
+                        if task_id:
+                            st.info(f"🔄 Background Task ID: {task_id} ဖြင့် အလုပ်လုပ်နေပါပြီ။ စောင့်ကြည့်နေပါသည်...")
+                            
+                            # Loading Bar နှင့် Status ပြရန် နေရာဖန်တီးခြင်း
+                            status_placeholder = st.empty()
+                            progress_bar = st.progress(0)
+                            
+                            # ၂။ Backend ဆီက Status ကို ၃ စက္ကန့်တစ်ခါ လှမ်းမေးခြင်း (Polling)
+                            while True:
+                                task_res = requests.get(f"{FASTAPI_URL}/api/v1/tasks/{task_id}")
+                                if task_res.status_code == 200:
+                                    task_data = task_res.json()
+                                    current_status = task_data.get("status")
+                                    info = task_data.get("info")
+                                    
+                                    # အခြေအနေကို UI မှာ ပြပေးခြင်း
+                                    status_placeholder.info(f"Текущий Status: **{current_status}**")
+                                    
+                                    # Progress ရာခိုင်နှုန်း တက်လာပါက Loading bar ကို ရွှေ့ပေးခြင်း
+                                    if isinstance(info, dict) and "progress" in info:
+                                        progress_bar.progress(info["progress"] / 100.0)
+                                        
+                                    # အလုပ်ပြီးသွားရင် Loop ထဲက ထွက်မယ်
+                                    if current_status == "COMPLETED":
+                                        status_placeholder.success("🎉 Gemini 2.5 ဖြင့် ဘာသာပြန်ခြင်း အောင်မြင်စွာ ပြီးဆုံးပါပြီ!")
+                                        progress_bar.progress(1.0)
+                                        
+                                        # ရလာတဲ့ မြန်မာ Subtitle တွေကို ဖော်ပြပေးမယ်
+                                        st.markdown("### 📝 ထွက်လာသော Subtitles များ:")
+                                        st.json(task_data.get("result", {}))
+                                        break
+                                        
+                                    elif current_status == "FAILED":
+                                        status_placeholder.error(f"❌ Error ဖြစ်သွားပါသည်: {info.get('error', 'Unknown Error')}")
+                                        break
+                                        
+                                time.sleep(3) # ၃ စက္ကန့် နားပြီးမှ ထပ်မေးမယ်
+                        else:
+                            st.warning("Task ID ကို ခွဲခြား၍မရပါ။ FastAPI Backend ကုဒ်ကို စစ်ဆေးပါ။")
+                    else:
+                        st.error(f"API Error: {response.text}")
+                except Exception as e:
+                    st.error(f"Backend သို့ ချိတ်ဆက်၍ မရပါ: {str(e)} \n(FastAPI Run ထားရဲ့လား စစ်ကြည့်ပါ)")
