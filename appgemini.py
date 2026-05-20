@@ -284,7 +284,7 @@ st.markdown('<h1 style="text-align:center; margin-bottom: 30px;">▲ AETHER FILM
 
 with st.sidebar:
     st.markdown("### 🧭 Navigation Menu")
-    app_mode = st.radio("Select Studio Mode:", ["🎙️ Movie Dubbing Studio", "🎥 Veo Video Studio", "🎵 Lyria Music Studio",""⚡ Translation/Transcript Studio"])
+    app_mode = st.radio("Select Studio Mode:", ["🎙️ Movie Dubbing Studio", "🎥 Veo Video Studio", "🎵 Lyria Music Studio","⚡ Translation/Transcript Studio"])
     st.markdown("---")
     st.markdown("### 🧠 1. Select AI Core Engine")
     ai_provider = st.selectbox("Choose AI Provider", ["Google Gemini (Flash - Recommended)", "OpenAI (GPT-5.5 Pro)", "Groq API (Fast & Free)"])
