@@ -20,6 +20,7 @@ import base64
 import wave
 import subprocess
 import json
+import datetime
 
 FFMPEG_BINARY = imageio_ffmpeg.get_ffmpeg_exe()
 
@@ -673,18 +674,21 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                     if subtitles_json is None:
                         raise Exception("ထည့်သွင်းထားသော Gemini API Key များအားလုံး Limit ပြည့်နေပါသည် (သို့မဟုတ်) Error ဖြစ်နေပါသည်။")
 
-                    # 4. JSON ကို SRT ပြောင်းခြင်း
+                  # 4. JSON ကို SRT ပြောင်းခြင်း
                     srt_path = f"{project_id}.srt"
                     with open(srt_path, "w", encoding="utf-8") as f:
                         for i, sub in enumerate(subtitles_json):
-                            start_td = datetime.timedelta(seconds=float(sub['start']))
-                            end_td = datetime.timedelta(seconds=float(sub['end']))
+                            # import datetime အစား from datetime import datetime, timedelta သုံးထားပါက အောက်ပါအတိုင်း ပြင်ပါ
+                            start_td = timedelta(seconds=float(sub['start']))
+                            end_td = timedelta(seconds=float(sub['end']))
                             start_str = str(start_td)[:-3].replace('.', ',') if '.' in str(start_td) else str(start_td) + ",000"
                             end_str = str(end_td)[:-3].replace('.', ',') if '.' in str(end_td) else str(end_td) + ",000"
                             if len(start_str.split(':')[0]) == 1: start_str = "0" + start_str
                             if len(end_str.split(':')[0]) == 1: end_str = "0" + end_str
                             
                             f.write(f"{i+1}\n{start_str} --> {end_str}\n{sub['text']}\n\n")
+                            
+        
 
                     # 5. Video Rendering (If selected)
                     output_video_path = f"{project_id}_rendered.mp4"
