@@ -559,74 +559,86 @@ elif app_mode == "🎵 Lyria Music Studio":
                 except Exception as e: st.error(f"Error: {e}")
 
 # =====================================================================
-# 📌 MODE: TRANSLATION / TRANSCRIPT STUDIO (FastAPI + Gemini 2.5)
+# 📌 MODE 4: TRANSLATION / TRANSCRIPT STUDIO (All-in-One Streamlit)
 # =====================================================================
 elif app_mode == "⚡ Translation/Transcript Studio":
     st.markdown('<h2 style="color:#00e5ff;">⚡ Translation & Transcript Studio</h2>', unsafe_allow_html=True)
-    st.markdown("FastAPI နှင့် Gemini 2.5 AI ကို အသုံးပြု၍ Video များကို အလိုအလျောက် မြန်မာစာတန်းထိုး ထုတ်ယူခြင်း")
+    st.markdown("Gemini 2.5 Flash ကို အသုံးပြု၍ Video များကို အလိုအလျောက် မြန်မာစာတန်းထိုး ထုတ်ယူခြင်း (Standalone Mode)")
 
-    # FastAPI Server URL 
-    FASTAPI_URL = st.text_input("🔗 FastAPI Server URL:", value="http://127.0.0.1:8000")
-    
     st.markdown("### 📥 1. Video URL ထည့်ရန်")
     video_url = st.text_input("YouTube / FB / TikTok URL ထည့်ပါ:")
     
-    if st.button("🚀 Backend သို့ ပေးပို့မည်"):
-        if not video_url:
-            st.error("URL ထည့်သွင်းရန် လိုအပ်ပါသည်။")
+    if st.button("🚀 ချက်ချင်း ဘာသာပြန်မည်"):
+        # ဘယ်ဘက် Menu မှာ သိမ်းထားတဲ့ Gemini API Key ကို လှမ်းယူခြင်း
+        # (မင်းရဲ့ Code ထဲက load_key function နဲ့ သက်ဆိုင်ရာ Key File ကို ယူပါမယ်)
+        gemini_api_key = load_key(API_KEY_FILE) 
+        
+        if not gemini_api_key:
+            st.error("⚠️ ကျေးဇူးပြု၍ ဘယ်ဘက် Menu တွင် Gemini API Key ကို အရင်ထည့်ပါ။")
+        elif not video_url:
+            st.error("⚠️ URL ထည့်သွင်းရန် လိုအပ်ပါသည်။")
         else:
-            with st.spinner("FastAPI ဆာဗာသို့ ပေးပို့နေပါသည်..."):
+            with st.spinner("🔄 Processing Video & Audio..."):
                 try:
-                    # ၁။ FastAPI ဆီကို Video URL လှမ်းပို့ခြင်း
-                    api_endpoint = f"{FASTAPI_URL}/api/v1/projects/import"
-                    payload = {"url": video_url}
-                    response = requests.post(api_endpoint, json=payload)
+                    # 1. Gemini AI ကို API Key ဖြင့် ချိတ်ဆက်ခြင်း
+                    genai.configure(api_key=gemini_api_key)
                     
-                    if response.status_code == 200:
-                        data = response.json()
-                        project_id = data.get("project_id")
+                    # 2. ဗီဒီယို/အသံ ဒေါင်းလုဒ်ဆွဲခြင်း (yt-dlp)
+                    project_id = "temp_gemini_" + str(int(time.time()))
+                    st.info("⬇️ ဗီဒီယိုမှ အသံဖိုင်ကို ဆွဲယူနေပါသည်...")
+                    
+                    ydl_opts = {
+                        'format': 'bestaudio/best', # Audio သီးသန့်ဆွဲတာ ပိုမြန်တယ်
+                        'outtmpl': f'{project_id}.%(ext)s',
+                        'quiet': True
+                    }
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        info = ydl.extract_info(video_url, download=True)
+                        downloaded_file = ydl.prepare_filename(info)
                         
-                        # Task ID ကို ယူခြင်း
-                        msg = data.get("message", "")
-                        task_id = msg.split("Task ")[1].split(" started")[0] if "Task" in msg else None
-                        
-                        st.success(f"✅ အောင်မြင်စွာ ပေးပို့ပြီးပါပြီ! (Project ID: {project_id})")
-                        
-                        if task_id:
-                            st.info(f"🔄 Background Task ID: {task_id} ဖြင့် အလုပ်လုပ်နေပါပြီ။ စောင့်ကြည့်နေပါသည်...")
-                            
-                            status_placeholder = st.empty()
-                            progress_bar = st.progress(0)
-                            
-                            # ၂။ Backend ဆီက Status ကို ၃ စက္ကန့်တစ်ခါ လှမ်းမေးခြင်း
-                            while True:
-                                task_res = requests.get(f"{FASTAPI_URL}/api/v1/tasks/{task_id}")
-                                if task_res.status_code == 200:
-                                    task_data = task_res.json()
-                                    current_status = task_data.get("status")
-                                    info = task_data.get("info")
-                                    
-                                    status_placeholder.info(f"Текущий Status: **{current_status}**")
-                                    
-                                    if isinstance(info, dict) and "progress" in info:
-                                        progress_bar.progress(info["progress"] / 100.0)
-                                        
-                                    if current_status == "COMPLETED":
-                                        status_placeholder.success("🎉 Gemini 2.5 ဖြင့် ဘာသာပြန်ခြင်း အောင်မြင်စွာ ပြီးဆုံးပါပြီ!")
-                                        progress_bar.progress(1.0)
-                                        
-                                        st.markdown("### 📝 ထွက်လာသော Subtitles များ:")
-                                        st.json(task_data.get("result", {}))
-                                        break
-                                        
-                                    elif current_status == "FAILED":
-                                        status_placeholder.error(f"❌ Error ဖြစ်သွားပါသည်: {info.get('error', 'Unknown Error')}")
-                                        break
-                                        
-                                time.sleep(3)
-                        else:
-                            st.warning("Task ID ကို ခွဲခြား၍မရပါ။ FastAPI Backend ကုဒ်ကို စစ်ဆေးပါ။")
-                    else:
-                        st.error(f"API Error: {response.text}")
+                    # 3. အသံဖိုင်ကို Gemini ကြိုက်သည့် WAV ဖော်မတ်သို့ ပြောင်းခြင်း (FFmpeg)
+                    st.info("🎵 အသံဖိုင် (Audio) ပြင်ဆင်နေပါသည်...")
+                    audio_path = f"{project_id}.wav"
+                    (
+                        ffmpeg
+                        .input(downloaded_file)
+                        .output(audio_path, format='wav', acodec='pcm_s16le', ac=1, ar='16k')
+                        .overwrite_output()
+                        .run(cmd=FFMPEG_BINARY, quiet=True)
+                    )
+                    
+                    # 4. Gemini 2.5 Flash ဆီသို့ ပေးပို့ခြင်း
+                    st.info("🤖 Gemini 2.5 Flash သို့ ပေးပို့၍ မြန်မာလို ဘာသာပြန်နေပါသည် (အချိန်အနည်းငယ် ကြာနိုင်ပါသည်)...")
+                    uploaded_audio = genai.upload_file(path=audio_path)
+                    
+                    prompt = """
+                    You are a professional movie subtitle generator and translator. 
+                    Listen to this audio and generate subtitles.
+                    Translate the spoken English directly into natural Myanmar (Burmese) language.
+                    
+                    Output MUST be ONLY a valid JSON array of objects. Do not include ```json or any other markdown formatting.
+                    Each object must have:
+                    - "start": start time in seconds (float)
+                    - "end": end time in seconds (float)
+                    - "text": the translated Myanmar text
+                    """
+                    
+                    model = genai.GenerativeModel('gemini-2.5-flash')
+                    response = model.generate_content([prompt, uploaded_audio])
+                    
+                    # 5. Cloud ပေါ်တင်ထားသော အသံဖိုင်များကို ပြန်ဖျက်ခြင်း (Storage မပြည့်အောင်)
+                    genai.delete_file(uploaded_audio.name)
+                    if os.path.exists(downloaded_file): os.remove(downloaded_file)
+                    if os.path.exists(audio_path): os.remove(audio_path)
+                    
+                    # 6. ရလဒ်ကို ဖော်ပြခြင်း
+                    raw_text = response.text.strip().replace("```json", "").replace("```", "")
+                    import json # အပေါ်မှာ import မလုပ်ရသေးရင် လုပ်ဖို့
+                    subtitles = json.loads(raw_text)
+                    
+                    st.success("🎉 ဘာသာပြန်ခြင်း အောင်မြင်စွာ ပြီးဆုံးပါပြီ!")
+                    st.markdown("### 📝 ထွက်လာသော Subtitles များ:")
+                    st.json(subtitles)
+                    
                 except Exception as e:
-                    st.error(f"Backend သို့ ချိတ်ဆက်၍ မရပါ: {str(e)}")
+                    st.error(f"❌ Error ဖြစ်သွားပါသည်: {str(e)}")
