@@ -7,3 +7,4 @@ imageio-ffmpeg
 requests
 groq
 openai
+openai-whisper
