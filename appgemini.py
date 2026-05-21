@@ -702,9 +702,9 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                     st.session_state.title_suggestions = response_json.get("titles", [])
                     subtitles_json = response_json.get("subtitles", [])
 
-                    # 4. JSON ကို SRT ပြောင်းခြင်း
-                    st.session_state.srt_path = f"{project_id}.srt"
-                    with open(st.session_state.srt_path, "w", encoding="utf-8-sig") as f:
+                  # 4. JSON ကို SRT ပြောင်းခြင်း (Silence Gaps & Over-extension Fix) 🛠️
+                    srt_path = f"{project_id}.srt"
+                    with open(srt_path, "w", encoding="utf-8-sig") as f:
                         for i, sub in enumerate(subtitles_json):
                             def format_seconds(secs):
                                 total_seconds = float(secs)
@@ -716,12 +716,20 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                             
                             start_val = float(sub['start'])
                             end_val = float(sub['end'])
-                            if end_val <= start_val or (end_val - start_val) > 10.0: end_val = start_val + 3.0
+                            
+                            # 🚨 [CRITICAL FIX]: စကားပြောပြီးနောက် Blank Gap ကြီးများတွင် စာတန်းအကြာကြီးပေါ်မနေစေရန် ညှိခြင်း
+                            # စာသားတစ်ခု၏ ပျမ်းမျှအရှည်ကို တွက်ချက်၍ အချိန်ကန့်သတ်မည် (စာလုံးရေအလိုက် စက္ကန့်သတ်မှတ်ခြင်း)
+                            text_length = len(sub['text'])
+                            # စာလုံးရေအလိုက် ပေါ်သင့်သည့် စက္ကန့်ကို ခန့်မှန်းတွက်ချက်ခြင်း (ဥပမာ- စာလုံး ၂၀ ဆိုလျှင် ၃ စက္ကန့်ခန့်)
+                            estimated_duration = max(2.5, min(6.0, text_length * 0.15)) 
+                            
+                            # အကယ်၍ Gemini ပေးသော End Time က အရမ်းကြာနေလျှင် (သို့မဟုတ်) အစထက် ငယ်နေလျှင်
+                            if end_val <= start_val or (end_val - start_val) > estimated_duration:
+                                end_val = start_val + estimated_duration
                                 
                             start_str = format_seconds(start_val)
                             end_str = format_seconds(end_val)
                             f.write(f"{i+1}\n{start_str} --> {end_str}\n{sub['text']}\n\n")
-
                     # 5. Video Rendering Engine (FFmpeg Filters)
                     st.session_state.output_video_path = f"{project_id}_rendered.mp4"
                     st.info("🎬 ဗီဒီယို ပြင်ဆင်ထုတ်လုပ်နေပါသည်...")
