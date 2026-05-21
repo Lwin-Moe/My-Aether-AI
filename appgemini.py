@@ -561,11 +561,11 @@ elif app_mode == "🎵 Lyria Music Studio":
                 except Exception as e: st.error(f"Error: {e}")
 
 # =====================================================================
-# 📌 MODE 5: TRANSLATION / TRANSCRIPT STUDIO (Lightning Fast Subtitle Engine)
+# 📌 MODE 4: TRANSLATION / TRANSCRIPT STUDIO (Whisper Timeline + Gemini Translation)
 # =====================================================================
 elif app_mode == "⚡ Translation/Transcript Studio":
-    st.markdown('<h2 style="color:#00e5ff;">⚡ Translation & Subtitle Studio</h2>', unsafe_allow_html=True)
-    st.markdown("Gemini 2.5 ဖြင့် မြန်မာပြန်ဆိုပြီး CapCut တွင် အဆင်သင့်သုံးနိုင်သော SRT ထုတ်ပေးသည့်စနစ်")
+    st.markdown('<h2 style="color:#00e5ff;">⚡ Translation & Subtitle Studio (AI Dual Engine)</h2>', unsafe_allow_html=True)
+    st.markdown("Whisper AI ဖြင့် မီလီစက္ကန့်မလွဲ Timeline ယူ၍ Gemini 2.5 ဖြင့် အဓိပ္ပာယ်မှန်ကန်စွာ ဘာသာပြန်ဆိုခြင်း")
 
     st.markdown("### 📥 1. Video URL ထည့်ရန်")
     video_url = st.text_input("YouTube / FB / TikTok / Rednote URL ထည့်ပါ:")
@@ -586,12 +586,13 @@ elif app_mode == "⚡ Translation/Transcript Studio":
             st.session_state.process_done = False
             st.session_state.title_suggestions = []
             
-            with st.spinner("🔄 စာတန်းထိုးများ ပြန်ဆိုနေပါသည်... (ကျေးဇူးပြု၍ စောင့်ပါ)"):
+            with st.spinner("🔄 စနစ်နှစ်ခုစလုံး အလုပ်လုပ်နေပါသည်... (ကျေးဇူးပြု၍ စောင့်ပါ)"):
                 error_logs = []
                 try:
+                    import whisper # Whisper library အား အသုံးပြုခြင်း
                     project_id = "project_" + str(int(time.time()))
                     
-                    # 1. Download Audio ONLY (Rednote အတွက် အမြန်ဆုံး အသံသီးသန့်စနစ်) ⚡
+                    # 1. Download Audio ONLY ⚡
                     st.info("⬇️ ဗီဒီယိုမှ အသံလမ်းကြောင်းကို ရယူနေပါသည်...")
                     ydl_opts = {
                         'format': 'bestaudio/best',
@@ -606,44 +607,63 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                         info = ydl.extract_info(video_url, download=True)
                         downloaded_audio = ydl.prepare_filename(info)
 
-                    # 2. Convert to Standard WAV
+                    # 2. Convert to Standard WAV for Whisper
                     wav_path = f"{project_id}.wav"
                     (
                         ffmpeg.input(downloaded_audio)
-                        .output(wav_path, format='wav', acodec='pcm_s16le')
+                        .output(wav_path, format='wav', acodec='pcm_s16le', ac=1, ar='16k')
                         .overwrite_output().run(quiet=True)
                     )
                     if os.path.exists(downloaded_audio): os.remove(downloaded_audio)
 
-                    # 3. Gemini Subtitle Processing
-                    st.info("🤖 Gemini 2.5 Flash ဖြင့် စာသားနှင့် ခေါင်းစဉ်များ ထုတ်ယူနေပါသည်...")
+                    # 3. Whisper AI - CapCut ကဲ့သို့ မီလီစက္ကန့်မလွဲ Timeline ဖတ်ယူခြင်း 🎙️
+                    st.info("🎙️ Whisper AI က ဗီဒီယိုအသံကို နားထောင်၍ တိကျသော Timeline ထုတ်ယူနေပါသည်...")
+                    whisper_model = whisper.load_model("base") # ပေါ့ပါးမြန်ဆန်သော Base Model ကိုသုံးပါမည်
+                    whisper_result = whisper_model.transcribe(wav_path, word_timestamps=False)
+                    
+                    # Whisper မှ ထွက်လာသော သန့်စင်ပြီးသား Timeline segments များ
+                    segments = whisper_result.get("segments", [])
+                    
+                    # Gemini သို့ ပို့ရန် စက္ကန့်များနှင့် စာသားများအား ကျစ်လျစ်စွာ ပြင်ဆင်ခြင်း
+                    whisper_json = []
+                    for seg in segments:
+                        whisper_json.append({
+                            "start": round(seg["start"], 3),
+                            "end": round(seg["end"], 3),
+                            "text": seg["text"].strip()
+                        })
+
+                    # 4. Gemini 2.5 Flash - တိကျသော Timeline အတိုင်း မြန်မာဘာသာသို့ အနုပညာဆန်စွာ ပြန်ဆိုခြင်း 🤖
+                    st.info("🤖 Gemini 2.5 Flash ဖြင့် မူရင်းအချိန်အတိုင်း မြန်မာဘာသာပြန်ဆိုနေပါသည်...")
                     response_json = None
                     
-                    prompt = """
-                    Listen to this audio carefully and generate:
-                    1. A list of 5 different viral, short, and catchy video titles in Myanmar language (suitable for TikTok Movie Recap/Psychology).
-                    2. Translated Myanmar (Burmese) subtitles sorted sequentially.
+                    # Whisper မှရလာသော တိကျသည့် အချိန်အတုံးလေးများကို မပြောင်းလဲဘဲ text ကိုသာ မြန်မာပြန်ခိုင်းသည့် Prompt
+                    prompt = f"""
+                    You are an expert movie subtitle translator. You are given a JSON array of subtitles with precise timestamps.
+                    Your tasks:
+                    1. Generate 5 different viral, short, catchy video titles in Myanmar language.
+                    2. Translate the "text" field of each item into natural, high-quality Myanmar (Burmese) language suitable for a TikTok movie recap. KEEP THE EXACT "start" AND "end" TIMESTAMPS UNCHANGED.
                     
-                    Output MUST be ONLY a valid JSON object. Do not include ```json or any markdown.
-                    {
+                    Input Data:
+                    {json.dumps(whisper_json, ensure_ascii=False)}
+                    
+                    Output MUST be ONLY a valid JSON object. Do not include ```json or any markdown formatting.
+                    The output JSON structure MUST be exactly like this:
+                    {{
                       "titles": ["ခေါင်းစဉ် ၁", "ခေါင်းစဉ် ၂", "ခေါင်းစဉ် ၃", "ခေါင်းစဉ် ၄", "ခေါင်းစဉ် ၅"],
                       "subtitles": [
-                        "မြန်မာဘာသာပြန်စာသား ၁",
-                        "မြန်မာဘာသာပြန်စာသား ၂",
-                        "မြန်မာဘာသာပြန်စာသား ၃"
+                        {{"start": 0.038, "end": 0.988, "text": "မြန်မာဘာသာပြန်စာသား"}}
                       ]
-                    }
+                    }}
                     """
                     
                     for index, current_key in enumerate(api_keys):
                         try:
                             st.toast(f"🔑 Key ({index + 1}/{len(api_keys)}) ဖြင့် ကြိုးစားနေပါသည်...", icon="⏳")
                             genai.configure(api_key=current_key)
-                            uploaded_file = genai.upload_file(path=wav_path)
                             
                             model = genai.GenerativeModel('gemini-2.5-flash')
-                            response = model.generate_content([prompt, uploaded_file])
-                            genai.delete_file(uploaded_file.name)
+                            response = model.generate_content(prompt)
                             
                             raw_text = response.text.strip().replace("```json", "").replace("```", "")
                             response_json = json.loads(raw_text)
@@ -653,20 +673,16 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                             continue
                     
                     if response_json is None:
-                        st.error("🚨 API Key များ အဆင်မပြေပါ။")
-                        raise Exception("API Error")
+                        st.error("🚨 Gemini API Key များ အဆင်မပြေပါ။")
+                        raise Exception("Gemini Error")
 
                     st.session_state.title_suggestions = response_json.get("titles", [])
-                    subtitles_list = response_json.get("subtitles", [])
+                    final_subtitles = response_json.get("subtitles", [])
 
-                    # 4. JSON ကို CapCut-Ready SRT ပုံစံသို့ စီစဉ်ခြင်း 🛠️
-                    # (CapCut တွင် Import လုပ်ပြီး Auto-Sync နှိပ်ရန်အတွက် အချိန်အား ကနဦး ၁ စက္ကန့်စီ ပုံသေခွဲပေးထားပါသည်)
+                    # 5. မီလီစက္ကန့်မလွဲသော SRT ဖိုင်အဖြစ် ပြောင်းလဲထုတ်ယူခြင်း 🛠️
                     st.session_state.srt_path = f"{project_id}.srt"
                     with open(st.session_state.srt_path, "w", encoding="utf-8-sig") as f:
-                        for i, text_content in enumerate(subtitles_list):
-                            start_sec = i * 2
-                            end_sec = start_sec + 1.5
-                            
+                        for i, sub in enumerate(final_subtitles):
                             def format_seconds(secs):
                                 total_seconds = float(secs)
                                 hours = int(total_seconds // 3600)
@@ -675,10 +691,12 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                                 milliseconds = int(round((total_seconds % 1) * 1000))
                                 return f"{hours:02d}:{minutes:02d}:{seconds:02d},{milliseconds:03d}"
                             
-                            f.write(f"{i+1}\n{format_seconds(start_sec)} --> {format_seconds(end_sec)}\n{text_content}\n\n")
+                            start_str = format_seconds(sub['start'])
+                            end_str = format_seconds(sub['end'])
+                            f.write(f"{i+1}\n{start_str} --> {end_str}\n{sub['text']}\n\n")
 
                     st.session_state.process_done = True
-                    st.success("🎉 ပြန်ဆိုခြင်း အောင်မြင်စွာ ပြီးဆုံးပါပြီ!")
+                    st.success("🎉 Whisper & Gemini ပူးပေါင်းမှု အောင်မြင်စွာ ပြီးဆုံးပါပြီ!")
                     st.rerun()
 
                 except Exception as e:
@@ -699,8 +717,8 @@ elif app_mode == "⚡ Translation/Transcript Studio":
 
         st.markdown("### 📥 Download Subtitle")
         with open(st.session_state.srt_path, "rb") as f:
-            st.download_button(label="📥 Download Subtitle (.srt ဖိုင်ရယူရန်)", data=f, file_name="MrZack_CapCut_Ready.srt", mime="text/plain")
-            st.caption("💡 **CapCut အသုံးပြုနည်းလမ်းညွှန်:** ယခုရရှိလာသော SRT ဖိုင်အား CapCut ထဲသို့ သွင်းပါ။ ပြီးလျှင် စာတန်းထိုး Track ကိုနှိပ်၍ **'Auto-Realign' (သို့မဟုတ်) 'Sync to Audio'** ကို နှိပ်ပေးလိုက်ပါက ဗီဒီယိုအရှိန်နှင့်ကိုက်ညီအောင် CapCut မှ ကွက်တိအလိုအလျောက် ညှိပေးသွားမည် ဖြစ်သည်။")
+            st.download_button(label="📥 Download Subtitle (.srt ဖိုင်ရယူရန်)", data=f, file_name="MrZack_Whisper_Perfect.srt", mime="text/plain")
+            st.caption("💡 **ပြီးပြည့်စုံသော နည်းလမ်း:** ယခုထွက်လာသော SRT သည် Whisper က ကွက်တိ နေရာချပေးထားပြီး Gemini က ဘာသာပြန်ပေးထားခြင်း ဖြစ်သဖြင့် CapCut PC ထဲသို့ သွင်းလိုက်ရုံဖြင့် အချိန်ကော စာသားပါ မလွဲမသွေ ကွက်တိကျနေပါလိမ့်မည်။")
 
         st.markdown("### 📝 Subtitle Preview")
         with open(st.session_state.srt_path, "r", encoding="utf-8") as f:
