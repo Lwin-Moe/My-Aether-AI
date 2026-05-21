@@ -561,7 +561,7 @@ elif app_mode == "🎵 Lyria Music Studio":
                 except Exception as e: st.error(f"Error: {e}")
 
 # =====================================================================
-# 📌 MODE: TRANSLATION / TRANSCRIPT STUDIO (Clean Video + UI Titles)
+# 📌 MODE 4: TRANSLATION / TRANSCRIPT STUDIO (Clean Video + UI Titles)
 # =====================================================================
 elif app_mode == "⚡ Translation/Transcript Studio":
     st.markdown('<h2 style="color:#00e5ff;">⚡ Translation & Video Render Studio</h2>', unsafe_allow_html=True)
@@ -732,14 +732,28 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                         else:
                             video_stream = video_stream.filter('subtitles', st.session_state.srt_path)
                     
+                  # Apply Watermark Logo (Size & Position Fixed) 🛠️
                     if watermark_file is not None:
                         wm_path = f"wm_{project_id}.png"
                         with open(wm_path, "wb") as f: f.write(watermark_file.read())
-                        wm_stream = ffmpeg.input(wm_path)
-                        if wm_position == "Top Right": overlay_xy = {'x': 'main_w-overlay_w-10', 'y': '10'}
-                        elif wm_position == "Top Left": overlay_xy = {'x': '10', 'y': '10'}
-                        elif wm_position == "Bottom Right": overlay_xy = {'x': 'main_w-overlay_w-10', 'y': 'main_h-overlay_h-10'}
-                        else: overlay_xy = {'x': '10', 'y': 'main_h-overlay_h-10'}
+                        
+                        # Logo ဖိုင်အား FFmpeg Input အဖြစ်ယူခြင်း
+                        wm_input = ffmpeg.input(wm_path)
+                        
+                        # 📏 Logo Size ကို ဗီဒီယိုအကျယ်ရဲ့ ၁၀% သာရှိအောင် scaleFilter ဖြင့် သေးယူခြင်း (scale=iw*0.1)
+                        wm_stream = wm_input.filter('scale', w='iw*0.10', h='-1') # -1 သုံးခြင်းဖြင့် Aspect Ratio မပျက်အောင် ထိန်းထားပါမည်
+                        
+                        # 📍 Position Logic (နေရာချခြင်း - ဘေးပတ်ပတ်လည် ၁၀ pixel စီ ခွာမည်)
+                        if wm_position == "Top Right":
+                            overlay_xy = {'x': 'main_w-overlay_w-10', 'y': '10'}
+                        elif wm_position == "Top Left":
+                            overlay_xy = {'x': '10', 'y': '10'}
+                        elif wm_position == "Bottom Right":
+                            overlay_xy = {'x': 'main_w-overlay_w-10', 'y': 'main_h-overlay_h-10'}
+                        else: # Bottom Left
+                            overlay_xy = {'x': '10', 'y': 'main_h-overlay_h-10'}
+                            
+                        # ScaleFilter လုပ်ထားသော Logo Stream ကို Overlay တွင် အသုံးပြုခြင်း
                         video_stream = ffmpeg.overlay(video_stream, wm_stream, **overlay_xy)
 
                     (
