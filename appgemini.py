@@ -627,11 +627,12 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                         info = ydl.extract_info(video_url, download=True)
                         st.session_state.downloaded_file = ydl.prepare_filename(info)
 
-                    # 2. Extract Audio for Gemini
+                 # 2. Extract Audio for Gemini (Original Precision Fix) 🛠️
                     st.session_state.audio_path = f"{project_id}.wav"
                     (
                         ffmpeg.input(st.session_state.downloaded_file)
-                        .output(st.session_state.audio_path, format='wav', acodec='pcm_s16le', ac=1, ar='16k')
+                        # ar='16k' ကို ဖြုတ်လိုက်ပြီး မူရင်းဗီဒီယိုရဲ့ အသံနမူနာနှုန်း (Sample Rate) အတိုင်း အပြည့်အဝထုတ်ယူခြင်း
+                        .output(st.session_state.audio_path, format='wav', acodec='pcm_s16le')
                         .overwrite_output().run(quiet=True)
                     )
 
