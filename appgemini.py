@@ -561,45 +561,17 @@ elif app_mode == "🎵 Lyria Music Studio":
                 except Exception as e: st.error(f"Error: {e}")
 
 # =====================================================================
-# 📌 MODE 4: TRANSLATION / TRANSCRIPT STUDIO (Clean Video + UI Titles)
+# 📌 MODE 4 : TRANSLATION / TRANSCRIPT STUDIO (Fast & Precision SRT Subtitle Engine)
 # =====================================================================
 elif app_mode == "⚡ Translation/Transcript Studio":
-    st.markdown('<h2 style="color:#00e5ff;">⚡ Translation & Video Render Studio</h2>', unsafe_allow_html=True)
-    st.markdown("Gemini 2.5 ဖြင့် ဘာသာပြန်ခြင်း၊ Copyright Bypass လုပ်ခြင်းနှင့် စစ်မှန်သော မြန်မာစာတန်းထိုး ထုတ်ခြင်း")
+    st.markdown('<h2 style="color:#00e5ff;">⚡ Translation & Subtitle Studio</h2>', unsafe_allow_html=True)
+    st.markdown("Gemini 2.5 ဖြင့် မြန်မာပြန်ဆိုပြီး CapCut တွင် အဆင်သင့်သုံးနိုင်သော SRT ထုတ်ပေးသည့်စနစ်")
 
     st.markdown("### 📥 1. Video URL ထည့်ရန်")
     video_url = st.text_input("YouTube / FB / TikTok URL ထည့်ပါ:")
     
-    # ---------------------------------------------------------
-    # ⚙️ ADVANCED SETTINGS (UI)
-    # ---------------------------------------------------------
-    with st.expander("🛠️ Advanced Video & Render Settings", expanded=True):
-        st.markdown("**1. Copyright Bypass Tools**")
-        col1, col2 = st.columns(2)
-        with col1:
-            apply_flip = st.checkbox("↔️ Horizontal Flip (ဘယ်ညာလှန်ရန်)")
-        with col2:
-            apply_zoom = st.checkbox("🔍 Auto Zoom (5% Crop ဖြတ်၍ ချဲ့ရန်)")
-
-        st.markdown("**2. Watermark / Logo**")
-        watermark_file = st.file_uploader("Logo တင်ရန် (PNG အကြည်ဖြစ်ရမည်)", type=['png'])
-        wm_position = st.selectbox("Watermark နေရာ", ["Top Right", "Top Left", "Bottom Right", "Bottom Left"])
-
-        st.markdown("**3. Output Settings**")
-        render_mode = st.radio("ထုတ်ယူမည့် ပုံစံရွေးပါ:", [
-            "Export SRT File Only (Video မပြောင်းလဲဘဲ မူရင်းအတိုင်း ထုတ်မည်)", 
-            "Burn into Video (ဗီဒီယိုပေါ်တွင် မြန်မာစာတန်းထိုး တစ်ခါတည်း ကပ်မည်)", 
-            "Both (Burn + SRT)"
-        ])
-    
-  # ---------------------------------------------------------
-    # 🚀 MAIN PROCESSING LOGIC WITH PERSISTENCE FIX
-    # ---------------------------------------------------------
-    # အစပိုင်းတွင် Session State ထဲ၌ Variable များ မရှိပါက ကြိုတင်သတ်မှတ်ထားခြင်း
-    if "downloaded_file" not in st.session_state: st.session_state.downloaded_file = None
-    if "audio_path" not in st.session_state: st.session_state.audio_path = None
+    # Session State ကြိုတင်သတ်မှတ်ခြင်း
     if "srt_path" not in st.session_state: st.session_state.srt_path = None
-    if "output_video_path" not in st.session_state: st.session_state.output_video_path = None
     if "title_suggestions" not in st.session_state: st.session_state.title_suggestions = []
     if "process_done" not in st.session_state: st.session_state.process_done = False
 
@@ -612,53 +584,45 @@ elif app_mode == "⚡ Translation/Transcript Studio":
         elif not video_url:
             st.error("⚠️ URL ထည့်သွင်းရန် လိုအပ်ပါသည်။")
         else:
-            # ခလုတ်အသစ် ထပ်နှိပ်ပါက အဟောင်းများကို အရင်ရှင်းထုတ်ခြင်း
             st.session_state.process_done = False
             st.session_state.title_suggestions = []
             
-            with st.spinner("🔄 အလုပ်လုပ်နေပါသည်... (ကျေးဇူးပြု၍ စောင့်ပါ)"):
+            with st.spinner("🔄 စာတန်းထိုးများ ပြန်ဆိုနေပါသည်... (ကျေးဇူးပြု၍ စောင့်ပါ)"):
                 error_logs = []
                 try:
                     project_id = "project_" + str(int(time.time()))
                     
-                    # 1. Download Video
-                    st.info("⬇️ ဗီဒီယို ဒေါင်းလုဒ်ဆွဲနေပါသည်...")
+                    # 1. Download Audio ONLY (မြန်ဆန်စေရန် အသံသီးသန့်သာ ဒေါင်းပါမည်)
+                    st.info("⬇️ ဗီဒီယိုမှ အသံလမ်းကြောင်းကို ရယူနေပါသည်...")
                     ydl_opts = {
-                        'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4',
+                        'format': 'bestaudio/best',
                         'outtmpl': f'{project_id}.%(ext)s',
                         'quiet': True
                     }
                     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                         info = ydl.extract_info(video_url, download=True)
-                        st.session_state.downloaded_file = ydl.prepare_filename(info)
+                        downloaded_audio = ydl.prepare_filename(info)
 
-                    # 2. Extract Audio for Backup
-                    st.session_state.audio_path = f"{project_id}.wav"
+                    # 2. Convert to Standard WAV for Gemini
+                    wav_path = f"{project_id}.wav"
                     (
-                        ffmpeg.input(st.session_state.downloaded_file)
-                        .output(st.session_state.audio_path, format='wav', acodec='pcm_s16le')
+                        ffmpeg.input(downloaded_audio)
+                        .output(wav_path, format='wav', acodec='pcm_s16le')
                         .overwrite_output().run(quiet=True)
                     )
 
-                    # 3. Gemini 2.5 Video Multimodal Processing🎥🔄
-                    st.info("🤖 Gemini 2.5 Flash ဖြင့် ဗီဒီယိုကို လေ့လာ၍ စာတန်းထိုး ထုတ်ယူနေပါသည်...")
+                    # 3. Gemini High-Precision Translation
+                    st.info("🤖 Gemini 2.5 Flash ဖြင့် စာသားနှင့် ခေါင်းစဉ်များ ထုတ်ယူနေပါသည်...")
                     response_json = None
                     
                     prompt = """
-                    You are a professional subtitle generator. Analyze both the visual frames and audio of this video to generate:
+                    Listen to this audio carefully and generate:
                     1. A list of 5 different viral, short, and catchy video titles in Myanmar language (suitable for TikTok Movie Recap/Psychology).
-                    2. Translated Myanmar (Burmese) subtitles. The timestamp MUST align exactly with the actual visual timeline of the video (Do not extend timestamps beyond the video duration).
+                    2. Translated Myanmar (Burmese) subtitles with their approximate timestamps.
                     
-                    Output MUST be ONLY a valid JSON object. Do not include ```json or any markdown formatting.
-                    The JSON structure MUST be exactly like this:
+                    Output MUST be ONLY a valid JSON object. Do not include ```json or any markdown.
                     {
-                      "titles": [
-                        "ခေါင်းစဉ် ၁",
-                        "ခေါင်းစဉ် ၂",
-                        "ခေါင်းစဉ် ၃",
-                        "ခေါင်းစဉ် ၄",
-                        "ခေါင်းစဉ် ၅"
-                      ],
+                      "titles": ["ခေါင်းစဉ် ၁", "ခေါင်းစဉ် ၂", "ခေါင်းစဉ် ၃", "ခေါင်းစဉ် ၄", "ခေါင်းစဉ် ၅"],
                       "subtitles": [
                         {"start": 0.0, "end": 2.5, "text": "မြန်မာစာတန်း"}
                       ]
@@ -669,42 +633,29 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                         try:
                             st.toast(f"🔑 Key ({index + 1}/{len(api_keys)}) ဖြင့် ကြိုးစားနေပါသည်...", icon="⏳")
                             genai.configure(api_key=current_key)
+                            uploaded_file = genai.upload_file(path=wav_path)
                             
-                            uploaded_video = genai.upload_file(path=st.session_state.downloaded_file)
-                            
-                            while uploaded_video.state.name == "PROCESSING":
-                                time.sleep(2)
-                                uploaded_video = genai.get_file(uploaded_video.name)
-                                
-                            if uploaded_video.state.name == "FAILED":
-                                raise Exception("Gemini Video Processing Failed.")
-                                
                             model = genai.GenerativeModel('gemini-2.5-flash')
-                            response = model.generate_content([prompt, uploaded_video])
-                            genai.delete_file(uploaded_video.name)
+                            response = model.generate_content([prompt, uploaded_file])
+                            genai.delete_file(uploaded_file.name)
                             
                             raw_text = response.text.strip().replace("```json", "").replace("```", "")
                             response_json = json.loads(raw_text)
-                            
-                            st.toast(f"✅ Key {index + 1} အောင်မြင်သွားပါပြီ။", icon="🚀")
                             break 
                         except Exception as api_error:
-                            st.toast(f"⚠️ Key {index + 1} အဆင်မပြေပါ။", icon="❌")
-                            error_logs.append(f"Key {index + 1} Error: {str(api_error)}")
+                            error_logs.append(str(api_error))
                             continue
                     
                     if response_json is None:
-                        st.error("🚨 ထည့်သွင်းထားသော Gemini API Key များအားလုံး အသုံးပြု၍ မရတော့ပါ။")
-                        with st.expander("🔍 ဗားရှင်းအသေးစိတ် Error Logs ကြည့်ရန်"):
-                            for log in error_logs: st.write(log)
-                        raise Exception("API Keys Quota Exceeded or Invalid.")
+                        st.error("🚨 API Key များ အဆင်မပြေပါ။")
+                        raise Exception("API Error")
 
                     st.session_state.title_suggestions = response_json.get("titles", [])
                     subtitles_json = response_json.get("subtitles", [])
 
-                  # 4. JSON ကို SRT ပြောင်းခြင်း (Silence Gaps & Over-extension Fix) 🛠️
-                    srt_path = f"{project_id}.srt"
-                    with open(srt_path, "w", encoding="utf-8-sig") as f:
+                    # 4. JSON ကို SRT သို့ ပုံသွင်းခြင်း
+                    st.session_state.srt_path = f"{project_id}.srt"
+                    with open(st.session_state.srt_path, "w", encoding="utf-8-sig") as f:
                         for i, sub in enumerate(subtitles_json):
                             def format_seconds(secs):
                                 total_seconds = float(secs)
@@ -714,105 +665,37 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                                 milliseconds = int(round((total_seconds % 1) * 1000))
                                 return f"{hours:02d}:{minutes:02d}:{seconds:02d},{milliseconds:03d}"
                             
-                            start_val = float(sub['start'])
-                            end_val = float(sub['end'])
-                            
-                            # 🚨 [CRITICAL FIX]: စကားပြောပြီးနောက် Blank Gap ကြီးများတွင် စာတန်းအကြာကြီးပေါ်မနေစေရန် ညှိခြင်း
-                            # စာသားတစ်ခု၏ ပျမ်းမျှအရှည်ကို တွက်ချက်၍ အချိန်ကန့်သတ်မည် (စာလုံးရေအလိုက် စက္ကန့်သတ်မှတ်ခြင်း)
-                            text_length = len(sub['text'])
-                            # စာလုံးရေအလိုက် ပေါ်သင့်သည့် စက္ကန့်ကို ခန့်မှန်းတွက်ချက်ခြင်း (ဥပမာ- စာလုံး ၂၀ ဆိုလျှင် ၃ စက္ကန့်ခန့်)
-                            estimated_duration = max(2.5, min(6.0, text_length * 0.15)) 
-                            
-                            # အကယ်၍ Gemini ပေးသော End Time က အရမ်းကြာနေလျှင် (သို့မဟုတ်) အစထက် ငယ်နေလျှင်
-                            if end_val <= start_val or (end_val - start_val) > estimated_duration:
-                                end_val = start_val + estimated_duration
-                                
-                            start_str = format_seconds(start_val)
-                            end_str = format_seconds(end_val)
-                            f.write(f"{i+1}\n{start_str} --> {end_str}\n{sub['text']}\n\n")
-                    # 5. Video Rendering Engine (FFmpeg Filters)
-                    st.session_state.output_video_path = f"{project_id}_rendered.mp4"
-                    st.info("🎬 ဗီဒီယို ပြင်ဆင်ထုတ်လုပ်နေပါသည်...")
-                    
-                    video_stream = ffmpeg.input(st.session_state.downloaded_file)
-                    audio_stream = video_stream.audio
-                    
-                    if apply_flip:
-                        video_stream = video_stream.hflip()
-                    if apply_zoom:
-                        video_stream = video_stream.crop(x='iw*0.025', y='ih*0.025', width='iw*0.95', height='ih*0.95').filter('scale', w='iw', h='ih')
-                    
-                    if "Burn" in render_mode or "Both" in render_mode:
-                        if os.path.exists("Pyidaungsu.ttf"):
-                            video_stream = video_stream.filter('subtitles', st.session_state.srt_path, fontsdir='.', force_style='Fontname=Pyidaungsu,Fontsize=16')
-                        else:
-                            video_stream = video_stream.filter('subtitles', st.session_state.srt_path)
-                    
-                    if watermark_file is not None:
-                        wm_path = f"wm_{project_id}.png"
-                        with open(wm_path, "wb") as f: f.write(watermark_file.read())
-                        wm_input = ffmpeg.input(wm_path)
-                        wm_stream = wm_input.filter('scale', w='iw*0.10', h='-1') 
-                        
-                        if wm_position == "Top Right": overlay_xy = {'x': 'main_w-overlay_w-10', 'y': '10'}
-                        elif wm_position == "Top Left": overlay_xy = {'x': '10', 'y': '10'}
-                        elif wm_position == "Bottom Right": overlay_xy = {'x': 'main_w-overlay_w-10', 'y': 'main_h-overlay_h-10'}
-                        else: overlay_xy = {'x': '10', 'y': 'main_h-overlay_h-10'}
-                        video_stream = ffmpeg.overlay(video_stream, wm_stream, **overlay_xy)
+                            f.write(f"{i+1}\n{format_seconds(sub['start'])} --> {format_seconds(sub['end'])}\n{sub['text']}\n\n")
 
-                    (
-                        ffmpeg
-                        .output(video_stream, audio_stream, st.session_state.output_video_path, vcodec='libx264', crf=23, preset='fast', acodec='aac')
-                        .overwrite_output().run(quiet=True)
-                    )
-                    
-                    if watermark_file is not None and os.path.exists(wm_path): os.remove(wm_path)
-                    
-                    # အလုပ်အားလုံး အောင်မြင်စွာပြီးဆုံးကြောင်း အမှတ်အသားပြုခြင်း
                     st.session_state.process_done = True
-                    st.success("🎉 အောင်မြင်စွာ လုပ်ဆောင်ပြီးစီးပါပြီ!")
-                    st.rerun() # Refresh လုပ်ပြီး အောက်က Output Area ဆီသို့ တိုက်ရိုက်သွားခိုင်းခြင်း
+                    st.success("🎉 ပြန်ဆိုခြင်း အောင်မြင်စွာ ပြီးဆုံးပါပြီ!")
+                    st.rerun()
 
                 except Exception as e:
-                    st.error(f"❌ Error ဖြစ်သွားပါသည်: {str(e)}")
+                    st.error(f"❌ လုပ်ဆောင်ချက် မှားယွင်းပါသည်- {str(e)}")
                 finally:
-                    if st.session_state.audio_path and os.path.exists(st.session_state.audio_path): 
-                        os.remove(st.session_state.audio_path)
+                    if os.path.exists(downloaded_audio): os.remove(downloaded_audio)
+                    if os.path.exists(wav_path): os.remove(wav_path)
 
     # ---------------------------------------------------------
-    # 📺 OUTPUT DOWNLOAD & VIDEO PREVIEW (ခလုတ်အပြင်ဘက်သို့ ထုတ်ထားသောကြောင့် လုံးဝမပျောက်တော့ပါ 💯)
+    # 📺 UI OUTPUT AREA (လန်းဆန်းသန့်ရှင်းပြီး အမြဲပေါ်နေမည့်နေရာ)
     # ---------------------------------------------------------
-    if st.session_state.process_done and st.session_state.output_video_path and os.path.exists(st.session_state.output_video_path):
+    if st.session_state.process_done and st.session_state.srt_path and os.path.exists(st.session_state.srt_path):
         st.markdown("---")
         
-        # 🎥 ၁။ Video Preview
-        st.markdown("### 📺 Rendered Video Preview")
-        st.video(st.session_state.output_video_path)
-        
-        # 🏷️ ၂။ TikTok Viral Title Suggestions
+        # 🏷️ TikTok Titles Box
         if st.session_state.title_suggestions:
-            st.markdown("### 🏷️ TikTok Viral Title Suggestions (ရွေးချယ်စရာ ခေါင်းစဉ် ၅ မျိုး)")
-            st.markdown("ညာဘက်ထောင့်က Copy ခလုတ်လေးကို နှိပ်ပြီး အလွယ်တကူ ကူးယူနိုင်ပါသည်:")
+            st.markdown("### 🏷️ TikTok Viral Title Suggestions (ခေါင်းစဉ် ၅ မျိုး)")
             for t_title in st.session_state.title_suggestions:
                 st.code(f"{t_title}", language="text")
 
-        # 📥 ၃။ Download Zone
-        st.markdown("### 📥 Download Zone")
-        col_dl1, col_dl2 = st.columns(2)
-        
-        with col_dl1:
-            if "SRT" in render_mode or "Both" in render_mode:
-                if st.session_state.srt_path and os.path.exists(st.session_state.srt_path):
-                    with open(st.session_state.srt_path, "rb") as f:
-                        st.download_button(label="📥 Download Subtitle (.srt)", data=f, file_name="MrZack_Subtitles.srt", mime="text/plain")
-                        
-        with col_dl2:
-            with open(st.session_state.output_video_path, "rb") as f:
-                st.download_button(label="🎬 Download Video (.mp4)", data=f, file_name="MrZack_Rendered_Video.mp4", mime="video/mp4")
+        # 📥 Download Subtitle (.srt)
+        st.markdown("### 📥 Download Subtitle")
+        with open(st.session_state.srt_path, "rb") as f:
+            st.download_button(label="📥 Download Subtitle (.srt ဖိုင်ရယူရန်)", data=f, file_name="MrZack_CapCut_Ready.srt", mime="text/plain")
+            st.caption("💡 အကြံပြုချက်: ယခုရရှိလာသော SRT ဖိုင်အား CapCut ထဲသို့ တိုက်ရိုက်ဆွဲသွင်း (Import) ပြီး Auto-Align လုပ်လိုက်ပါက ဗီဒီယိုအရှိန်နှင့် ကိုက်ညီအောင် CapCut မှ ကွက်တိ ညှိပေးသွားမည် ဖြစ်သည်။")
 
-        # 📝 ၄။ Subtitle Preview
-        if st.session_state.srt_path and os.path.exists(st.session_state.srt_path):
-            st.markdown("### 📝 Subtitle Preview (စာတန်းထိုးအကျဉ်းချုပ်)")
-            with open(st.session_state.srt_path, "r", encoding="utf-8") as f:
-                lines = f.readlines()[:15]
-                st.text_area("SRT Preview", value="".join(lines), height=150)
+        # 📝 Subtitle Preview
+        st.markdown("### 📝 Subtitle Preview (စာတန်းထိုးအစမ်းကြည့်ရန်)")
+        with open(st.session_state.srt_path, "r", encoding="utf-8") as f:
+            st.text_area("SRT Preview", value="".join(f.readlines()[:20]), height=150)
