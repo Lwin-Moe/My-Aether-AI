@@ -676,17 +676,30 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                                 st.write(log)
                         raise Exception("API Keys Quota Exceeded or Invalid.")
 
-                    # 4. JSON ကို SRT ပြောင်းခြင်း (utf-8-sig သုံး၍ မြန်မာဖောင့်စနစ်တကျပြောင်းခြင်း)
-                    st.session_state.srt_path = f"{project_id}.srt"
-                    with open(st.session_state.srt_path, "w", encoding="utf-8-sig") as f:
+                  # 4. JSON ကို SRT ပြောင်းခြင်း (Enhanced Time Precision Bug-Fix) 🛠️
+                    srt_path = f"{project_id}.srt"
+                    with open(srt_path, "w", encoding="utf-8-sig") as f:
                         for i, sub in enumerate(subtitles_json):
-                            # 'import datetime' သုံးထားပါက အောက်ပါအတိုင်း အလုပ်လုပ်မည်
-                            start_td = datetime.timedelta(seconds=float(sub['start']))
-                            end_td = datetime.timedelta(seconds=float(sub['end']))
-                            start_str = str(start_td)[:-3].replace('.', ',') if '.' in str(start_td) else str(start_td) + ",000"
-                            end_str = str(end_td)[:-3].replace('.', ',') if '.' in str(end_td) else str(end_td) + ",000"
-                            if len(start_str.split(':')[0]) == 1: start_str = "0" + start_str
-                            if len(end_str.split(':')[0]) == 1: end_str = "0" + end_str
+                            # စက္ကန့်များကို HH:MM:SS,mmm ဖော်မတ်သို့ အတိအကျပြောင်းလဲခြင်း
+                            def format_seconds(secs):
+                                total_seconds = float(secs)
+                                hours = int(total_seconds // 3600)
+                                minutes = int((total_seconds % 3600) // 60)
+                                seconds = int(total_seconds % 60)
+                                milliseconds = int(round((total_seconds % 1) * 1000))
+                                
+                                # ကိန်းဂဏန်းများအား သုညဖြည့်တင်းခြင်း (Padding)
+                                return f"{hours:02d}:{minutes:02d}:{seconds:02d},{milliseconds:03d}"
+                            
+                            # ဒဿမကိန်းများ လွဲချော်ပြီး နောက်ပြန်ဆုတ်ခြင်းကို ကာကွယ်ရန် စစ်ဆေးခြင်း
+                            start_val = float(sub['start'])
+                            end_val = float(sub['end'])
+                            if end_val <= start_val:
+                                end_val = start_val + 2.0 # အကယ်၍ အဆုံးသတ်ချိန် လွဲနေပါက အလိုအလျောက် ၂ စက္ကန့် တိုးပေးမည်
+                                
+                            start_str = format_seconds(start_val)
+                            end_str = format_seconds(end_val)
+                            
                             f.write(f"{i+1}\n{start_str} --> {end_str}\n{sub['text']}\n\n")
 
                     # 5. Video Rendering Engine (FFmpeg Filters)
