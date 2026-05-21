@@ -561,16 +561,15 @@ elif app_mode == "🎵 Lyria Music Studio":
                 except Exception as e: st.error(f"Error: {e}")
 
 # =====================================================================
-# 📌 MODE 4 : TRANSLATION / TRANSCRIPT STUDIO (Fast & Precision SRT Subtitle Engine)
+# 📌 MODE 5: TRANSLATION / TRANSCRIPT STUDIO (Lightning Fast Subtitle Engine)
 # =====================================================================
 elif app_mode == "⚡ Translation/Transcript Studio":
     st.markdown('<h2 style="color:#00e5ff;">⚡ Translation & Subtitle Studio</h2>', unsafe_allow_html=True)
     st.markdown("Gemini 2.5 ဖြင့် မြန်မာပြန်ဆိုပြီး CapCut တွင် အဆင်သင့်သုံးနိုင်သော SRT ထုတ်ပေးသည့်စနစ်")
 
     st.markdown("### 📥 1. Video URL ထည့်ရန်")
-    video_url = st.text_input("YouTube / FB / TikTok URL ထည့်ပါ:")
+    video_url = st.text_input("YouTube / FB / TikTok / Rednote URL ထည့်ပါ:")
     
-    # Session State ကြိုတင်သတ်မှတ်ခြင်း
     if "srt_path" not in st.session_state: st.session_state.srt_path = None
     if "title_suggestions" not in st.session_state: st.session_state.title_suggestions = []
     if "process_done" not in st.session_state: st.session_state.process_done = False
@@ -592,39 +591,46 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                 try:
                     project_id = "project_" + str(int(time.time()))
                     
-                    # 1. Download Audio ONLY (မြန်ဆန်စေရန် အသံသီးသန့်သာ ဒေါင်းပါမည်)
+                    # 1. Download Audio ONLY (Rednote အတွက် အမြန်ဆုံး အသံသီးသန့်စနစ်) ⚡
                     st.info("⬇️ ဗီဒီယိုမှ အသံလမ်းကြောင်းကို ရယူနေပါသည်...")
                     ydl_opts = {
                         'format': 'bestaudio/best',
                         'outtmpl': f'{project_id}.%(ext)s',
-                        'quiet': True
+                        'quiet': True,
+                        'no_warnings': True,
+                        'http_headers': {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                        }
                     }
                     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                         info = ydl.extract_info(video_url, download=True)
                         downloaded_audio = ydl.prepare_filename(info)
 
-                    # 2. Convert to Standard WAV for Gemini
+                    # 2. Convert to Standard WAV
                     wav_path = f"{project_id}.wav"
                     (
                         ffmpeg.input(downloaded_audio)
                         .output(wav_path, format='wav', acodec='pcm_s16le')
                         .overwrite_output().run(quiet=True)
                     )
+                    if os.path.exists(downloaded_audio): os.remove(downloaded_audio)
 
-                    # 3. Gemini High-Precision Translation
+                    # 3. Gemini Subtitle Processing
                     st.info("🤖 Gemini 2.5 Flash ဖြင့် စာသားနှင့် ခေါင်းစဉ်များ ထုတ်ယူနေပါသည်...")
                     response_json = None
                     
                     prompt = """
                     Listen to this audio carefully and generate:
                     1. A list of 5 different viral, short, and catchy video titles in Myanmar language (suitable for TikTok Movie Recap/Psychology).
-                    2. Translated Myanmar (Burmese) subtitles with their approximate timestamps.
+                    2. Translated Myanmar (Burmese) subtitles sorted sequentially.
                     
                     Output MUST be ONLY a valid JSON object. Do not include ```json or any markdown.
                     {
                       "titles": ["ခေါင်းစဉ် ၁", "ခေါင်းစဉ် ၂", "ခေါင်းစဉ် ၃", "ခေါင်းစဉ် ၄", "ခေါင်းစဉ် ၅"],
                       "subtitles": [
-                        {"start": 0.0, "end": 2.5, "text": "မြန်မာစာတန်း"}
+                        "မြန်မာဘာသာပြန်စာသား ၁",
+                        "မြန်မာဘာသာပြန်စာသား ၂",
+                        "မြန်မာဘာသာပြန်စာသား ၃"
                       ]
                     }
                     """
@@ -651,12 +657,16 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                         raise Exception("API Error")
 
                     st.session_state.title_suggestions = response_json.get("titles", [])
-                    subtitles_json = response_json.get("subtitles", [])
+                    subtitles_list = response_json.get("subtitles", [])
 
-                    # 4. JSON ကို SRT သို့ ပုံသွင်းခြင်း
+                    # 4. JSON ကို CapCut-Ready SRT ပုံစံသို့ စီစဉ်ခြင်း 🛠️
+                    # (CapCut တွင် Import လုပ်ပြီး Auto-Sync နှိပ်ရန်အတွက် အချိန်အား ကနဦး ၁ စက္ကန့်စီ ပုံသေခွဲပေးထားပါသည်)
                     st.session_state.srt_path = f"{project_id}.srt"
                     with open(st.session_state.srt_path, "w", encoding="utf-8-sig") as f:
-                        for i, sub in enumerate(subtitles_json):
+                        for i, text_content in enumerate(subtitles_list):
+                            start_sec = i * 2
+                            end_sec = start_sec + 1.5
+                            
                             def format_seconds(secs):
                                 total_seconds = float(secs)
                                 hours = int(total_seconds // 3600)
@@ -665,7 +675,7 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                                 milliseconds = int(round((total_seconds % 1) * 1000))
                                 return f"{hours:02d}:{minutes:02d}:{seconds:02d},{milliseconds:03d}"
                             
-                            f.write(f"{i+1}\n{format_seconds(sub['start'])} --> {format_seconds(sub['end'])}\n{sub['text']}\n\n")
+                            f.write(f"{i+1}\n{format_seconds(start_sec)} --> {format_seconds(end_sec)}\n{text_content}\n\n")
 
                     st.session_state.process_done = True
                     st.success("🎉 ပြန်ဆိုခြင်း အောင်မြင်စွာ ပြီးဆုံးပါပြီ!")
@@ -674,32 +684,27 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                 except Exception as e:
                     st.error(f"❌ လုပ်ဆောင်ချက် မှားယွင်းပါသည်- {str(e)}")
                 finally:
-                    if os.path.exists(downloaded_audio): os.remove(downloaded_audio)
                     if os.path.exists(wav_path): os.remove(wav_path)
 
     # ---------------------------------------------------------
-    # 📺 UI OUTPUT AREA (လန်းဆန်းသန့်ရှင်းပြီး အမြဲပေါ်နေမည့်နေရာ)
+    # 📺 UI OUTPUT AREA
     # ---------------------------------------------------------
     if st.session_state.process_done and st.session_state.srt_path and os.path.exists(st.session_state.srt_path):
         st.markdown("---")
         
-        # 🏷️ TikTok Titles Box
         if st.session_state.title_suggestions:
             st.markdown("### 🏷️ TikTok Viral Title Suggestions (ခေါင်းစဉ် ၅ မျိုး)")
             for t_title in st.session_state.title_suggestions:
                 st.code(f"{t_title}", language="text")
 
-        # 📥 Download Subtitle (.srt)
         st.markdown("### 📥 Download Subtitle")
         with open(st.session_state.srt_path, "rb") as f:
             st.download_button(label="📥 Download Subtitle (.srt ဖိုင်ရယူရန်)", data=f, file_name="MrZack_CapCut_Ready.srt", mime="text/plain")
-            st.caption("💡 အကြံပြုချက်: ယခုရရှိလာသော SRT ဖိုင်အား CapCut ထဲသို့ တိုက်ရိုက်ဆွဲသွင်း (Import) ပြီး Auto-Align လုပ်လိုက်ပါက ဗီဒီယိုအရှိန်နှင့် ကိုက်ညီအောင် CapCut မှ ကွက်တိ ညှိပေးသွားမည် ဖြစ်သည်။")
+            st.caption("💡 **CapCut အသုံးပြုနည်းလမ်းညွှန်:** ယခုရရှိလာသော SRT ဖိုင်အား CapCut ထဲသို့ သွင်းပါ။ ပြီးလျှင် စာတန်းထိုး Track ကိုနှိပ်၍ **'Auto-Realign' (သို့မဟုတ်) 'Sync to Audio'** ကို နှိပ်ပေးလိုက်ပါက ဗီဒီယိုအရှိန်နှင့်ကိုက်ညီအောင် CapCut မှ ကွက်တိအလိုအလျောက် ညှိပေးသွားမည် ဖြစ်သည်။")
 
-        # 📝 Subtitle Preview
-        st.markdown("### 📝 Subtitle Preview (စာတန်းထိုးအစမ်းကြည့်ရန်)")
+        st.markdown("### 📝 Subtitle Preview")
         with open(st.session_state.srt_path, "r", encoding="utf-8") as f:
             st.text_area("SRT Preview", value="".join(f.readlines()[:20]), height=150)
-
 
 # =====================================================================
 # 📌 MODE 5: VIDEO DOWNLOADER HUB (Original Quality Multi-Platform Downloader)
