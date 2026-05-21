@@ -286,7 +286,7 @@ st.markdown('<h1 style="text-align:center; margin-bottom: 30px;">▲ AETHER FILM
 
 with st.sidebar:
     st.markdown("### 🧭 Navigation Menu")
-    app_mode = st.radio("Select Studio Mode:", ["🎙️ Movie Dubbing Studio", "🎥 Veo Video Studio", "🎵 Lyria Music Studio","⚡ Translation/Transcript Studio"])
+    app_mode = st.radio("Select Studio Mode:", ["🎙️ Movie Dubbing Studio", "🎥 Veo Video Studio", "🎵 Lyria Music Studio","⚡ Translation/Transcript Studio","📥 Video Downloader Hub",])
     st.markdown("---")
     st.markdown("### 🧠 1. Select AI Core Engine")
     ai_provider = st.selectbox("Choose AI Provider", ["Google Gemini (Flash - Recommended)", "OpenAI (GPT-5.5 Pro)", "Groq API (Fast & Free)"])
@@ -699,3 +699,84 @@ elif app_mode == "⚡ Translation/Transcript Studio":
         st.markdown("### 📝 Subtitle Preview (စာတန်းထိုးအစမ်းကြည့်ရန်)")
         with open(st.session_state.srt_path, "r", encoding="utf-8") as f:
             st.text_area("SRT Preview", value="".join(f.readlines()[:20]), height=150)
+
+
+# =====================================================================
+# 📌 MODE 5: VIDEO DOWNLOADER HUB (Original Quality Multi-Platform Downloader)
+# =====================================================================
+elif app_mode == "📥 Video Downloader Hub":
+    st.markdown('<h2 style="color:#00e5ff;">📥 Video Downloader Hub</h2>', unsafe_allow_html=True)
+    st.markdown("YouTube, TikTok, Facebook, Rednote (小红书) စသည့် ဗီဒီယိုများကို မူရင်းအတိုင်း ဒေါင်းလုဒ်ဆွဲရန်")
+
+    st.markdown("### 🔗 ဗီဒီယို Link ထည့်ရန်")
+    dl_url = st.text_input("ဗီဒီယို URL ကို ဒီမှာ ထည့်ပါ (ဥပမာ- TikTok, YouTube, Rednote, FB):", key="hub_dl_url")
+    
+    # Session State ဖိုင်လမ်းကြောင်း သိမ်းဆည်းရန်
+    if "hub_file_path" not in st.session_state: st.session_state.hub_file_path = None
+    if "hub_file_name" not in st.session_state: st.session_state.hub_file_name = "downloaded_video.mp4"
+    if "hub_done" not in st.session_state: st.session_state.hub_done = False
+
+    if st.button("⬇️ ဗီဒီယို စစ်ဆေးပြီး ဒေါင်းလုဒ်ဆွဲမည်"):
+        if not dl_url:
+            st.error("⚠️ ကျေးဇူးပြု၍ ဗီဒီယို Link တစ်ခုခု အရင်ထည့်သွင်းပေးပါ။")
+        else:
+            st.session_state.hub_done = False
+            with st.spinner("🔄 ဗီဒီယိုအား Platform မှ မူရင်းအတိုင်း ဖတ်ယူနေပါသည်... (ကျေးဇူးပြု၍ စောင့်ပါ)"):
+                try:
+                    # ဖိုင်နာမည် မထပ်စေရန် Time ID သုံးခြင်း
+                    dl_project_id = "dl_" + str(int(time.time()))
+                    
+                    # 🚀 Multi-Platform & Original Quality အတွက် yt-dlp Options ချိန်ညှိခြင်း
+                    ydl_hub_opts = {
+                        # အကောင်းဆုံး Video ရော Audio ကိုပါ မူရင်းအတိုင်း ပေါင်းစပ်ထုတ်ယူရန် စနစ်
+                        'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+                        'outtmpl': f'{dl_project_id}.%(ext)s',
+                        'quiet': True,
+                        'no_warnings': True,
+                        # Rednote သို့မဟုတ် အချို့ တရုတ်ဆာဗာများအတွက် ပိတ်မကျသွားစေရန် Header ဖြည့်ခြင်း
+                        'http_headers': {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                        }
+                    }
+                    
+                    with yt_dlp.YoutubeDL(ydl_hub_opts) as ydl:
+                        # ဗီဒီယို အချက်အလက်များ ဖတ်ယူခြင်း
+                        info_dict = ydl.extract_info(dl_url, download=True)
+                        
+                        # ဒေါင်းလုဒ်ပြီးသွားသော ဖိုင်လမ်းကြောင်းအား သိမ်းဆည်းခြင်း
+                        st.session_state.hub_file_path = ydl.prepare_filename(info_dict)
+                        
+                        # ဗီဒီယို ခေါင်းစဉ်ကို ရယူပြီး ဖိုင်နာမည်အဖြစ် သတ်မှတ်ခြင်း (မရပါက Default သုံးမည်)
+                        video_title = info_dict.get('title', 'downloaded_video')
+                        # ဖိုင်နာမည်ထဲတွင် မပါသင့်သော သင်္ကေတများအား ဖယ်ရှားခြင်း
+                        clean_title = "".join([c for c in video_title if c.isalpha() or c.isdigit() or c==' ']).strip()
+                        st.session_state.hub_file_name = f"{clean_title or 'video'}.mp4"
+                    
+                    st.session_state.hub_done = True
+                    st.toast("✅ ဗီဒီယိုကို ဆာဗာပေါ်သို့ အောင်မြင်စွာ ဆွဲယူပြီးပါပြီ။", icon="🚀")
+                    st.rerun()
+
+                except Exception as dl_err:
+                    st.error(f"❌ ဗီဒီယို ဒေါင်းလုဒ်ဆွဲခြင်း မအောင်မြင်ပါ။ Link မှားနေခြင်း (သို့မဟုတ်) ပုဂ္ဂလိက ဗီဒီယို ဖြစ်နိုင်ပါသည်။")
+                    with st.expander("🔍 အသေးစိတ် Error Details ကြည့်ရန်"):
+                        st.write(str(dl_err))
+
+    # ---------------------------------------------------------
+    # 📺 DOWNLOAD BUTTON AREA (အလုပ်ပြီးပါက ချက်ချင်း ပေါ်လာမည့်နေရာ)
+    # ---------------------------------------------------------
+    if st.session_state.hub_done and st.session_state.hub_file_path and os.path.exists(st.session_state.hub_file_path):
+        st.markdown("---")
+        st.success("🎉 ဗီဒီယို အဆင်သင့်ဖြစ်ပါပြီ။ အောက်ပါခလုတ်ကို နှိပ်၍ ဖုန်း/ကွန်ပျူတာထဲသို့ သိမ်းဆည်းနိုင်ပါပြီ။")
+        
+        # ဗီဒီယို အစမ်းကြည့်ရှုရန် Player
+        st.markdown("### 🎥 Video Preview")
+        st.video(st.session_state.hub_file_path)
+        
+        # Local ထဲသို့ အပြီးသတ် ဒေါင်းလုဒ်ဆွဲမည့် ခလုတ်
+        with open(st.session_state.hub_file_path, "rb") as file:
+            st.download_button(
+                label="📥 ကိုယ့်ဖုန်း/စက်ထဲသို့ ရယူရန် (Download Video)",
+                data=file,
+                file_name=st.session_state.hub_file_name,
+                mime="video/mp4"
+            )
