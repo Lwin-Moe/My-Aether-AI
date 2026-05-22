@@ -407,23 +407,21 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     Original Audio Transcript: {st.session_state.original_transcript}
                     """
 
-                  # Fallback Logic (3.0 First, 2.5 Second)
-                    # safety_settings ကို ကြိုတင်သတ်မှတ်ထားခြင်း
-                    safety_config = [
-                        {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                        {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-                        {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-                        {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
-                    ]
+                 # Fallback Logic (3.0 First, 2.5 Second)
+                    # safety_settings ကို စနစ်တကျ သတ်မှတ်ပါ
+                    safety_config = [{"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"}]
                     
+                    # ဒီနေရာကနေစပြီး နေရာအကုန်လုံးကို ညီအောင်ရွှေ့ပါ
+                    gemini_prompt = "Listen to the ENTIRE audio file from the absolute beginning to the very last second. Do NOT truncate, skip, or summarize the ending. You MUST generate a complete SRT subtitle file in natural spoken Burmese (မြန်မာစကားပြောဟန်) covering the WHOLE video duration until the very end. 🛑 STRICT RULES: 1. Include Synergy Audio Tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers] to guide the voice naturally. 2. NO ENGLISH TRANSLITERATION. 3. Output ONLY valid SRT format."
+
                     genai.configure(api_key=current_key)
                     
                     try:
                         model = genai.GenerativeModel('gemini-3.0-flash', safety_settings=safety_config)
-                        response = model.generate_content([audio_file, hook_prompt])
+                        response = model.generate_content([audio_file, gemini_prompt])
                     except:
                         model = genai.GenerativeModel('gemini-2.5-flash', safety_settings=safety_config)
-                        response = model.generate_content([audio_file, hook_prompt])
+                        response = model.generate_content([audio_file, hook_prompt]) # hook_prompt အဟောင်း/အသစ် သေချာရွေးပါ
                     
                     raw_output_text = response.text.strip()
                                 gemini_prompt = "Listen to the ENTIRE audio file from the absolute beginning to the very last second. Do NOT truncate, skip, or summarize the ending. You MUST generate a complete SRT subtitle file in natural spoken Burmese (မြန်မာစကားပြောဟန်) covering the WHOLE video duration until the very end. 🛑 STRICT RULES: 1. Include Synergy Audio Tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers] to guide the voice naturally. 2. NO ENGLISH TRANSLITERATION. 3. Output ONLY valid SRT format."
