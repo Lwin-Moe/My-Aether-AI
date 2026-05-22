@@ -227,37 +227,36 @@ def parse_and_save_real_srt(raw_srt_text, output_file):
         
     return parsed_lines, " ".join(full_speech)
 
+d# --- Render Function (Hook + Dubbing + Features) ---
 def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_bypass=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)"):
     try:
         input_vid = ffmpeg.input(in_v)
         tts_audio = ffmpeg.input(in_a)
         
-        # Hook 3-sec clip
+        # 1. Video Hook (3 seconds) + Main Video
         hook_video = input_vid.video.trim(start=20, end=23).setpts('PTS-STARTPTS')
         main_video = input_vid.video.setpts('PTS-STARTPTS')
         video = ffmpeg.concat(hook_video, main_video, v=1, a=0).node[0]
         
-        # Features
+        # 2. Features
         if use_bypass:
             video = ffmpeg.filter(video, 'scale', '2*trunc(iw*1.08/2)', '2*trunc(ih*1.08/2)')
             video = ffmpeg.filter(video, 'crop', 'iw/1.08', 'ih/1.08')
         video = ffmpeg.filter(video, 'scale', 'trunc(oh*a/2)*2', 1080, flags='bicubic')
         if use_blur: 
             video = ffmpeg.filter(video, 'drawbox', x=0, y='ih-90', w='iw', h=90, color='black@0.95', thickness='fill')
-        if ratio == "9:16 (TikTok/Shorts)": 
-            video = ffmpeg.filter(video, 'crop', 'min(iw, ih*9/16)', 'ih')
-        elif ratio == "16:9 (YouTube)": 
-            video = ffmpeg.filter(video, 'crop', 'iw', 'min(ih, iw*9/16)')
-        if watermark: 
-            video = ffmpeg.filter(video, 'drawtext', text=watermark, x='w-tw-15', y='15', fontsize=30, fontcolor='white@0.5')
+        if ratio == "9:16 (TikTok/Shorts)": video = ffmpeg.filter(video, 'crop', 'min(iw, ih*9/16)', 'ih')
+        elif ratio == "16:9 (YouTube)": video = ffmpeg.filter(video, 'crop', 'iw', 'min(ih, iw*9/16)')
+        if watermark: video = ffmpeg.filter(video, 'drawtext', text=watermark, x='w-tw-15', y='15', fontsize=30, fontcolor='white@0.5')
         
-        # SRT writing
+        # 3. SRT writing with Hook offset (+3s)
         safe_srt_path_escaped = os.path.abspath("subtitles.srt").replace('\\', '/').replace(':', '\\:')
         with open("subtitles.srt", "w", encoding="utf-8-sig") as f:
             for i, (start, end, text) in enumerate(parsed_timestamps, start=1):
                 def fmt_t(s): return f"{int(s//3600):02d}:{int((s%3600)//60):02d}:{int(s%60):02d},{int((s-int(s))*1000):03d}"
                 f.write(f"{i}\n{fmt_t(start+3)} --> {fmt_t(end+3)}\n{text}\n\n")
 
+        # 4. Burn Subtitle
         if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"]:
             video = ffmpeg.filter(video, 'subtitles', safe_srt_path_escaped, charenc='UTF-8', fontsdir='.', force_style="FontName=Pyidaungsu,FontSize=22,PrimaryColour=&H0000FFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2.5,Shadow=1,Alignment=2,MarginV=25")
 
@@ -265,6 +264,24 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         return True, "Success"
     except Exception as e:
         return False, str(e)
+
+# --- Hook Prompt & Model Fallback Logic ---
+def generate_recap_script(current_key, audio_file, transcript):
+    hook_prompt = f"""
+    You are an expert TikTok Movie Recap Scriptwriter. Listen to this audio and write a highly engaging script in Burmese.
+    1. THE HOOK: First 3 sentences must be a catchy hook.
+    2. THE BODY: Seamlessly tell the story.
+    3. AUDIO TAGS: Use [pause=0.5], [excited] tags.
+    Transcript: {transcript}
+    """
+    safety_config = [{"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"}]
+    
+    try:
+        model = genai.GenerativeModel('gemini-3.0-flash', safety_settings=safety_config)
+        return model.generate_content([audio_file, hook_prompt])
+    except:
+        model = genai.GenerativeModel('gemini-2.5-flash', safety_settings=safety_config)
+        return model.generate_content([audio_file, hook_prompt])
 # Helper function
 def fmt_t(s): 
     return f"{int(s//3600):02d}:{int((s%3600)//60):02d}:{int(s%60):02d},{int((s-int(s))*1000):03d}"
