@@ -391,27 +391,23 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     st.error("❌ ဗီဒီယိုထဲကနေ အသံဖိုင် ခွဲထုတ်လို့ မရပါဘူး။")
                     st.stop()
 
-           # 2. Gemini 2.5/3.0 Flash နဲ့ Hook ပါတဲ့ ဇာတ်ညွှန်း ရေးသားခြင်း
+      # 2. Gemini 2.5/3.0 Flash ဇာတ်ညွှန်း ရေးသားခြင်း
                 try:
-                    # Hook ပါဝင်သော အဓိက Prompt အသစ်
+                    # အရင်ဆုံး Safety Settings နဲ့ Prompt ကို ပြင်ဆင်ပါ
+                    safety_config = [{"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"}]
                     hook_prompt = f"""
                     You are an expert TikTok Movie Recap Scriptwriter. 
                     Listen to this audio/video carefully and write a highly engaging movie recap script in Myanmar (Burmese) language.
-
                     CRITICAL RULES:
-                    1. THE HOOK (First 3 Sentences): The first three sentences MUST be an extremely catchy, curiosity-inducing "HOOK" that forces the audience to stop scrolling and watch. Use psychological triggers, suspense, or shocking facts.
-                    2. THE BODY: After the hook, seamlessly transition into telling the main story naturally and engagingly.
-                    3. SYNERGY AUDIO TAGS: You MUST include inline audio tags to direct the TTS voice. Use tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers], [reluctantly] at the beginning of relevant sentences to add emotion and dramatic pacing.
-                    4. FORMAT: Keep the EXACT original SRT timecodes and indices. Output ONLY the raw SRT format.
-                    
-                    Original Audio Transcript: {st.session_state.original_transcript}
+                    1. THE HOOK: The first three sentences MUST be a highly catchy hook.
+                    2. THE BODY: Seamlessly transition into telling the main story.
+                    3. AUDIO TAGS: Use [pause=0.5], [excited] tags.
+                    Original Transcript: {st.session_state.original_transcript}
                     """
-
-                # Fallback Logic (3.0 First, 2.5 Second)
-                    # safety_settings ကို စနစ်တကျ သတ်မှတ်ပါ
-                safety_config = [{"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"}]
+                    
                     genai.configure(api_key=current_key)
                     
+                    # 3.0 နဲ့ 2.5 Fallback လုပ်ခြင်း
                     try:
                         model = genai.GenerativeModel('gemini-3.0-flash', safety_settings=safety_config)
                         response = model.generate_content([audio_file, hook_prompt])
@@ -423,12 +419,14 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     genai.delete_file(audio_file.name)
                     success_gemini = True
                     break 
+                
                 except Exception as e:
                     last_err = str(e)
                     if "429" in last_err or "quota" in last_err.lower() or "exhausted" in last_err.lower() or "limit" in last_err.lower():
                         st.toast(f"⚠️ Key {idx+1} Limit ကုန်သွားပါပြီ။ နောက် Key ကို ပြောင်းလဲချိတ်ဆက်နေပါသည်...", icon="🔄")
                         continue
-                    else: break
+                    else:
+                        break
                         if not success_gemini: raise Exception(f"Gemini API များကို အသုံးပြု၍မရပါ: {last_err}")
 
                     elif "Groq" in ai_provider:
