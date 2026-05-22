@@ -374,31 +374,34 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     st.error("❌ ဗီဒီယိုထဲကနေ အသံဖိုင် ခွဲထုတ်လို့ မရပါဘူး။")
                     st.stop()
 
-            with st.spinner(f"⏳ [အဆင့် ၂/၆] {ai_provider} ကိုအသုံးပြု၍ Audio Tags များပါဝင်သော ဇာတ်ညွှန်း ရေးသားနေပါသည်..."):
+           # 2. Gemini 2.5/3.0 Flash နဲ့ Hook ပါတဲ့ ဇာတ်ညွှန်း ရေးသားခြင်း
                 try:
-                    base_prompt = "You are an expert Myanmar (Burmese) TikTok movie recap narrator. I am providing you with an English SRT file translated from the original audio. Translate and adapt the text into highly engaging, natural spoken Burmese (မြန်မာစကားပြောဟန်). STRICT RULES: 1. SYNERGY AUDIO TAGS: You MUST include inline audio tags to direct the TTS voice. Use tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers], [reluctantly] at the beginning of relevant sentences to add emotion and dramatic pacing. 2. NO ENGLISH TRANSLITERATION: Translate meanings naturally. 3. FORMAT: Keep the EXACT original SRT timecodes and indices. 4. Output ONLY the raw SRT format."
+                    # Hook ပါဝင်သော အဓိက Prompt အသစ်
+                    hook_prompt = f"""
+                    You are an expert TikTok Movie Recap Scriptwriter. 
+                    Listen to this audio/video carefully and write a highly engaging movie recap script in Myanmar (Burmese) language.
 
-                    if "Gemini" in ai_provider:
-                        keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
-                        success_gemini = False
-                        last_err = ""
-                        st.session_state.original_transcript = "[Gemini Model processed Audio directly.]"
-                        
-                        for idx, current_key in enumerate(keys_list):
-                            try:
-                                genai.configure(api_key=current_key)
-                                audio_file = genai.upload_file(path=a_extracted)
-                                while audio_file.state.name == "PROCESSING":
-                                    time.sleep(2)
-                                    audio_file = genai.get_file(audio_file.name)
-                                
-                               # အရင်က code လေးကို ဖျက်ပြီး အခုဟာနဲ့ အစားထိုးပါ
-                                try:
-                            model = genai.GenerativeModel('gemini-3.0-flash')
-                        response = model.generate_content(prompt)
-except:
-    model = genai.GenerativeModel('gemini-2.5-flash')
-    response = model.generate_content(prompt),
+                    CRITICAL RULES:
+                    1. THE HOOK (First 3 Sentences): The first three sentences MUST be an extremely catchy, curiosity-inducing "HOOK" that forces the audience to stop scrolling and watch. Use psychological triggers, suspense, or shocking facts.
+                    2. THE BODY: After the hook, seamlessly transition into telling the main story naturally and engagingly.
+                    3. SYNERGY AUDIO TAGS: You MUST include inline audio tags to direct the TTS voice. Use tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers], [reluctantly] at the beginning of relevant sentences to add emotion and dramatic pacing.
+                    4. FORMAT: Keep the EXACT original SRT timecodes and indices. Output ONLY the raw SRT format.
+                    
+                    Original Audio Transcript: {st.session_state.original_transcript}
+                    """
+
+                    # Fallback Logic (3.0 First, 2.5 Second)
+                    try:
+                        genai.configure(api_key=current_key)
+                        model = genai.GenerativeModel('gemini-3.0-flash')
+                        response = model.generate_content([audio_file, hook_prompt])
+                    except:
+                        genai.configure(api_key=current_key)
+                        model = genai.GenerativeModel('gemini-2.5-flash')
+                        response = model.generate_content([audio_file, hook_prompt])
+                    
+                    raw_output_text = response.text.strip()
+                    # (ကျန်တဲ့ ကုဒ်အောက်ပိုင်းကို ဒီအတိုင်း ထားလိုက်ပါ),
                                     safety_settings=[
                                         {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
                                         {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
