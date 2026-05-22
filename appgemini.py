@@ -390,25 +390,25 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     Original Audio Transcript: {st.session_state.original_transcript}
                     """
 
-                    # Fallback Logic (3.0 First, 2.5 Second)
+                  # Fallback Logic (3.0 First, 2.5 Second)
+                    # safety_settings ကို ကြိုတင်သတ်မှတ်ထားခြင်း
+                    safety_config = [
+                        {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                        {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                        {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                        {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+                    ]
+                    
+                    genai.configure(api_key=current_key)
+                    
                     try:
-                        genai.configure(api_key=current_key)
-                        model = genai.GenerativeModel('gemini-3.0-flash')
+                        model = genai.GenerativeModel('gemini-3.0-flash', safety_settings=safety_config)
                         response = model.generate_content([audio_file, hook_prompt])
                     except:
-                        genai.configure(api_key=current_key)
-                        model = genai.GenerativeModel('gemini-2.5-flash')
+                        model = genai.GenerativeModel('gemini-2.5-flash', safety_settings=safety_config)
                         response = model.generate_content([audio_file, hook_prompt])
                     
                     raw_output_text = response.text.strip()
-                    # (ကျန်တဲ့ ကုဒ်အောက်ပိုင်းကို ဒီအတိုင်း ထားလိုက်ပါ),
-                                    safety_settings=[
-                                        {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                                        {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-                                        {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-                                        {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
-                                    ]
-                                )
                                 gemini_prompt = "Listen to the ENTIRE audio file from the absolute beginning to the very last second. Do NOT truncate, skip, or summarize the ending. You MUST generate a complete SRT subtitle file in natural spoken Burmese (မြန်မာစကားပြောဟန်) covering the WHOLE video duration until the very end. 🛑 STRICT RULES: 1. Include Synergy Audio Tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers] to guide the voice naturally. 2. NO ENGLISH TRANSLITERATION. 3. Output ONLY valid SRT format."
                                 response = model.generate_content([audio_file, gemini_prompt])
                                 raw_output_text = response.text.strip()
