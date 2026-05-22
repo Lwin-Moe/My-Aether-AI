@@ -391,45 +391,47 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     st.error("❌ ဗီဒီယိုထဲကနေ အသံဖိုင် ခွဲထုတ်လို့ မရပါဘူး။")
                     st.stop()
 
-      # 2. Gemini 2.5/3.0 Flash ဇာတ်ညွှန်း ရေးသားခြင်း
-                try:
-                    # အရင်ဆုံး Safety Settings နဲ့ Prompt ကို ပြင်ဆင်ပါ
+      # 2. Gemini 2.5/3.0 Flash နဲ့ Hook ပါတဲ့ ဇာတ်ညွှန်း ရေးသားခြင်း
+                if "Gemini" in ai_provider:
                     safety_config = [{"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"}]
                     hook_prompt = f"""
                     You are an expert TikTok Movie Recap Scriptwriter. 
                     Listen to this audio/video carefully and write a highly engaging movie recap script in Myanmar (Burmese) language.
                     CRITICAL RULES:
                     1. THE HOOK: The first three sentences MUST be a highly catchy hook.
-                    2. THE BODY: Seamlessly transition into telling the main story.
+                    2. THE BODY: Seamlessly tell the story.
                     3. AUDIO TAGS: Use [pause=0.5], [excited] tags.
                     Original Transcript: {st.session_state.original_transcript}
                     """
                     
                     genai.configure(api_key=current_key)
+                    success_gemini = False
                     
-                    # 3.0 နဲ့ 2.5 Fallback လုပ်ခြင်း
-                    try:
-                        model = genai.GenerativeModel('gemini-3.0-flash', safety_settings=safety_config)
-                        response = model.generate_content([audio_file, hook_prompt])
-                    except:
-                        model = genai.GenerativeModel('gemini-2.5-flash', safety_settings=safety_config)
-                        response = model.generate_content([audio_file, hook_prompt])
-                    
-                    raw_output_text = response.text.strip()
-                    genai.delete_file(audio_file.name)
-                    success_gemini = True
-                    break 
-                
-                except Exception as e:
-                    last_err = str(e)
-                    if "429" in last_err or "quota" in last_err.lower() or "exhausted" in last_err.lower() or "limit" in last_err.lower():
-                        st.toast(f"⚠️ Key {idx+1} Limit ကုန်သွားပါပြီ။ နောက် Key ကို ပြောင်းလဲချိတ်ဆက်နေပါသည်...", icon="🔄")
-                        continue
-                    else:
-                        break
-                        if not success_gemini: raise Exception(f"Gemini API များကို အသုံးပြု၍မရပါ: {last_err}")
+                    for idx, current_key in enumerate(keys_list):
+                        try:
+                            # 3.0 First, 2.5 Second
+                            try:
+                                model = genai.GenerativeModel('gemini-3.0-flash', safety_settings=safety_config)
+                                response = model.generate_content([audio_file, hook_prompt])
+                            except:
+                                model = genai.GenerativeModel('gemini-2.5-flash', safety_settings=safety_config)
+                                response = model.generate_content([audio_file, hook_prompt])
+                            
+                            raw_output_text = response.text.strip()
+                            genai.delete_file(audio_file.name)
+                            st.session_state.generated_script = raw_output_text
+                            success_gemini = True
+                            break
+                        except Exception as e:
+                            if "429" in str(e): continue
+                            else: break
+                            
+                    if not success_gemini: raise Exception("Gemini API အားလုံး Limit ပြည့်နေပါသည်။")
+                    parsed_timestamps, speech_text = parse_and_save_real_srt(st.session_state.generated_script, srt_final)
 
-                    elif "Groq" in ai_provider:
+                elif "Groq" in ai_provider:
+                    # Groq အပိုင်းကို မူလအတိုင်း ထားပါ (ဒီနေရာမှာ Groq logic အဟောင်းကို ပြန်ထည့်ပါ)
+                    # ... (Groq logic အဟောင်းက ဒီအောက်မှာ ဆက်လာပါလိမ့်မယ်) ...
                         client = Groq(api_key=api_key_input)
                         with open(a_extracted, "rb") as file:
                             transcription = client.audio.translations.create(file=(a_extracted, file.read()), model="whisper-large-v3", response_format="verbose_json")
