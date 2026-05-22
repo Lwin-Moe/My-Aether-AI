@@ -392,8 +392,13 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                                     time.sleep(2)
                                     audio_file = genai.get_file(audio_file.name)
                                 
-                                model = genai.GenerativeModel(
-                                    model_name="gemini-2.5-flash",
+                               # အရင်က code လေးကို ဖျက်ပြီး အခုဟာနဲ့ အစားထိုးပါ
+                                try:
+                            model = genai.GenerativeModel('gemini-3.0-flash')
+                        response = model.generate_content(prompt)
+except:
+    model = genai.GenerativeModel('gemini-2.5-flash')
+    response = model.generate_content(prompt),
                                     safety_settings=[
                                         {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
                                         {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
@@ -650,8 +655,14 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                             st.toast(f"🔑 Key ({index + 1}/{len(api_keys)}) ဖြင့် ကြိုးစားနေပါသည်...", icon="⏳")
                             genai.configure(api_key=current_key)
                             
-                            model = genai.GenerativeModel('gemini-2.5-flash')
-                            response = model.generate_content(prompt)
+                            # အရင်က code လေးကို ဖျက်ပြီး အခုဟာနဲ့ အစားထိုးပါ
+try:
+    model = genai.GenerativeModel('gemini-3.0-flash')
+    response = model.generate_content(prompt)
+except:
+    model = genai.GenerativeModel('gemini-2.5-flash')
+    response = model.generate_content(prompt)
+                    
                             
                             raw_text = response.text.strip().replace("```json", "").replace("```", "")
                             response_json = json.loads(raw_text)
