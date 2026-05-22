@@ -229,57 +229,61 @@ def parse_and_save_real_srt(raw_srt_text, output_file):
 
 def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_bypass=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)"):
     try:
-        a_dur = get_file_duration(in_a)
-        v_max_dur = get_file_duration(in_v)
+        # ၁။ Inputs အားလုံးကို အရင် သတ်မှတ်ခြင်း
+        input_vid = ffmpeg.input(in_v)
+        tts_audio = ffmpeg.input(in_a)
         
-        safe_srt_path = os.path.abspath("subtitles.srt").replace('\\', '/')
-        safe_srt_path_escaped = safe_srt_path.replace(':', '\\:')
+        # ၂။ Hook Clip နှင့် Main Video ကို ခွဲထုတ်ပြီး ပေါင်းစပ်ခြင်း
+        hook_video = input_vid.video.trim(start=20, end=23).setpts('PTS-STARTPTS')
+        main_video = input_vid.video.setpts('PTS-STARTPTS')
+        video = ffmpeg.concat(hook_video, main_video, v=1, a=0).node[0]
         
-        # ပြင်ဆင်ချက် ၁ (ဆက်လက်): Safe filter ပိုင်းကိုလည်း utf-8-sig ဖြင့် သိမ်းခြင်း
-        with open("subtitles.srt", "w", encoding="utf-8-sig") as f:
-            for i, (start, end, text) in enumerate(parsed_timestamps, start=1):
-                if start >= v_max_dur: continue
-                safe_end = min(end, v_max_dur)
-                def fmt_t(s): 
-                    return f"{int(s//3600):02d}:{int((s%3600)//60):02d}:{int(s%60):02d},{int((s-int(s))*1000):03d}"
-                f.write(f"{i}\n{fmt_t(start)} --> {fmt_t(safe_end)}\n{text}\n\n")
-        
-        video = ffmpeg.input(in_v).video
+        # ၃။ Bypass (Smart Zoom) စစ်ဆေးခြင်း
         if use_bypass:
             video = ffmpeg.filter(video, 'scale', '2*trunc(iw*1.08/2)', '2*trunc(ih*1.08/2)')
             video = ffmpeg.filter(video, 'crop', 'iw/1.08', 'ih/1.08')
         
+        # ၄။ Resolution ချိန်ညှိခြင်း
         video = ffmpeg.filter(video, 'scale', 'trunc(oh*a/2)*2', 1080, flags='bicubic')
-        audio = ffmpeg.input(in_a).audio
         
-        if v_max_dur > 1.0 and a_dur > 0:
-            target_a_dur = v_max_dur - 0.5
-            speed_factor = a_dur / target_a_dur
-            if 0.5 <= speed_factor <= 2.0:
-                audio = ffmpeg.filter(audio, 'atempo', speed_factor)
-        
+        # ၅။ Blur (Chinese Subtitle ဖုံးရန်) စစ်ဆေးခြင်း
         if use_blur: 
             video = ffmpeg.filter(video, 'drawbox', x=0, y='ih-90', w='iw', h=90, color='black@0.95', thickness='fill')
-            
+        
+        # ၆။ Ratio ချိန်ညှိခြင်း
         if ratio == "9:16 (TikTok/Shorts)": 
             video = ffmpeg.filter(video, 'crop', 'min(iw, ih*9/16)', 'ih')
         elif ratio == "16:9 (YouTube)": 
             video = ffmpeg.filter(video, 'crop', 'iw', 'min(ih, iw*9/16)')
         
-        try:
-            if watermark: 
-                video = ffmpeg.filter(video, 'drawtext', text=watermark, x='w-tw-15', y='15', fontsize=30, fontcolor='white@0.5')
-        except: pass
+        # ၇။ Watermark ထည့်ခြင်း
+        if watermark: 
+            video = ffmpeg.filter(video, 'drawtext', text=watermark, x='w-tw-15', y='15', fontsize=30, fontcolor='white@0.5')
         
-        if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"] and os.path.exists("subtitles.srt"):
-            # ပြင်ဆင်ချက် ၂: charenc='UTF-8' နှင့် fontsdir='.' ကို အတင်းအကျပ် ထည့်သွင်းခြင်း
+        # ၈။ SRT ရေးသားခြင်း (Hook အတွက် +3 စက္ကန့် ရွှေ့ခြင်း)
+        safe_srt_path = os.path.abspath("subtitles.srt").replace('\\', '/')
+        safe_srt_path_escaped = safe_srt_path.replace(':', '\\:')
+        with open("subtitles.srt", "w", encoding="utf-8-sig") as f:
+            for i, (start, end, text) in enumerate(parsed_timestamps, start=1):
+                f.write(f"{i}\n{fmt_t(start+3)} --> {fmt_t(end+3)}\n{text}\n\n")
+
+        # ၉။ Subtitle Burn လုပ်ခြင်း
+        if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"]:
             video = ffmpeg.filter(video, 'subtitles', safe_srt_path_escaped, charenc='UTF-8', fontsdir='.', force_style="FontName=Pyidaungsu,FontSize=22,PrimaryColour=&H0000FFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2.5,Shadow=1,Alignment=2,MarginV=25")
 
-        out = ffmpeg.output(video, audio, out_v, vcodec='libx264', acodec='aac', preset='fast', crf=21, t=v_max_dur)
-        out.run(cmd=FFMPEG_BINARY, overwrite_output=True, capture_stdout=True, capture_stderr=True)
+        # ၁၀။ Render ထုတ်ခြင်း
+        (
+            ffmpeg.output(video, tts_audio, out_v, vcodec='libx264', acodec='aac', preset='fast', crf=21)
+            .overwrite_output()
+            .run(cmd=FFMPEG_BINARY, quiet=True)
+        )
         return True, "Success"
-    except ffmpeg.Error as e: 
-        return False, e.stderr.decode('utf-8', errors='ignore') if e.stderr else str(e)
+    except Exception as e:
+        return False, str(e)
+
+# Helper function
+def fmt_t(s): 
+    return f"{int(s//3600):02d}:{int((s%3600)//60):02d}:{int(s%60):02d},{int((s-int(s))*1000):03d}"
 
 # --- 3. UI INTERFACE & NAVIGATION ---
 st.markdown('<h1 style="text-align:center; margin-bottom: 30px;">▲ AETHER FILMWORKS AI // STUDIO V52</h1>', unsafe_allow_html=True)
