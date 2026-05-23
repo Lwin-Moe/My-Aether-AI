@@ -1,5 +1,5 @@
 # =====================================================================
-# 📌 AETHER FILMWORKS AI // STUDIO V52 (FINAL PRODUCTION READY)
+# 📌 AETHER FILMWORKS AI // STUDIO V52 (ANTI-CRASH & SAFE HOOK)
 # =====================================================================
 
 import streamlit as st
@@ -238,23 +238,34 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         a_dur = get_file_duration(in_a)
         v_original_dur = get_file_duration(in_v)
         
-        # --- 🎬 VISUAL HOOK LOGIC (3s cut) ---
+        # --- 🎬 VISUAL HOOK LOGIC (SAFE DYNAMIC TRIM) ---
         base_vid = ffmpeg.input(in_v)
-        hook_clip = base_vid.video.trim(start=20, end=23).setpts('PTS-STARTPTS')
-        main_clip = base_vid.video.setpts('PTS-STARTPTS')
-        video = ffmpeg.concat(hook_clip, main_clip, v=1, a=0).node[0]
-        v_max_dur = v_original_dur + 3.0
+        offset = 0.0
+        
+        # ဗီဒီယိုက ၅ စက္ကန့်ထက်ပိုရှည်မှသာ Hook ဖြတ်ပါမည် (Crash မဖြစ်စေရန်)
+        if v_original_dur > 5.0:
+            hook_start = min(15.0, v_original_dur / 2) # ဇာတ်လမ်းအလယ်လောက်ကနေ ဖြတ်ယူပါမည်
+            hook_end = min(hook_start + 3.0, v_original_dur)
+            hook_clip = base_vid.video.trim(start=hook_start, end=hook_end).setpts('PTS-STARTPTS')
+            main_clip = base_vid.video.setpts('PTS-STARTPTS')
+            video = ffmpeg.concat(hook_clip, main_clip, v=1, a=0).node[0]
+            v_max_dur = v_original_dur + (hook_end - hook_start)
+            offset = hook_end - hook_start
+        else:
+            video = base_vid.video
+            v_max_dur = v_original_dur
 
         safe_srt_path = os.path.abspath("subtitles.srt").replace('\\', '/')
         safe_srt_path_escaped = safe_srt_path.replace(':', '\\:')
         
         with open("subtitles.srt", "w", encoding="utf-8-sig") as f:
             for i, (start, end, text) in enumerate(parsed_timestamps, start=1):
-                if start >= v_max_dur: continue
-                safe_end = min(end, v_max_dur)
+                if start >= v_original_dur: continue
+                safe_end = min(end, v_original_dur)
                 def fmt_t(s): 
                     return f"{int(s//3600):02d}:{int((s%3600)//60):02d}:{int(s%60):02d},{int((s-int(s))*1000):03d}"
-                f.write(f"{i}\n{fmt_t(start)} --> {fmt_t(safe_end)}\n{text}\n\n")
+                # Hook စက္ကန့်ကို ပေါင်းထည့်ပေးပါမည်
+                f.write(f"{i}\n{fmt_t(start + offset)} --> {fmt_t(safe_end + offset)}\n{text}\n\n")
         
         if use_bypass:
             video = ffmpeg.filter(video, 'scale', '2*trunc(iw*1.08/2)', '2*trunc(ih*1.08/2)')
@@ -274,7 +285,6 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         if in_bgm and os.path.exists(in_bgm):
             bgm_audio = ffmpeg.input(in_bgm).audio
             bgm_audio = ffmpeg.filter(bgm_audio, 'volume', 0.10)
-            # Prevent FFmpeg OOM crash by using inputs=2 and amix properly
             final_audio = ffmpeg.filter([voice_audio, bgm_audio], 'amix', inputs=2, duration='first', dropout_transition=0)
         else:
             final_audio = voice_audio
@@ -295,7 +305,8 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"] and os.path.exists("subtitles.srt"):
             video = ffmpeg.filter(video, 'subtitles', safe_srt_path_escaped, charenc='UTF-8', fontsdir='.', force_style="FontName=Pyidaungsu,FontSize=22,PrimaryColour=&H0000FFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2.5,Shadow=1,Alignment=2,MarginV=25")
 
-        out = ffmpeg.output(video, final_audio, out_v, vcodec='libx264', acodec='aac', preset='fast', crf=21, t=v_max_dur)
+        # Memory မပြည့်အောင် threads=2 နှင့် preset='ultrafast' သုံးထားသည်
+        out = ffmpeg.output(video, final_audio, out_v, vcodec='libx264', acodec='aac', preset='ultrafast', crf=24, threads=2, t=v_max_dur)
         out.run(cmd=FFMPEG_BINARY, overwrite_output=True, capture_stdout=True, capture_stderr=True)
         return True, "Success"
     except ffmpeg.Error as e: 
@@ -508,7 +519,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     except:
                         pass
                 try:
-                    # Token limit မဖြစ်အောင် စာသားအနည်းငယ်သာ ဖြတ်ယူပါမည်
                     safe_script_snippet = st.session_state.generated_script[:1500] if st.session_state.generated_script else "Epic movie scene"
                     music_vibe_prompt = f"Based on this movie recap snippet, generate a 1-sentence English prompt for background music (e.g., 'Epic cinematic orchestral BGM for horror scene'). Script: {safe_script_snippet}"
                     
@@ -538,7 +548,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     if not music_success:
                         st.warning("⚠️ Lyria Music အား ယခု Key ဖြင့်မရရှိနိုင်သဖြင့် ဂီတမပါဘဲ ဆက်လက်လုပ်ဆောင်နေပါသည်။")
                 except Exception as music_err:
-                    st.warning(f"⚠️ Music Error: {str(music_err)}. ဂီတမပါဘဲ ဆက်သွားပါမည်။")
+                    st.warning("⚠️ ဂီတမပါဘဲ ဆက်သွားပါမည်။")
 
             with st.spinner("⏳ [အဆင့် ၅+၆] ဗီဒီယိုနှင့် စာတန်းထိုးအား ရွေးချယ်ထားသော စနစ်အတိုင်း ဖန်တီးနေပါသည်..."):
                 bgm_file = "lyria_output.mp3" if os.path.exists("lyria_output.mp3") else None
