@@ -1,5 +1,5 @@
 # =====================================================================
-# 📌 AETHER FILMWORKS AI // STUDIO V52 (ANTI-CRASH & SAFE HOOK)
+# 📌 AETHER FILMWORKS AI // STUDIO V52 (FIXED SUBTITLE OVERLAP)
 # =====================================================================
 
 import streamlit as st
@@ -185,6 +185,22 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
         communicate = edge_tts.Communicate(text, voice)
         await communicate.save(output_file)
 
+# 🛠️ FIXED: Time Formatter Function
+# ဤ Function သည် အချိန် format မှားယွင်းခြင်းများကို ကာကွယ်ပေးသည်
+def clean_time_str(t_str):
+    try:
+        parts = t_str.replace(',', '.').split(':')
+        if len(parts) == 3:
+            h, m, s = parts
+            return int(h) * 3600 + int(m) * 60 + float(s)
+        elif len(parts) == 2:
+            m, s = parts
+            return int(m) * 60 + float(s)
+        else:
+            return float(t_str.replace(',', '.'))
+    except:
+        return 0.0
+
 def parse_and_save_real_srt(raw_srt_text, output_file):
     clean_srt = raw_srt_text.replace("```srt", "").replace("```", "").strip()
     
@@ -193,11 +209,13 @@ def parse_and_save_real_srt(raw_srt_text, output_file):
         
     parsed_lines = []
     full_speech = []
-    matches = list(re.finditer(r'(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})', clean_srt))
+    
+    # ပိုမိုတိကျသော Regex Pattern ဖြင့် အချိန်များကို ရှာဖွေခြင်း
+    matches = list(re.finditer(r'(\d{1,2}:\d{2}:\d{2}[,.]\d+|\d{2}:\d{2}[,.]\d+|\d+[,.]\d+)\s*-->\s*(\d{1,2}:\d{2}:\d{2}[,.]\d+|\d{2}:\d{2}[,.]\d+|\d+[,.]\d+)', clean_srt))
     
     for i in range(len(matches)):
-        start_str = matches[i].group(1).replace('.', ',')
-        end_str = matches[i].group(2).replace('.', ',')
+        start_str = matches[i].group(1)
+        end_str = matches[i].group(2)
         text_start = matches[i].end()
         
         if i + 1 < len(matches):
@@ -211,15 +229,13 @@ def parse_and_save_real_srt(raw_srt_text, output_file):
             block = clean_srt[text_start:].strip().replace('\n', ' ')
             
         if block:
-            try:
-                def to_sec(t):
-                    h, m, s_ms = t.split(':')
-                    s, ms = s_ms.split(',')
-                    ms = ms.ljust(3, '0')
-                    return int(h)*3600 + int(m)*60 + int(s) + int(ms)/1000.0
-                parsed_lines.append((to_sec(start_str), to_sec(end_str), block.strip()))
+            start_sec = clean_time_str(start_str)
+            end_sec = clean_time_str(end_str)
+            
+            # Error ကာကွယ်ရန်
+            if start_sec < end_sec:
+                parsed_lines.append((start_sec, end_sec, block.strip()))
                 full_speech.append(block.strip())
-            except: pass
             
     if not parsed_lines:
         text_only = re.sub(r'^\d+\s*$', '', clean_srt, flags=re.MULTILINE)
@@ -424,7 +440,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
 
             with st.spinner(f"⏳ [အဆင့် ၂/၆] {ai_provider} ကိုအသုံးပြု၍ Viral Hook ပါသော ဇာတ်ညွှန်း ရေးသားနေပါသည်..."):
                 try:
-                    base_prompt = "You are an expert Myanmar (Burmese) TikTok movie recap narrator. I am providing you with an English SRT file translated from the original audio. Translate and REWRITE the story into a viral Myanmar TikTok movie recap. 🛑 CRITICAL RULES: 1. THE HOOK: The VERY FIRST 3 sentences MUST be a highly engaging, suspenseful hook that makes the viewer stop scrolling. 2. SYNERGY AUDIO TAGS: Include inline audio tags like [pause=0.5], [excited], [whispers] at the beginning of sentences to add emotion. 3. FORMAT: Output ONLY the raw SRT format."
+                    base_prompt = "You are an expert Myanmar (Burmese) TikTok movie recap narrator. I am providing you with an English SRT file translated from the original audio. Translate and REWRITE the story into a viral Myanmar TikTok movie recap. 🛑 CRITICAL RULES: 1. THE HOOK: The VERY FIRST 3 sentences MUST be a highly engaging, suspenseful hook that makes the viewer stop scrolling. 2. SYNERGY AUDIO TAGS: Include inline audio tags like [pause=0.5], [excited], [whispers] at the beginning of sentences to add emotion. 3. FORMAT: Output ONLY the raw SRT format. ALWAYS output valid timecodes in HH:MM:SS,mmm format."
 
                     if "Gemini" in ai_provider:
                         keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
@@ -439,7 +455,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                             {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
                         ]
                         
-                        gemini_prompt = "Listen to the ENTIRE audio file. You MUST generate a complete SRT subtitle file in natural spoken Burmese (မြန်မာစကားပြောဟန်). 🛑 CRITICAL RULES: 1. THE VIRAL HOOK: The very first 3 sentences MUST be a highly engaging, suspenseful hook (စပ်စုချင်စရာအရေးအသား) to stop viewers from scrolling. 2. Include Synergy Audio Tags like [pause=0.5], [excited], [whispers] to guide the voice. 3. Output ONLY valid SRT format covering the WHOLE video duration."
+                        gemini_prompt = "Listen to the ENTIRE audio file. You MUST generate a complete SRT subtitle file in natural spoken Burmese (မြန်မာစကားပြောဟန်). 🛑 CRITICAL RULES: 1. THE VIRAL HOOK: The very first 3 sentences MUST be a highly engaging, suspenseful hook (စပ်စုချင်စရာအရေးအသား) to stop viewers from scrolling. 2. Include Synergy Audio Tags like [pause=0.5], [excited], [whispers] to guide the voice. 3. Output ONLY valid SRT format covering the WHOLE video duration. Make sure the timestamps are ALWAYS in strict HH:MM:SS,mmm format."
 
                         for idx, current_key in enumerate(keys_list):
                             try:
@@ -519,6 +535,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     except:
                         pass
                 try:
+                    # Token limit မဖြစ်အောင် စာသားအနည်းငယ်သာ ဖြတ်ယူပါမည်
                     safe_script_snippet = st.session_state.generated_script[:1500] if st.session_state.generated_script else "Epic movie scene"
                     music_vibe_prompt = f"Based on this movie recap snippet, generate a 1-sentence English prompt for background music (e.g., 'Epic cinematic orchestral BGM for horror scene'). Script: {safe_script_snippet}"
                     
@@ -548,7 +565,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     if not music_success:
                         st.warning("⚠️ Lyria Music အား ယခု Key ဖြင့်မရရှိနိုင်သဖြင့် ဂီတမပါဘဲ ဆက်လက်လုပ်ဆောင်နေပါသည်။")
                 except Exception as music_err:
-                    st.warning("⚠️ ဂီတမပါဘဲ ဆက်သွားပါမည်။")
+                    st.warning(f"⚠️ Music Error: {str(music_err)}. ဂီတမပါဘဲ ဆက်သွားပါမည်။")
 
             with st.spinner("⏳ [အဆင့် ၅+၆] ဗီဒီယိုနှင့် စာတန်းထိုးအား ရွေးချယ်ထားသော စနစ်အတိုင်း ဖန်တီးနေပါသည်..."):
                 bgm_file = "lyria_output.mp3" if os.path.exists("lyria_output.mp3") else None
