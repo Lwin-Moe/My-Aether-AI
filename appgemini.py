@@ -87,7 +87,7 @@ def download_video_from_url(url, output_path="input_temp.mp4"):
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl: ydl.download([url])
         return output_path
-    except Exception: raise Exception("ဗီဒီယိုအား ဒေါင်းလုဒ်ဆွဲ၍ မရပါ။")
+    except Exception as e: raise Exception(f"ဗီဒီယိုအား ဒေါင်းလုဒ်ဆွဲ၍ မရပါ။ ({str(e)})")
 
 def extract_audio_fast(video_in, audio_out="temp_extracted.mp3"):
     if os.path.exists(audio_out): os.remove(audio_out)
@@ -273,9 +273,9 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         
         if in_bgm and os.path.exists(in_bgm):
             bgm_audio = ffmpeg.input(in_bgm).audio
-            bgm_audio = ffmpeg.filter(bgm_audio, 'volume', 0.12)
-            bgm_audio = ffmpeg.filter(bgm_audio, 'atrim', duration=v_max_dur)
-            final_audio = ffmpeg.filter([voice_audio, bgm_audio], 'amix', duration='first', dropout_transition=0)
+            bgm_audio = ffmpeg.filter(bgm_audio, 'volume', 0.10)
+            # Prevent FFmpeg OOM crash by using inputs=2 and amix properly
+            final_audio = ffmpeg.filter([voice_audio, bgm_audio], 'amix', inputs=2, duration='first', dropout_transition=0)
         else:
             final_audio = voice_audio
         
@@ -399,16 +399,21 @@ if app_mode == "🎙️ Movie Dubbing Studio":
             with st.spinner("⏳ [အဆင့် ၁/၆] ဗီဒီယို ဖိုင်အား စနစ်ထဲသို့ ဆွဲသွင်းနေပါသည်..."):
                 if uploaded_file:
                     with open(v_input, "wb") as f: f.write(uploaded_file.read())
-                else: download_video_from_url(video_url, v_input)
+                else: 
+                    try:
+                        download_video_from_url(video_url, v_input)
+                    except Exception as e:
+                        st.error(f"❌ {e}")
+                        st.stop()
                 
                 extracted_res = extract_audio_fast(v_input, a_extracted)
                 if not extracted_res or not os.path.exists(a_extracted):
                     st.error("❌ ဗီဒီယိုထဲကနေ အသံဖိုင် ခွဲထုတ်လို့ မရပါဘူး။")
                     st.stop()
 
-            with st.spinner(f"⏳ [အဆင့် ၂/၆] {ai_provider} ကိုအသုံးပြု၍ Audio Tags များပါဝင်သော ဇာတ်ညွှန်း ရေးသားနေပါသည်..."):
+            with st.spinner(f"⏳ [အဆင့် ၂/၆] {ai_provider} ကိုအသုံးပြု၍ Viral Hook ပါသော ဇာတ်ညွှန်း ရေးသားနေပါသည်..."):
                 try:
-                    base_prompt = "You are an expert Myanmar (Burmese) TikTok movie recap narrator. I am providing you with an English SRT file translated from the original audio. Translate and REWRITE the story into a viral Myanmar TikTok movie recap. 🛑 CRITICAL RULES: 1. THE HOOK: The VERY FIRST 3 sentences MUST be a highly engaging, suspenseful hook that makes the viewer stop scrolling. 2. SYNERGY AUDIO TAGS: Include inline audio tags like [pause=0.5], [excited], [whispers] at the beginning of sentences to add emotion. 3. FORMAT: Output ONLY the raw SRT format. Adjust the SRT timecodes naturally to fit your new hook."
+                    base_prompt = "You are an expert Myanmar (Burmese) TikTok movie recap narrator. I am providing you with an English SRT file translated from the original audio. Translate and REWRITE the story into a viral Myanmar TikTok movie recap. 🛑 CRITICAL RULES: 1. THE HOOK: The VERY FIRST 3 sentences MUST be a highly engaging, suspenseful hook that makes the viewer stop scrolling. 2. SYNERGY AUDIO TAGS: Include inline audio tags like [pause=0.5], [excited], [whispers] at the beginning of sentences to add emotion. 3. FORMAT: Output ONLY the raw SRT format."
 
                     if "Gemini" in ai_provider:
                         keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
@@ -496,15 +501,24 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     st.stop()
 
             # --- 🎵 AUTOMATIC AI BACKGROUND MUSIC GENERATION ---
-            with st.spinner("⏳ [အဆင့် ၄.5/၆] Lyria AI အား အသုံးပြု၍ ဇာတ်လမ်းနှင့် ကိုက်ညီမည့် နောက်ခံဂီတ ဖန်တီးနေပါသည်..."):
+            with st.spinner("⏳ [အဆင့် ၄.၅/၆] Lyria AI အား အသုံးပြု၍ နောက်ခံဂီတ ဖန်တီးနေပါသည်..."):
                 if os.path.exists("lyria_output.mp3"):
-                    os.remove("lyria_output.mp3")
+                    try:
+                        os.remove("lyria_output.mp3")
+                    except:
+                        pass
                 try:
-                    music_vibe_prompt = f"Based on this movie recap script, generate a 1-sentence English prompt for background music (e.g., 'Epic cinematic orchestral BGM for horror scene'). Script: {st.session_state.generated_script}"
+                    # Token limit မဖြစ်အောင် စာသားအနည်းငယ်သာ ဖြတ်ယူပါမည်
+                    safe_script_snippet = st.session_state.generated_script[:1500] if st.session_state.generated_script else "Epic movie scene"
+                    music_vibe_prompt = f"Based on this movie recap snippet, generate a 1-sentence English prompt for background music (e.g., 'Epic cinematic orchestral BGM for horror scene'). Script: {safe_script_snippet}"
                     
                     genai.configure(api_key=api_key_input.split(",")[0].strip())
                     model_music = genai.GenerativeModel('gemini-2.5-flash')
-                    music_prompt_res = model_music.generate_content(music_vibe_prompt).text.strip()
+                    
+                    try:
+                        music_prompt_res = model_music.generate_content(music_vibe_prompt).text.strip()
+                    except:
+                        music_prompt_res = "Epic cinematic orchestral background music for suspense and action"
                     
                     lyria_keys = [k.strip() for k in api_key_input.split(",") if k.strip()]
                     music_success = False
@@ -522,9 +536,9 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                             break
                             
                     if not music_success:
-                        st.warning("⚠️ Lyria Music မရရှိနိုင်သဖြင့် ဂီတမပါဘဲ ဆက်လက်လုပ်ဆောင်နေပါသည်။")
+                        st.warning("⚠️ Lyria Music အား ယခု Key ဖြင့်မရရှိနိုင်သဖြင့် ဂီတမပါဘဲ ဆက်လက်လုပ်ဆောင်နေပါသည်။")
                 except Exception as music_err:
-                    pass
+                    st.warning(f"⚠️ Music Error: {str(music_err)}. ဂီတမပါဘဲ ဆက်သွားပါမည်။")
 
             with st.spinner("⏳ [အဆင့် ၅+၆] ဗီဒီယိုနှင့် စာတန်းထိုးအား ရွေးချယ်ထားသော စနစ်အတိုင်း ဖန်တီးနေပါသည်..."):
                 bgm_file = "lyria_output.mp3" if os.path.exists("lyria_output.mp3") else None
