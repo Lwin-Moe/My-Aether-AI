@@ -76,7 +76,14 @@ def get_file_duration(file_path):
 
 def download_video_from_url(url, output_path="input_temp.mp4"):
     if os.path.exists(output_path): os.remove(output_path)
-    ydl_opts = {'outtmpl': output_path, 'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best', 'quiet': True}
+    ydl_opts = {
+        'outtmpl': output_path, 
+        'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best', 
+        'quiet': True,
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        }
+    }
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl: ydl.download([url])
         return output_path
@@ -181,7 +188,6 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
 def parse_and_save_real_srt(raw_srt_text, output_file):
     clean_srt = raw_srt_text.replace("```srt", "").replace("```", "").strip()
     
-    # ပြင်ဆင်ချက် ၁: Linux FFmpeg အတွက် utf-8-sig ဖြင့် သိမ်းခြင်း
     with open(output_file, "w", encoding="utf-8-sig") as f: 
         f.write(clean_srt)
         
@@ -227,15 +233,21 @@ def parse_and_save_real_srt(raw_srt_text, output_file):
         
     return parsed_lines, " ".join(full_speech)
 
-def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_bypass=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)"):
+def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_bypass=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)", in_bgm=None):
     try:
         a_dur = get_file_duration(in_a)
-        v_max_dur = get_file_duration(in_v)
+        v_original_dur = get_file_duration(in_v)
         
+        # --- 🎬 VISUAL HOOK LOGIC (3s cut) ---
+        base_vid = ffmpeg.input(in_v)
+        hook_clip = base_vid.video.trim(start=20, end=23).setpts('PTS-STARTPTS')
+        main_clip = base_vid.video.setpts('PTS-STARTPTS')
+        video = ffmpeg.concat(hook_clip, main_clip, v=1, a=0).node[0]
+        v_max_dur = v_original_dur + 3.0
+
         safe_srt_path = os.path.abspath("subtitles.srt").replace('\\', '/')
         safe_srt_path_escaped = safe_srt_path.replace(':', '\\:')
         
-        # ပြင်ဆင်ချက် ၁ (ဆက်လက်): Safe filter ပိုင်းကိုလည်း utf-8-sig ဖြင့် သိမ်းခြင်း
         with open("subtitles.srt", "w", encoding="utf-8-sig") as f:
             for i, (start, end, text) in enumerate(parsed_timestamps, start=1):
                 if start >= v_max_dur: continue
@@ -244,19 +256,28 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
                     return f"{int(s//3600):02d}:{int((s%3600)//60):02d}:{int(s%60):02d},{int((s-int(s))*1000):03d}"
                 f.write(f"{i}\n{fmt_t(start)} --> {fmt_t(safe_end)}\n{text}\n\n")
         
-        video = ffmpeg.input(in_v).video
         if use_bypass:
             video = ffmpeg.filter(video, 'scale', '2*trunc(iw*1.08/2)', '2*trunc(ih*1.08/2)')
             video = ffmpeg.filter(video, 'crop', 'iw/1.08', 'ih/1.08')
         
         video = ffmpeg.filter(video, 'scale', 'trunc(oh*a/2)*2', 1080, flags='bicubic')
-        audio = ffmpeg.input(in_a).audio
+        
+        # --- 🔊 AUDIO MIXING & DUCKING LOGIC ---
+        voice_audio = ffmpeg.input(in_a).audio
         
         if v_max_dur > 1.0 and a_dur > 0:
             target_a_dur = v_max_dur - 0.5
             speed_factor = a_dur / target_a_dur
             if 0.5 <= speed_factor <= 2.0:
-                audio = ffmpeg.filter(audio, 'atempo', speed_factor)
+                voice_audio = ffmpeg.filter(voice_audio, 'atempo', speed_factor)
+        
+        if in_bgm and os.path.exists(in_bgm):
+            bgm_audio = ffmpeg.input(in_bgm).audio
+            bgm_audio = ffmpeg.filter(bgm_audio, 'volume', 0.12)
+            bgm_audio = ffmpeg.filter(bgm_audio, 'atrim', duration=v_max_dur)
+            final_audio = ffmpeg.filter([voice_audio, bgm_audio], 'amix', duration='first', dropout_transition=0)
+        else:
+            final_audio = voice_audio
         
         if use_blur: 
             video = ffmpeg.filter(video, 'drawbox', x=0, y='ih-90', w='iw', h=90, color='black@0.95', thickness='fill')
@@ -272,10 +293,9 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         except: pass
         
         if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"] and os.path.exists("subtitles.srt"):
-            # ပြင်ဆင်ချက် ၂: charenc='UTF-8' နှင့် fontsdir='.' ကို အတင်းအကျပ် ထည့်သွင်းခြင်း
             video = ffmpeg.filter(video, 'subtitles', safe_srt_path_escaped, charenc='UTF-8', fontsdir='.', force_style="FontName=Pyidaungsu,FontSize=22,PrimaryColour=&H0000FFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2.5,Shadow=1,Alignment=2,MarginV=25")
 
-        out = ffmpeg.output(video, audio, out_v, vcodec='libx264', acodec='aac', preset='fast', crf=21, t=v_max_dur)
+        out = ffmpeg.output(video, final_audio, out_v, vcodec='libx264', acodec='aac', preset='fast', crf=21, t=v_max_dur)
         out.run(cmd=FFMPEG_BINARY, overwrite_output=True, capture_stdout=True, capture_stderr=True)
         return True, "Success"
     except ffmpeg.Error as e: 
@@ -388,7 +408,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
 
             with st.spinner(f"⏳ [အဆင့် ၂/၆] {ai_provider} ကိုအသုံးပြု၍ Audio Tags များပါဝင်သော ဇာတ်ညွှန်း ရေးသားနေပါသည်..."):
                 try:
-                    base_prompt = "You are an expert Myanmar (Burmese) TikTok movie recap narrator. I am providing you with an English SRT file translated from the original audio. Translate and adapt the text into highly engaging, natural spoken Burmese (မြန်မာစကားပြောဟန်). STRICT RULES: 1. SYNERGY AUDIO TAGS: You MUST include inline audio tags to direct the TTS voice. Use tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers], [reluctantly] at the beginning of relevant sentences to add emotion and dramatic pacing. 2. NO ENGLISH TRANSLITERATION: Translate meanings naturally. 3. FORMAT: Keep the EXACT original SRT timecodes and indices. 4. Output ONLY the raw SRT format."
+                    base_prompt = "You are an expert Myanmar (Burmese) TikTok movie recap narrator. I am providing you with an English SRT file translated from the original audio. Translate and REWRITE the story into a viral Myanmar TikTok movie recap. 🛑 CRITICAL RULES: 1. THE HOOK: The VERY FIRST 3 sentences MUST be a highly engaging, suspenseful hook that makes the viewer stop scrolling. 2. SYNERGY AUDIO TAGS: Include inline audio tags like [pause=0.5], [excited], [whispers] at the beginning of sentences to add emotion. 3. FORMAT: Output ONLY the raw SRT format. Adjust the SRT timecodes naturally to fit your new hook."
 
                     if "Gemini" in ai_provider:
                         keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
@@ -396,6 +416,15 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                         last_err = ""
                         st.session_state.original_transcript = "[Gemini Model processed Audio directly.]"
                         
+                        safety_config = [
+                            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+                        ]
+                        
+                        gemini_prompt = "Listen to the ENTIRE audio file. You MUST generate a complete SRT subtitle file in natural spoken Burmese (မြန်မာစကားပြောဟန်). 🛑 CRITICAL RULES: 1. THE VIRAL HOOK: The very first 3 sentences MUST be a highly engaging, suspenseful hook (စပ်စုချင်စရာအရေးအသား) to stop viewers from scrolling. 2. Include Synergy Audio Tags like [pause=0.5], [excited], [whispers] to guide the voice. 3. Output ONLY valid SRT format covering the WHOLE video duration."
+
                         for idx, current_key in enumerate(keys_list):
                             try:
                                 genai.configure(api_key=current_key)
@@ -404,17 +433,13 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                                     time.sleep(2)
                                     audio_file = genai.get_file(audio_file.name)
                                 
-                                model = genai.GenerativeModel(
-                                    model_name="gemini-2.5-flash",
-                                    safety_settings=[
-                                        {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                                        {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-                                        {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-                                        {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
-                                    ]
-                                )
-                                gemini_prompt = "Listen to the ENTIRE audio file from the absolute beginning to the very last second. Do NOT truncate, skip, or summarize the ending. You MUST generate a complete SRT subtitle file in natural spoken Burmese (မြန်မာစကားပြောဟန်) covering the WHOLE video duration until the very end. 🛑 STRICT RULES: 1. Include Synergy Audio Tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers] to guide the voice naturally. 2. NO ENGLISH TRANSLITERATION. 3. Output ONLY valid SRT format."
-                                response = model.generate_content([audio_file, gemini_prompt])
+                                try:
+                                    model = genai.GenerativeModel('gemini-3.0-flash', safety_settings=safety_config)
+                                    response = model.generate_content([audio_file, gemini_prompt])
+                                except:
+                                    model = genai.GenerativeModel('gemini-2.5-flash', safety_settings=safety_config)
+                                    response = model.generate_content([audio_file, gemini_prompt])
+                                
                                 raw_output_text = response.text.strip()
                                 genai.delete_file(audio_file.name)
                                 success_gemini = True
@@ -470,8 +495,40 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     st.error(f"အသံထုတ်လုပ်ခြင်း မအောင်မြင်ပါ: {e}")
                     st.stop()
 
+            # --- 🎵 AUTOMATIC AI BACKGROUND MUSIC GENERATION ---
+            with st.spinner("⏳ [အဆင့် ၄.5/၆] Lyria AI အား အသုံးပြု၍ ဇာတ်လမ်းနှင့် ကိုက်ညီမည့် နောက်ခံဂီတ ဖန်တီးနေပါသည်..."):
+                if os.path.exists("lyria_output.mp3"):
+                    os.remove("lyria_output.mp3")
+                try:
+                    music_vibe_prompt = f"Based on this movie recap script, generate a 1-sentence English prompt for background music (e.g., 'Epic cinematic orchestral BGM for horror scene'). Script: {st.session_state.generated_script}"
+                    
+                    genai.configure(api_key=api_key_input.split(",")[0].strip())
+                    model_music = genai.GenerativeModel('gemini-2.5-flash')
+                    music_prompt_res = model_music.generate_content(music_vibe_prompt).text.strip()
+                    
+                    lyria_keys = [k.strip() for k in api_key_input.split(",") if k.strip()]
+                    music_success = False
+                    
+                    for l_key in lyria_keys:
+                        url_lyria = f"https://generativelanguage.googleapis.com/v1beta/models/lyria-3-pro-preview:generateContent?key={l_key}"
+                        payload_lyria = {"contents": [{"parts": [{"text": music_prompt_res}]}], "generationConfig": {"responseModalities": ["AUDIO"]}}
+                        res_lyria = requests.post(url_lyria, json=payload_lyria)
+                        
+                        if res_lyria.status_code == 200:
+                            audio_b64 = res_lyria.json()["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
+                            with open("lyria_output.mp3", "wb") as f: 
+                                f.write(base64.b64decode(audio_b64))
+                            music_success = True
+                            break
+                            
+                    if not music_success:
+                        st.warning("⚠️ Lyria Music မရရှိနိုင်သဖြင့် ဂီတမပါဘဲ ဆက်လက်လုပ်ဆောင်နေပါသည်။")
+                except Exception as music_err:
+                    pass
+
             with st.spinner("⏳ [အဆင့် ၅+၆] ဗီဒီယိုနှင့် စာတန်းထိုးအား ရွေးချယ်ထားသော စနစ်အတိုင်း ဖန်တီးနေပါသည်..."):
-                success, err_msg = render_premium_saas_video(v_input, a_generated, parsed_timestamps, v_final, video_ratio, cb_bypass, cb_blur, watermark_text, subtitle_mode)
+                bgm_file = "lyria_output.mp3" if os.path.exists("lyria_output.mp3") else None
+                success, err_msg = render_premium_saas_video(v_input, a_generated, parsed_timestamps, v_final, video_ratio, cb_bypass, cb_blur, watermark_text, subtitle_mode, in_bgm=bgm_file)
                 if success: st.session_state.render_success = True
                 else: st.error(f"Rendering Sync Failure: {err_msg}")
 
