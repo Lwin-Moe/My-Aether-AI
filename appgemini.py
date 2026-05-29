@@ -32,8 +32,9 @@ OPENAI_KEY_FILE = "saved_openai_key.txt"
 ELEVEN_VOICE_ID_FILE = "saved_eleven_voice_id.txt"
 
 def load_key(file_path):
-    # AI Studio ပုံထဲက Key အစစ်အမှန်ကိုသာ အသေထည့်ထားပါသည်
-    return "AQ.Ab8RN6IvTQ9-8KoYh7AchDT-NfGvU2bPrwbw33JuSpXw4GVG6g"
+    if os.path.exists(file_path):
+        with open(file_path, "r", encoding="utf-8") as f: return f.read().strip()
+    return ""
 
 def save_key(file_path, key):
     with open(file_path, "w", encoding="utf-8") as f: f.write(key)
@@ -293,8 +294,7 @@ with st.sidebar:
     st.markdown("### 🔑 2. API Credentials")
     saved_gemini = load_key(API_KEY_FILE)
     if "Gemini" in ai_provider:
-        # type="password" အား ဖယ်ရှားထားပါသည်
-        api_key_input = st.text_input("Gemini Keys (Comma separated)", value=saved_gemini, placeholder="Key1, Key2...")
+        api_key_input = st.text_input("Gemini Keys (Comma separated)", type="password", value=saved_gemini, placeholder="Key1, Key2...")
         if api_key_input and api_key_input != saved_gemini: save_key(API_KEY_FILE, api_key_input)
     elif "Groq" in ai_provider:
         saved_groq = load_key(GROQ_KEY_FILE)
@@ -321,8 +321,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         
         if "Synergy" in audio_engine_choice:
             st.caption("✨ Using your Gemini API Key for Synergy Speech synthesis.")
-            # type="password" အား ဖယ်ရှားထားပါသည်
-            synergy_key = st.text_input("Enter API Key for Synergy TTS", value=saved_gemini)
+            synergy_key = st.text_input("Enter API Key for Synergy TTS", type="password", value=saved_gemini)
 
         if "ElevenLabs" in audio_engine_choice:
             saved_eleven = load_key(ELEVEN_KEY_FILE)
@@ -406,7 +405,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                                     audio_file = genai.get_file(audio_file.name)
                                 
                                 model = genai.GenerativeModel(
-                                    model_name="gemini-3.0-flash",
+                                    model_name="gemini-2.5-flash",
                                     safety_settings=[
                                         {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
                                         {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
@@ -515,7 +514,7 @@ elif app_mode == "🎥 Veo Video Studio":
                     keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
                     success = False
                     for key in keys_list:
-                        url = f"https://generativelanguage.googleapis.com/v1beta/models/veo-3.1-generate-preview:generateContent?key={key}"
+                        url = f"https://generativelanguage.googleapis.com/v1beta/models/veo-2.0-preview:generateContent?key={key}"
                         payload = {"contents": [{"parts": [{"text": video_prompt}]}], "generationConfig": {"responseModalities": ["VIDEO"]}}
                         res = requests.post(url, json=payload)
                         if res.status_code == 200:
@@ -635,7 +634,7 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                         })
 
                     # 4. Gemini 2.5 Flash - တိကျသော Timeline အတိုင်း မြန်မာဘာသာသို့ အနုပညာဆန်စွာ ပြန်ဆိုခြင်း 🤖
-                    st.info("🤖 Gemini 3.0 Flash ဖြင့် မူရင်းအချိန်အတိုင်း မြန်မာဘာသာပြန်ဆိုနေပါသည်...")
+                    st.info("🤖 Gemini 2.5 Flash ဖြင့် မူရင်းအချိန်အတိုင်း မြန်မာဘာသာပြန်ဆိုနေပါသည်...")
                     response_json = None
                     
                     # Whisper မှရလာသော တိကျသည့် အချိန်အတုံးလေးများကို မပြောင်းလဲဘဲ text ကိုသာ မြန်မာပြန်ခိုင်းသည့် Prompt
@@ -663,7 +662,7 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                             st.toast(f"🔑 Key ({index + 1}/{len(api_keys)}) ဖြင့် ကြိုးစားနေပါသည်...", icon="⏳")
                             genai.configure(api_key=current_key)
                             
-                            model = genai.GenerativeModel('gemini-3.0-flash')
+                            model = genai.GenerativeModel('gemini-2.5-flash')
                             response = model.generate_content(prompt)
                             
                             raw_text = response.text.strip().replace("```json", "").replace("```", "")
