@@ -32,9 +32,8 @@ OPENAI_KEY_FILE = "saved_openai_key.txt"
 ELEVEN_VOICE_ID_FILE = "saved_eleven_voice_id.txt"
 
 def load_key(file_path):
-    if os.path.exists(file_path):
-        with open(file_path, "r", encoding="utf-8") as f: return f.read().strip()
-    return ""
+    # AI Studio ပုံထဲက Key အစစ်အမှန်ကိုသာ အသေထည့်ထားပါသည်
+    return "AQ.Ab8RN6IvTQ9-8KoYh7AchDT-NfGvU2bPrwbw33JuSpXw4GVG6g"
 
 def save_key(file_path, key):
     with open(file_path, "w", encoding="utf-8") as f: f.write(key)
