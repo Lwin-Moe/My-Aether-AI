@@ -120,9 +120,10 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
         
         last_err = ""
         for idx, current_key in enumerate(keys_list):
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key={current_key}"
+            url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent"
+            headers = {"x-goog-api-key": current_key, "Content-Type": "application/json"}
             try:
-                res = requests.post(url, json=payload)
+                res = requests.post(url, headers=headers, json=payload)
                 if res.status_code == 200:
                     candidate = res.json().get("candidates", [{}])[0]
                     if candidate.get("finishReason") == "SAFETY":
@@ -396,7 +397,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
 
                         for idx, current_key in enumerate(keys_list):
                             try:
-                                # REST API ပြောင်းသုံးခြင်း (google-generativeai မလိုတော့ပါ)
                                 with open(a_extracted, "rb") as f:
                                     audio_b64 = base64.b64encode(f.read()).decode('utf-8')
                                 
@@ -412,8 +412,9 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                                         {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
                                     ]
                                 }
-                                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.0-flash:generateContent?key={current_key}"
-                                res = requests.post(url, json=payload)
+                                url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.0-flash:generateContent"
+                                headers = {"x-goog-api-key": current_key, "Content-Type": "application/json"}
+                                res = requests.post(url, headers=headers, json=payload)
                                 
                                 if res.status_code == 200:
                                     raw_output_text = res.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
@@ -517,9 +518,10 @@ elif app_mode == "🎥 Veo Video Studio":
                     keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
                     success = False
                     for key in keys_list:
-                        url = f"https://generativelanguage.googleapis.com/v1beta/models/veo-3.1-generate-preview:generateContent?key={key}"
+                        url = "https://generativelanguage.googleapis.com/v1beta/models/veo-3.1-generate-preview:generateContent"
+                        headers = {"x-goog-api-key": key, "Content-Type": "application/json"}
                         payload = {"contents": [{"parts": [{"text": video_prompt}]}], "generationConfig": {"responseModalities": ["VIDEO"]}}
-                        res = requests.post(url, json=payload)
+                        res = requests.post(url, headers=headers, json=payload)
                         if res.status_code == 200:
                             video_b64 = res.json()["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
                             with open("veo_output.mp4", "wb") as f: f.write(base64.b64decode(video_b64))
@@ -548,9 +550,10 @@ elif app_mode == "🎵 Lyria Music Studio":
                     keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
                     success = False
                     for key in keys_list:
-                        url = f"https://generativelanguage.googleapis.com/v1beta/models/lyria-3-pro-preview:generateContent?key={key}"
+                        url = "https://generativelanguage.googleapis.com/v1beta/models/lyria-3-pro-preview:generateContent"
+                        headers = {"x-goog-api-key": key, "Content-Type": "application/json"}
                         payload = {"contents": [{"parts": [{"text": music_prompt}]}], "generationConfig": {"responseModalities": ["AUDIO"]}}
-                        res = requests.post(url, json=payload)
+                        res = requests.post(url, headers=headers, json=payload)
                         if res.status_code == 200:
                             audio_b64 = res.json()["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
                             with open("lyria_output.mp3", "wb") as f: f.write(base64.b64decode(audio_b64))
@@ -656,10 +659,10 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                         try:
                             st.toast(f"🔑 Key ({index + 1}/{len(api_keys)}) ဖြင့် ကြိုးစားနေပါသည်...", icon="⏳")
                             
-                            # REST API ပြောင်းသုံးခြင်း (google-generativeai မလိုတော့ပါ)
                             payload = {"contents": [{"parts": [{"text": prompt}]}]}
-                            url = f"[https://generativelanguage.googleapis.com/v1beta/models/gemini-3.0-flash:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-3.0-flash:generateContent?key=){current_key}"
-                            res = requests.post(url, json=payload)
+                            url = "[https://generativelanguage.googleapis.com/v1beta/models/gemini-3.0-flash:generateContent](https://generativelanguage.googleapis.com/v1beta/models/gemini-3.0-flash:generateContent)"
+                            headers = {"x-goog-api-key": current_key, "Content-Type": "application/json"}
+                            res = requests.post(url, headers=headers, json=payload)
                             
                             if res.status_code == 200:
                                 raw_text = res.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
