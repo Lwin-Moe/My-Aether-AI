@@ -405,7 +405,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                                     audio_file = genai.get_file(audio_file.name)
                                 
                                 model = genai.GenerativeModel(
-                                    model_name="gemini-2.5-flash",
+                                    model_name="gemini-3.0-flash",
                                     safety_settings=[
                                         {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
                                         {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
@@ -514,7 +514,7 @@ elif app_mode == "🎥 Veo Video Studio":
                     keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
                     success = False
                     for key in keys_list:
-                        url = f"https://generativelanguage.googleapis.com/v1beta/models/veo-2.0-preview:generateContent?key={key}"
+                        url = f"https://generativelanguage.googleapis.com/v1beta/models/veo-3.1-generate-preview:generateContent?key={key}"
                         payload = {"contents": [{"parts": [{"text": video_prompt}]}], "generationConfig": {"responseModalities": ["VIDEO"]}}
                         res = requests.post(url, json=payload)
                         if res.status_code == 200:
@@ -634,7 +634,7 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                         })
 
                     # 4. Gemini 2.5 Flash - တိကျသော Timeline အတိုင်း မြန်မာဘာသာသို့ အနုပညာဆန်စွာ ပြန်ဆိုခြင်း 🤖
-                    st.info("🤖 Gemini 2.5 Flash ဖြင့် မူရင်းအချိန်အတိုင်း မြန်မာဘာသာပြန်ဆိုနေပါသည်...")
+                    st.info("🤖 Gemini 3.0 Flash ဖြင့် မူရင်းအချိန်အတိုင်း မြန်မာဘာသာပြန်ဆိုနေပါသည်...")
                     response_json = None
                     
                     # Whisper မှရလာသော တိကျသည့် အချိန်အတုံးလေးများကို မပြောင်းလဲဘဲ text ကိုသာ မြန်မာပြန်ခိုင်းသည့် Prompt
@@ -662,7 +662,7 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                             st.toast(f"🔑 Key ({index + 1}/{len(api_keys)}) ဖြင့် ကြိုးစားနေပါသည်...", icon="⏳")
                             genai.configure(api_key=current_key)
                             
-                            model = genai.GenerativeModel('gemini-2.5-flash')
+                            model = genai.GenerativeModel('gemini-3.0-flash')
                             response = model.generate_content(prompt)
                             
                             raw_text = response.text.strip().replace("```json", "").replace("```", "")
