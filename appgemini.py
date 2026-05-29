@@ -293,19 +293,10 @@ with st.sidebar:
     
     st.markdown("### 🔑 2. API Credentials")
     saved_gemini = load_key(API_KEY_FILE)
-    
     if "Gemini" in ai_provider:
-        api_key_input = st.text_input("Gemini Keys", type="password", value=saved_gemini, placeholder="AQ.Ab8RN6...")
-        
-        col_k1, col_k2 = st.columns(2)
-        with col_k1:
-            if st.button("💾 Save Key"):
-                save_key(API_KEY_FILE, api_key_input)
-                st.success("✅ သိမ်းပြီးပါပြီ")
-        with col_k2:
-            if st.button("🗑️ Clear Old Key"):
-                save_key(API_KEY_FILE, "") # နောက်ကွယ်က ဖိုင်ကိုပါ အလွတ်လုပ်ပစ်မည်
-                st.rerun() # App ကို Refresh လုပ်မည်
+        # type="password" အား ဖယ်ရှားထားပါသည်
+        api_key_input = st.text_input("Gemini Keys (Comma separated)", value=saved_gemini, placeholder="Key1, Key2...")
+        if api_key_input and api_key_input != saved_gemini: save_key(API_KEY_FILE, api_key_input)
     elif "Groq" in ai_provider:
         saved_groq = load_key(GROQ_KEY_FILE)
         api_key_input = st.text_input("Groq API Key", type="password", value=saved_groq)
@@ -331,7 +322,8 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         
         if "Synergy" in audio_engine_choice:
             st.caption("✨ Using your Gemini API Key for Synergy Speech synthesis.")
-            synergy_key = st.text_input("Enter API Key for Synergy TTS", type="password", value=saved_gemini)
+            # type="password" အား ဖယ်ရှားထားပါသည်
+            synergy_key = st.text_input("Enter API Key for Synergy TTS", value=saved_gemini)
 
         if "ElevenLabs" in audio_engine_choice:
             saved_eleven = load_key(ELEVEN_KEY_FILE)
