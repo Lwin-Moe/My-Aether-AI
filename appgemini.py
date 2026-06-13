@@ -21,6 +21,7 @@ import wave
 import subprocess
 import json
 import datetime
+import random
 
 FFMPEG_BINARY = imageio_ffmpeg.get_ffmpeg_exe()
 
@@ -44,118 +45,20 @@ st.set_page_config(page_title="AETHER STUDIO V52", layout="wide", page_icon="�
 
 st.markdown('''
     <style>
-    /* Import Premium Fonts */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Montserrat:wght@500;700;800;900&display=swap');
-
-    /* Base App Styling */
-    .stApp { 
-        background-color: #0b0f19 !important; 
-        background-image: radial-gradient(circle at top, #161b2e 0%, #0b0f19 60%) !important;
-        color: #cbd5e1 !important; 
-        font-family: 'Inter', sans-serif; 
-    }
-    
-    /* Sidebar Styling */
-    section[data-testid="stSidebar"] { 
-        background-color: #0d111c !important; 
-        border-right: 1px solid rgba(255, 255, 255, 0.05) !important; 
-    }
-    
-    /* Typography */
-    h1, h2, h3, h4 { 
-        font-family: 'Montserrat', sans-serif !important; 
-        color: #f8fafc !important; 
-        font-weight: 700 !important;
-    }
-    p, span, label, .stRadio label, .stCheckbox label, .stSelectbox label { 
-        color: #94a3b8 !important; 
-        font-size: 14px; 
-    }
-    
-    /* Main Cinematic Title */
-    .main-title {
-        text-align: center;
-        font-family: 'Montserrat', sans-serif;
-        font-size: 3.5rem !important;
-        font-weight: 900;
-        background: linear-gradient(135deg, #38bdf8 0%, #818cf8 50%, #c084fc 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        margin-top: 20px;
-        margin-bottom: 5px;
-        letter-spacing: -1px;
-        text-shadow: 0px 10px 30px rgba(129, 140, 248, 0.2);
-    }
-    .sub-title {
-        text-align: center;
-        color: #64748b;
-        font-family: 'Inter', sans-serif;
-        font-size: 1.1rem;
-        font-weight: 500;
-        margin-bottom: 40px;
-        letter-spacing: 3px;
-        text-transform: uppercase;
-    }
-
-    /* Input Fields & Dropdowns */
-    .stTextInput input, div[data-baseweb="select"], .stTextArea textarea { 
-        background-color: #151b2b !important; 
-        color: #f1f5f9 !important; 
-        border: 1px solid #334155 !important; 
-        border-radius: 8px !important; 
-        transition: all 0.3s ease;
-    }
-    .stTextInput input:focus, div[data-baseweb="select"]:focus-within, .stTextArea textarea:focus {
-        border-color: #818cf8 !important;
-        box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.5) !important;
-    }
-    
-    /* Custom Panel / Card Design */
-    .setting-panel { 
-        background: #111624; 
-        border: 1px solid rgba(255, 255, 255, 0.05); 
-        border-radius: 12px; 
-        padding: 24px; 
-        margin-bottom: 24px; 
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2); 
-    }
-    
-    /* Primary CTA Button */
-    .stButton>button { 
-        background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%) !important; 
-        color: #ffffff !important; 
-        font-family: 'Montserrat', sans-serif !important;
-        font-weight: 700 !important; 
-        font-size: 16px !important; 
-        letter-spacing: 0.5px;
-        border-radius: 8px !important; 
-        border: none !important; 
-        width: 100%; 
-        padding: 16px !important; 
-        transition: all 0.3s ease !important; 
-        box-shadow: 0 4px 15px rgba(124, 58, 237, 0.3);
-    }
-    .stButton>button:hover { 
-        transform: translateY(-3px); 
-        box-shadow: 0 8px 25px rgba(124, 58, 237, 0.5); 
-    }
-    
-    /* Expander / Accordion */
-    .streamlit-expanderHeader {
-        background-color: #151b2b !important;
-        border-radius: 8px !important;
-        color: #f8fafc !important;
-    }
-    
-    /* Subtitle Styling Box */
-    .sub-box {
-        background-color: #1a2235;
-        border: 1px solid rgba(129, 140, 248, 0.3);
-        border-radius: 8px;
-        padding: 20px;
-        margin-top: 15px;
-        margin-bottom: 10px;
-    }
+    .stApp { background-color: #0b0f19 !important; background-image: radial-gradient(circle at top, #161b2e 0%, #0b0f19 60%) !important; color: #cbd5e1 !important; font-family: 'Inter', sans-serif; }
+    section[data-testid="stSidebar"] { background-color: #0d111c !important; border-right: 1px solid rgba(255, 255, 255, 0.05) !important; }
+    h1, h2, h3, h4 { font-family: 'Montserrat', sans-serif !important; color: #f8fafc !important; font-weight: 700 !important; }
+    p, span, label, .stRadio label, .stCheckbox label, .stSelectbox label { color: #94a3b8 !important; font-size: 14px; }
+    .main-title { text-align: center; font-family: 'Montserrat', sans-serif; font-size: 3.5rem !important; font-weight: 900; background: linear-gradient(135deg, #38bdf8 0%, #818cf8 50%, #c084fc 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-top: 20px; margin-bottom: 5px; letter-spacing: -1px; text-shadow: 0px 10px 30px rgba(129, 140, 248, 0.2); }
+    .sub-title { text-align: center; color: #64748b; font-family: 'Inter', sans-serif; font-size: 1.1rem; font-weight: 500; margin-bottom: 40px; letter-spacing: 3px; text-transform: uppercase; }
+    .stTextInput input, div[data-baseweb="select"], .stTextArea textarea { background-color: #151b2b !important; color: #f1f5f9 !important; border: 1px solid #334155 !important; border-radius: 8px !important; transition: all 0.3s ease; }
+    .stTextInput input:focus, div[data-baseweb="select"]:focus-within, .stTextArea textarea:focus { border-color: #818cf8 !important; box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.5) !important; }
+    .setting-panel { background: #111624; border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2); }
+    .stButton>button { background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%) !important; color: #ffffff !important; font-family: 'Montserrat', sans-serif !important; font-weight: 700 !important; font-size: 16px !important; letter-spacing: 0.5px; border-radius: 8px !important; border: none !important; width: 100%; padding: 16px !important; transition: all 0.3s ease !important; box-shadow: 0 4px 15px rgba(124, 58, 237, 0.3); }
+    .stButton>button:hover { transform: translateY(-3px); box-shadow: 0 8px 25px rgba(124, 58, 237, 0.5); }
+    .streamlit-expanderHeader { background-color: #151b2b !important; border-radius: 8px !important; color: #f8fafc !important; }
+    .sub-box { background-color: #1a2235; border: 1px solid rgba(129, 140, 248, 0.3); border-radius: 8px; padding: 20px; margin-top: 15px; margin-bottom: 10px; }
     </style>
 ''', unsafe_allow_html=True)
 
@@ -179,7 +82,6 @@ def get_file_duration(file_path):
 
 def download_video_from_url(url, output_path="input_temp.mp4"):
     if os.path.exists(output_path): os.remove(output_path)
-    
     ydl_opts = {
         'outtmpl': output_path, 
         'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best', 
@@ -196,8 +98,7 @@ def download_video_from_url(url, output_path="input_temp.mp4"):
         }
     }
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl: 
-            ydl.download([url])
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl: ydl.download([url])
         return output_path
     except Exception as e: 
         raise Exception(f"YouTube Download Error: ဗီဒီယိုကို ဆွဲယူ၍မရပါ။ Server IP Block ခံရခြင်း (သို့) Private Video ဖြစ်နိုင်ပါသည်။ (ERROR: {str(e)})")
@@ -220,8 +121,7 @@ def extract_audio_fast(video_in, audio_out="temp_extracted.mp3"):
             'extractor_args': {'youtube': {'player_client': ['tv', 'ios', 'web']}},
             'ffmpeg_location': FFMPEG_BINARY
         }
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl: 
-            ydl.extract_info(video_in, download=True)
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl: ydl.extract_info(video_in, download=True)
         return audio_out
     except: return None
 
@@ -331,8 +231,9 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
             if os.path.exists(temp_out): os.remove(temp_out)
 
 def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
-    marker = chr(96) * 3
-    clean_srt = raw_srt_text.replace(f"{marker}srt", "").replace(marker, "").strip()
+    bt = chr(96)
+    tbt = bt * 3
+    clean_srt = raw_srt_text.replace(f"{tbt}srt", "").replace(f"{tbt}json", "").replace(tbt, "").strip()
     
     with open(output_file, "w", encoding="utf-8-sig") as f: 
         f.write(clean_srt)
@@ -384,7 +285,7 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
         
     return parsed_lines, " ".join(full_speech)
 
-def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_bypass=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)", use_mirror=False, use_color=False, use_grain=False, use_fps=False, sub_style_str="FontName=Pyidaungsu,FontSize=22,PrimaryColour=&H0000FFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2.5,Shadow=1,Alignment=2,MarginV=25"):
+def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_bypass=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)", use_mirror=False, use_color=False, use_grain=False, use_fps=False, sub_style_str="", mute_orig=True, bgm_file=None, bgm_vol=0.1):
     try:
         a_dur = get_file_duration(in_a)
         v_max_dur = get_file_duration(in_v)
@@ -406,44 +307,46 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
             video = ffmpeg.filter(video, 'scale', '2*trunc(iw*1.08/2)', '2*trunc(ih*1.08/2)')
             video = ffmpeg.filter(video, 'crop', 'iw/1.08', 'ih/1.08')
             
-        if use_mirror:
-            video = ffmpeg.filter(video, 'hflip')
-            
-        if use_color:
-            video = ffmpeg.filter(video, 'eq', brightness=0.02, contrast=1.05, saturation=1.1)
-            
-        if use_grain:
-            video = ffmpeg.filter(video, 'noise', alls=2, allf='t+u')
-            
-        if use_fps:
-            video = ffmpeg.filter(video, 'fps', fps=24, round='near')
+        if use_mirror: video = ffmpeg.filter(video, 'hflip')
+        if use_color: video = ffmpeg.filter(video, 'eq', brightness=0.02, contrast=1.05, saturation=1.1)
+        if use_grain: video = ffmpeg.filter(video, 'noise', alls=2, allf='t+u')
+        if use_fps: video = ffmpeg.filter(video, 'fps', fps=24, round='near')
         
         video = ffmpeg.filter(video, 'scale', 'trunc(oh*a/2)*2', 1080, flags='bicubic')
-        audio = ffmpeg.input(in_a).audio
         
+        tts_audio = ffmpeg.input(in_a).audio
         if v_max_dur > 1.0 and a_dur > 0:
-            target_a_dur = v_max_dur - 0.5
-            speed_factor = a_dur / target_a_dur
+            speed_factor = a_dur / (v_max_dur - 0.5)
             if 0.5 <= speed_factor <= 2.0:
-                audio = ffmpeg.filter(audio, 'atempo', speed_factor)
+                tts_audio = ffmpeg.filter(tts_audio, 'atempo', speed_factor)
+                
+        audio_streams = [tts_audio]
+        
+        if not mute_orig:
+            orig_audio = ffmpeg.input(in_v).audio.filter('volume', 0.1)
+            audio_streams.append(orig_audio)
+            
+        if bgm_file and os.path.exists(bgm_file):
+            bgm_audio = ffmpeg.input(bgm_file, stream_loop=-1).audio.filter('atrim', duration=v_max_dur).filter('volume', bgm_vol)
+            audio_streams.append(bgm_audio)
+            
+        if len(audio_streams) > 1:
+            final_audio = ffmpeg.filter(audio_streams, 'amix', inputs=len(audio_streams), duration='longest', dropout_transition=2)
+        else:
+            final_audio = audio_streams[0]
         
         if use_blur: 
             video = ffmpeg.filter(video, 'drawbox', x=0, y='ih-90', w='iw', h=90, color='black@0.95', thickness='fill')
             
-        if ratio == "9:16 (TikTok/Shorts)": 
-            video = ffmpeg.filter(video, 'crop', 'min(iw, ih*9/16)', 'ih')
-        elif ratio == "16:9 (YouTube)": 
-            video = ffmpeg.filter(video, 'crop', 'iw', 'min(ih, iw*9/16)')
+        if ratio == "9:16 (TikTok/Shorts)": video = ffmpeg.filter(video, 'crop', 'min(iw, ih*9/16)', 'ih')
+        elif ratio == "16:9 (YouTube)": video = ffmpeg.filter(video, 'crop', 'iw', 'min(ih, iw*9/16)')
         
-        try:
-            if watermark: 
-                video = ffmpeg.filter(video, 'drawtext', text=watermark, x='w-tw-15', y='15', fontsize=30, fontcolor='white@0.5')
-        except: pass
+        if watermark: video = ffmpeg.filter(video, 'drawtext', text=watermark, x='w-tw-15', y='15', fontsize=30, fontcolor='white@0.5')
         
         if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"] and os.path.exists("subtitles.srt"):
             video = ffmpeg.filter(video, 'subtitles', safe_srt_path_escaped, charenc='UTF-8', fontsdir='.', force_style=sub_style_str)
 
-        out = ffmpeg.output(video, audio, out_v, vcodec='libx264', acodec='aac', preset='fast', crf=21, t=v_max_dur)
+        out = ffmpeg.output(video, final_audio, out_v, vcodec='libx264', acodec='aac', preset='fast', crf=21, t=v_max_dur)
         out.run(cmd=FFMPEG_BINARY, overwrite_output=True, capture_stdout=True, capture_stderr=True)
         return True, "Success"
     except ffmpeg.Error as e: 
@@ -537,6 +440,22 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         script_curiosity = st.checkbox("🤯 Curiosity Gaps (စိတ်ဝင်စားမှု အရှိန်တင်မည်)", value=True)
         script_tone = st.checkbox("🎭 Emotion & Tone (ဇာတ်ကောင်စရိုက် သွင်းမည်)", value=True)
         script_cta = st.checkbox("💬 Call to Action (Comment ခေါ်မည်)", value=False)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        st.markdown("<div class='sub-box'>", unsafe_allow_html=True)
+        st.markdown("<p style='margin-bottom: 10px; font-weight: bold; color: #10b981 !important; font-size: 16px;'>🎵 Audio Mixing & BGM</p>", unsafe_allow_html=True)
+        cb_mute_orig = st.checkbox("🔇 Mute Original Audio (မူရင်းအသံဖျောက်ပြီး Copyright ရှောင်မည်)", value=True)
+        
+        bgm_options = ["None (BGM မထည့်ပါ)"]
+        bgm_files = []
+        if os.path.exists("bgm_tracks"):
+            bgm_files = [f for f in os.listdir("bgm_tracks") if f.endswith(".mp3")]
+            if bgm_files:
+                bgm_options.insert(1, "🤖 Auto (Random Select)")
+                bgm_options.extend(bgm_files)
+                
+        selected_bgm = st.selectbox("🎼 Background Music", bgm_options)
+        bgm_volume = st.slider("🔊 BGM Volume", 1, 50, 10) / 100.0
         st.markdown("</div>", unsafe_allow_html=True)
 
     with col_in2:
@@ -669,14 +588,15 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                                     model="gemini-2.5-flash",
                                     contents=[f_info, gemini_prompt]
                                 )
-                                marker = chr(96) * 3
-                                raw_output_text = response.text.strip().replace(f"{marker}srt", "").replace(marker, "")
+                                
+                                bt = chr(96)
+                                tbt = bt * 3
+                                raw_output_text = response.text.strip().replace(f"{tbt}srt", "").replace(tbt, "")
                                 client.files.delete(name=f_info.name)
                                 success_gemini = True
                                 break 
                             except Exception as e:
                                 last_err = str(e)
-                                # 👇 FIX: 503 error check added. Automatically loop to next key instead of breaking.
                                 if "429" in last_err or "503" in last_err or "unavailable" in last_err.lower() or "quota" in last_err.lower() or "exhausted" in last_err.lower() or "limit" in last_err.lower():
                                     st.toast(f"⚠️ Key {idx+1} တွင် ခေတ္တပြဿနာရှိပါသဖြင့် နောက် Key ကို ပြောင်းလဲချိတ်ဆက်နေပါသည်...", icon="🔄")
                                     continue
@@ -759,12 +679,21 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                 
                 dynamic_style = f"FontName={font_n},FontSize={sub_size},PrimaryColour={prim_c},OutlineColour=&H00000000,BackColour={back_c},BorderStyle={border_s},Outline={out_thick},Shadow=1,Alignment={align_val},MarginV={margin_v_val}"
                 
+                selected_bgm_path = None
+                if selected_bgm not in ["None (BGM မထည့်ပါ)", "🤖 Auto (Random Select)"]:
+                    selected_bgm_path = os.path.join("bgm_tracks", selected_bgm)
+                elif selected_bgm == "🤖 Auto (Random Select)" and bgm_files:
+                    selected_bgm_path = os.path.join("bgm_tracks", random.choice(bgm_files))
+                
                 success, err_msg = render_premium_saas_video(
                     v_input, a_generated, parsed_timestamps, v_final, video_ratio, 
                     use_bypass=cb_bypass, use_blur=cb_blur, watermark=watermark_text, 
                     subtitle_mode=subtitle_mode, 
                     use_mirror=cb_mirror, use_color=cb_color, use_grain=cb_grain, use_fps=cb_fps,
-                    sub_style_str=dynamic_style
+                    sub_style_str=dynamic_style,
+                    mute_orig=cb_mute_orig,
+                    bgm_file=selected_bgm_path,
+                    bgm_vol=bgm_volume
                 )
                 if success: st.session_state.render_success = True
                 else: st.error(f"Rendering Sync Failure: {err_msg}")
@@ -956,8 +885,9 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                                 contents=prompt
                             )
                             
-                            marker = chr(96) * 3
-                            raw_text = response.text.strip().replace(f"{marker}json", "").replace(marker, "")
+                            bt = chr(96)
+                            tbt = bt * 3
+                            raw_text = response.text.strip().replace(f"{tbt}json", "").replace(tbt, "")
                             response_json = json.loads(raw_text)
                             break 
                         except Exception as api_error:
