@@ -147,7 +147,7 @@ st.markdown('''
         color: #f8fafc !important;
     }
     
-    /* Subtitle & Storytelling Box */
+    /* Subtitle Styling Box */
     .sub-box {
         background-color: #1a2235;
         border: 1px solid rgba(129, 140, 248, 0.3);
@@ -529,7 +529,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         video_url = st.text_input("🔗 Paste Short Drama URL Link", placeholder="https://...")
         uploaded_file = st.file_uploader("📥 OR Upload Video File (MP4)", type=["mp4"])
         
-        # 👇 NEW: Storytelling & Script Pro Settings added to the empty space
         st.markdown("<br>", unsafe_allow_html=True)
         st.markdown("<div class='sub-box'>", unsafe_allow_html=True)
         st.markdown("<p style='margin-bottom: 10px; font-weight: bold; color: #38bdf8 !important; font-size: 16px;'>✍️ AI Storytelling & Script Rules</p>", unsafe_allow_html=True)
@@ -635,7 +634,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
 
             with st.spinner(f"⏳ [အဆင့် ၂/၆] {ai_provider} ကိုအသုံးပြု၍ Audio Tags များပါဝင်သော ဇာတ်ညွှန်း ရေးသားနေပါသည်..."):
                 try:
-                    # 👇 NEW: Injecting the Storytelling Prompts based on User Toggles
                     extra_rules = ""
                     if script_hook: extra_rules += " [HOOK]: Start with an extremely engaging 3-second viral hook."
                     if script_slang: extra_rules += " [SLANG]: Use modern Myanmar internet slang and Gen-Z conversational tone instead of formal translation."
@@ -678,10 +676,12 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                                 break 
                             except Exception as e:
                                 last_err = str(e)
-                                if "429" in last_err or "quota" in last_err.lower() or "exhausted" in last_err.lower() or "limit" in last_err.lower():
-                                    st.toast(f"⚠️ Key {idx+1} Limit ကုန်သွားပါပြီ။ နောက် Key ကို ပြောင်းလဲချိတ်ဆက်နေပါသည်...", icon="🔄")
+                                # 👇 FIX: 503 error check added. Automatically loop to next key instead of breaking.
+                                if "429" in last_err or "503" in last_err or "unavailable" in last_err.lower() or "quota" in last_err.lower() or "exhausted" in last_err.lower() or "limit" in last_err.lower():
+                                    st.toast(f"⚠️ Key {idx+1} တွင် ခေတ္တပြဿနာရှိပါသဖြင့် နောက် Key ကို ပြောင်းလဲချိတ်ဆက်နေပါသည်...", icon="🔄")
                                     continue
-                                else: break
+                                else:
+                                    continue
 
                         if not success_gemini: raise Exception(f"Gemini API များကို အသုံးပြု၍မရပါ: {last_err}")
 
