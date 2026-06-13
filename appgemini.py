@@ -206,8 +206,9 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
         else: raise Exception(f"TTSMaker API Error: {res}")
 
     else:
+        # 👇 FIX 1: Add native speed boost (+15%) to Edge-TTS to reduce original lag
         voice = "my-MM-ThihaNeural" if "Male" in voice_model else "my-MM-NilarNeural"
-        communicate = edge_tts.Communicate(text, voice)
+        communicate = edge_tts.Communicate(text, voice, rate='+15%')
         await communicate.save(temp_out)
 
     if needs_ffmpeg:
@@ -315,9 +316,21 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         video = ffmpeg.filter(video, 'scale', 'trunc(oh*a/2)*2', 1080, flags='bicubic')
         
         tts_audio = ffmpeg.input(in_a).audio
+        
+        # 👇 FIX 2: Force Audio Sync - Compress Audio aggressively if it exceeds video duration
         if v_max_dur > 1.0 and a_dur > 0:
-            speed_factor = a_dur / (v_max_dur - 0.5)
-            if 0.5 <= speed_factor <= 2.0:
+            target_a_dur = v_max_dur - 0.2
+            speed_factor = a_dur / target_a_dur
+            
+            if speed_factor > 1.0:
+                # Audio is longer than video, compress it without limits
+                temp_speed = speed_factor
+                while temp_speed > 2.0:
+                    tts_audio = ffmpeg.filter(tts_audio, 'atempo', 2.0)
+                    temp_speed /= 2.0
+                tts_audio = ffmpeg.filter(tts_audio, 'atempo', temp_speed)
+            elif 0.5 <= speed_factor <= 1.0:
+                # Audio is slightly shorter, match it to video if desired
                 tts_audio = ffmpeg.filter(tts_audio, 'atempo', speed_factor)
                 
         audio_streams = [tts_audio]
@@ -560,9 +573,11 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     if script_tone: extra_rules += " [TONE]: Inject strong emotions and character tones matching the scene."
                     if script_cta: extra_rules += " [CTA]: End the script with a strong Call to Action (CTA) asking a question to encourage comments."
 
-                    hormozi_rule = " [HORMOZI]: Split the subtitles into very short chunks (maximum 3-5 words per subtitle). Do not write long sentences in a single block. Keep them extremely fast-paced and punchy." if sub_short else ""
+                    # 👇 FIX 3: Force the AI to be extremely brief to match the pacing of the video naturally
+                    hormozi_rule = " [HORMOZI]: Split the subtitles into very short chunks (maximum 3-5 words per subtitle). Do not write long sentences in a single block." if sub_short else ""
+                    concise_rule = " 5. CONCISENESS: Your Burmese translation MUST BE EXTREMELY BRIEF and FAST-PACED to match the exact duration of the English original. Avoid unnecessary words."
                     
-                    base_prompt = f"You are an expert Myanmar (Burmese) TikTok movie recap narrator. I am providing you with an English SRT file translated from the original audio. Translate and adapt the text into highly engaging, natural spoken Burmese (မြန်မာစကားပြောဟန်). STRICT RULES: 1. SYNERGY AUDIO TAGS: You MUST include inline audio tags to direct the TTS voice. Use tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers], [reluctantly] at the beginning of relevant sentences to add emotion and dramatic pacing. 2. NO ENGLISH TRANSLITERATION: Translate meanings naturally. 3. FORMAT: Keep the EXACT original SRT timecodes and indices. 4. Output ONLY the raw SRT format.{extra_rules}{hormozi_rule}"
+                    base_prompt = f"You are an expert Myanmar (Burmese) TikTok movie recap narrator. I am providing you with an English SRT file translated from the original audio. Translate and adapt the text into highly engaging, natural spoken Burmese (မြန်မာစကားပြောဟန်). STRICT RULES: 1. SYNERGY AUDIO TAGS: You MUST include inline audio tags to direct the TTS voice. Use tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers], [reluctantly] at the beginning of relevant sentences to add emotion and dramatic pacing. 2. NO ENGLISH TRANSLITERATION: Translate meanings naturally. 3. FORMAT: Keep the EXACT original SRT timecodes and indices. 4. Output ONLY the raw SRT format.{concise_rule}{extra_rules}{hormozi_rule}"
 
                     if "Gemini" in ai_provider:
                         keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
@@ -582,7 +597,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                                     else:
                                         break
                                 
-                                gemini_prompt = f"Listen to the ENTIRE audio file from the absolute beginning to the very last second. Do NOT truncate, skip, or summarize the ending. You MUST generate a complete SRT subtitle file in natural spoken Burmese (မြန်မာစကားပြောဟန်) covering the WHOLE video duration until the very end. 🛑 STRICT RULES: 1. Include Synergy Audio Tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers] to guide the voice naturally. 2. NO ENGLISH TRANSLITERATION. 3. Output ONLY valid SRT format.{extra_rules}{hormozi_rule}"
+                                gemini_prompt = f"Listen to the ENTIRE audio file from the absolute beginning to the very last second. Do NOT truncate, skip, or summarize the ending. You MUST generate a complete SRT subtitle file in natural spoken Burmese (မြန်မာစကားပြောဟန်) covering the WHOLE video duration until the very end. 🛑 STRICT RULES: 1. Include Synergy Audio Tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers] to guide the voice naturally. 2. NO ENGLISH TRANSLITERATION. 3. Output ONLY valid SRT format.{concise_rule}{extra_rules}{hormozi_rule}"
                                 
                                 response = client.models.generate_content(
                                     model="gemini-2.5-flash",
