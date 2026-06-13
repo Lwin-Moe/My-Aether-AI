@@ -3,6 +3,7 @@
 # =====================================================================
 
 import streamlit as st
+import google.generativeai as genai
 import os
 import asyncio
 import edge_tts
@@ -120,10 +121,9 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
         
         last_err = ""
         for idx, current_key in enumerate(keys_list):
-            url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent"
-            headers = {"x-goog-api-key": current_key, "Content-Type": "application/json"}
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key={current_key}"
             try:
-                res = requests.post(url, headers=headers, json=payload)
+                res = requests.post(url, json=payload)
                 if res.status_code == 200:
                     candidate = res.json().get("candidates", [{}])[0]
                     if candidate.get("finishReason") == "SAFETY":
@@ -181,6 +181,7 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
 def parse_and_save_real_srt(raw_srt_text, output_file):
     clean_srt = raw_srt_text.replace("```srt", "").replace("```", "").strip()
     
+    # ပြင်ဆင်ချက် ၁: Linux FFmpeg အတွက် utf-8-sig ဖြင့် သိမ်းခြင်း
     with open(output_file, "w", encoding="utf-8-sig") as f: 
         f.write(clean_srt)
         
@@ -234,6 +235,7 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         safe_srt_path = os.path.abspath("subtitles.srt").replace('\\', '/')
         safe_srt_path_escaped = safe_srt_path.replace(':', '\\:')
         
+        # ပြင်ဆင်ချက် ၁ (ဆက်လက်): Safe filter ပိုင်းကိုလည်း utf-8-sig ဖြင့် သိမ်းခြင်း
         with open("subtitles.srt", "w", encoding="utf-8-sig") as f:
             for i, (start, end, text) in enumerate(parsed_timestamps, start=1):
                 if start >= v_max_dur: continue
@@ -270,6 +272,7 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         except: pass
         
         if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"] and os.path.exists("subtitles.srt"):
+            # ပြင်ဆင်ချက် ၂: charenc='UTF-8' နှင့် fontsdir='.' ကို အတင်းအကျပ် ထည့်သွင်းခြင်း
             video = ffmpeg.filter(video, 'subtitles', safe_srt_path_escaped, charenc='UTF-8', fontsdir='.', force_style="FontName=Pyidaungsu,FontSize=22,PrimaryColour=&H0000FFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2.5,Shadow=1,Alignment=2,MarginV=25")
 
         out = ffmpeg.output(video, audio, out_v, vcodec='libx264', acodec='aac', preset='fast', crf=21, t=v_max_dur)
@@ -291,15 +294,15 @@ with st.sidebar:
     st.markdown("### 🔑 2. API Credentials")
     saved_gemini = load_key(API_KEY_FILE)
     if "Gemini" in ai_provider:
-        api_key_input = st.text_input("Gemini Keys (Comma separated)", value=saved_gemini, placeholder="Key1, Key2...")
+        api_key_input = st.text_input("Gemini Keys (Comma separated)", type="password", value=saved_gemini, placeholder="Key1, Key2...")
         if api_key_input and api_key_input != saved_gemini: save_key(API_KEY_FILE, api_key_input)
     elif "Groq" in ai_provider:
         saved_groq = load_key(GROQ_KEY_FILE)
-        api_key_input = st.text_input("Groq API Key", value=saved_groq)
+        api_key_input = st.text_input("Groq API Key", type="password", value=saved_groq)
         if api_key_input and api_key_input != saved_groq: save_key(GROQ_KEY_FILE, api_key_input)
     else:
         saved_openai = load_key(OPENAI_KEY_FILE)
-        api_key_input = st.text_input("OpenAI API Key", value=saved_openai)
+        api_key_input = st.text_input("OpenAI API Key", type="password", value=saved_openai)
         if api_key_input and api_key_input != saved_openai: save_key(OPENAI_KEY_FILE, api_key_input)
 
 # =====================================================================
@@ -318,18 +321,18 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         
         if "Synergy" in audio_engine_choice:
             st.caption("✨ Using your Gemini API Key for Synergy Speech synthesis.")
-            synergy_key = st.text_input("Enter API Key for Synergy TTS", value=saved_gemini)
+            synergy_key = st.text_input("Enter API Key for Synergy TTS", type="password", value=saved_gemini)
 
         if "ElevenLabs" in audio_engine_choice:
             saved_eleven = load_key(ELEVEN_KEY_FILE)
-            eleven_key_input = st.text_input("ElevenLabs API Key", value=saved_eleven)
+            eleven_key_input = st.text_input("ElevenLabs API Key", type="password", value=saved_eleven)
             if eleven_key_input and eleven_key_input != saved_eleven: save_key(ELEVEN_KEY_FILE, eleven_key_input)
             
             saved_voice_id = load_key(ELEVEN_VOICE_ID_FILE)
             custom_eleven_id = st.text_input("Custom Voice ID (Optional)", value=saved_voice_id, placeholder="e.g., pNInz6obbfdqI2CCOruU")
             if custom_eleven_id and custom_eleven_id != saved_voice_id: save_key(ELEVEN_VOICE_ID_FILE, custom_eleven_id)
         
-        key_ttsmaker = st.text_input("TTSMaker API Key") if "TTSMaker" in audio_engine_choice else ""
+        key_ttsmaker = st.text_input("TTSMaker API Key", type="password") if "TTSMaker" in audio_engine_choice else ""
 
         st.markdown("---")
         st.markdown("### 📐 4. Layout & Protection")
@@ -391,44 +394,37 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                         keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
                         success_gemini = False
                         last_err = ""
-                        st.session_state.original_transcript = "[Gemini Model processed Audio directly via REST API]"
+                        st.session_state.original_transcript = "[Gemini Model processed Audio directly.]"
                         
-                        gemini_prompt = "Listen to the ENTIRE audio file from the absolute beginning to the very last second. Do NOT truncate, skip, or summarize the ending. You MUST generate a complete SRT subtitle file in natural spoken Burmese (မြန်မာစကားပြောဟန်) covering the WHOLE video duration until the very end. 🛑 STRICT RULES: 1. Include Synergy Audio Tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers] to guide the voice naturally. 2. NO ENGLISH TRANSLITERATION. 3. Output ONLY valid SRT format."
-
                         for idx, current_key in enumerate(keys_list):
                             try:
-                                with open(a_extracted, "rb") as f:
-                                    audio_b64 = base64.b64encode(f.read()).decode('utf-8')
+                                genai.configure(api_key=current_key)
+                                audio_file = genai.upload_file(path=a_extracted)
+                                while audio_file.state.name == "PROCESSING":
+                                    time.sleep(2)
+                                    audio_file = genai.get_file(audio_file.name)
                                 
-                                payload = {
-                                    "contents": [{"parts": [
-                                        {"text": gemini_prompt},
-                                        {"inlineData": {"mimeType": "audio/mp3", "data": audio_b64}}
-                                    ]}],
-                                    "safetySettings": [
+                                model = genai.GenerativeModel(
+                                    model_name="gemini-2.5-flash",
+                                    safety_settings=[
                                         {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
                                         {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
                                         {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
                                         {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
                                     ]
-                                }
-                                url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.0-flash:generateContent"
-                                headers = {"x-goog-api-key": current_key, "Content-Type": "application/json"}
-                                res = requests.post(url, headers=headers, json=payload)
-                                
-                                if res.status_code == 200:
-                                    raw_output_text = res.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
-                                    success_gemini = True
-                                    break 
-                                elif res.status_code == 429:
-                                    st.toast(f"⚠️ Key {idx+1} Limit ကုန်သွားပါပြီ။ နောက် Key ကို ပြောင်းလဲချိတ်ဆက်နေပါသည်...", icon="🔄")
-                                    continue
-                                else:
-                                    last_err = res.text
-                                    break
+                                )
+                                gemini_prompt = "Listen to the ENTIRE audio file from the absolute beginning to the very last second. Do NOT truncate, skip, or summarize the ending. You MUST generate a complete SRT subtitle file in natural spoken Burmese (မြန်မာစကားပြောဟန်) covering the WHOLE video duration until the very end. 🛑 STRICT RULES: 1. Include Synergy Audio Tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers] to guide the voice naturally. 2. NO ENGLISH TRANSLITERATION. 3. Output ONLY valid SRT format."
+                                response = model.generate_content([audio_file, gemini_prompt])
+                                raw_output_text = response.text.strip()
+                                genai.delete_file(audio_file.name)
+                                success_gemini = True
+                                break 
                             except Exception as e:
                                 last_err = str(e)
-                                break
+                                if "429" in last_err or "quota" in last_err.lower() or "exhausted" in last_err.lower() or "limit" in last_err.lower():
+                                    st.toast(f"⚠️ Key {idx+1} Limit ကုန်သွားပါပြီ။ နောက် Key ကို ပြောင်းလဲချိတ်ဆက်နေပါသည်...", icon="🔄")
+                                    continue
+                                else: break
 
                         if not success_gemini: raise Exception(f"Gemini API များကို အသုံးပြု၍မရပါ: {last_err}")
 
@@ -518,10 +514,9 @@ elif app_mode == "🎥 Veo Video Studio":
                     keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
                     success = False
                     for key in keys_list:
-                        url = "https://generativelanguage.googleapis.com/v1beta/models/veo-3.1-generate-preview:generateContent"
-                        headers = {"x-goog-api-key": key, "Content-Type": "application/json"}
+                        url = f"https://generativelanguage.googleapis.com/v1beta/models/veo-2.0-preview:generateContent?key={key}"
                         payload = {"contents": [{"parts": [{"text": video_prompt}]}], "generationConfig": {"responseModalities": ["VIDEO"]}}
-                        res = requests.post(url, headers=headers, json=payload)
+                        res = requests.post(url, json=payload)
                         if res.status_code == 200:
                             video_b64 = res.json()["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
                             with open("veo_output.mp4", "wb") as f: f.write(base64.b64decode(video_b64))
@@ -550,10 +545,9 @@ elif app_mode == "🎵 Lyria Music Studio":
                     keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
                     success = False
                     for key in keys_list:
-                        url = "https://generativelanguage.googleapis.com/v1beta/models/lyria-3-pro-preview:generateContent"
-                        headers = {"x-goog-api-key": key, "Content-Type": "application/json"}
+                        url = f"https://generativelanguage.googleapis.com/v1beta/models/lyria-3-pro-preview:generateContent?key={key}"
                         payload = {"contents": [{"parts": [{"text": music_prompt}]}], "generationConfig": {"responseModalities": ["AUDIO"]}}
-                        res = requests.post(url, headers=headers, json=payload)
+                        res = requests.post(url, json=payload)
                         if res.status_code == 200:
                             audio_b64 = res.json()["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
                             with open("lyria_output.mp3", "wb") as f: f.write(base64.b64decode(audio_b64))
@@ -571,7 +565,7 @@ elif app_mode == "🎵 Lyria Music Studio":
 # =====================================================================
 elif app_mode == "⚡ Translation/Transcript Studio":
     st.markdown('<h2 style="color:#00e5ff;">⚡ Translation & Subtitle Studio (AI Dual Engine)</h2>', unsafe_allow_html=True)
-    st.markdown("Whisper AI ဖြင့် မီလီစက္ကန့်မလွဲ Timeline ယူ၍ Gemini 3.0 ဖြင့် အဓိပ္ပာယ်မှန်ကန်စွာ ဘာသာပြန်ဆိုခြင်း")
+    st.markdown("Whisper AI ဖြင့် မီလီစက္ကန့်မလွဲ Timeline ယူ၍ Gemini 2.5 ဖြင့် အဓိပ္ပာယ်မှန်ကန်စွာ ဘာသာပြန်ဆိုခြင်း")
 
     st.markdown("### 📥 1. Video URL ထည့်ရန်")
     video_url = st.text_input("YouTube / FB / TikTok / Rednote URL ထည့်ပါ:")
@@ -595,9 +589,10 @@ elif app_mode == "⚡ Translation/Transcript Studio":
             with st.spinner("🔄 စနစ်နှစ်ခုစလုံး အလုပ်လုပ်နေပါသည်... (ကျေးဇူးပြု၍ စောင့်ပါ)"):
                 error_logs = []
                 try:
-                    import whisper
+                    import whisper # Whisper library အား အသုံးပြုခြင်း
                     project_id = "project_" + str(int(time.time()))
                     
+                    # 1. Download Audio ONLY ⚡
                     st.info("⬇️ ဗီဒီယိုမှ အသံလမ်းကြောင်းကို ရယူနေပါသည်...")
                     ydl_opts = {
                         'format': 'bestaudio/best',
@@ -612,6 +607,7 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                         info = ydl.extract_info(video_url, download=True)
                         downloaded_audio = ydl.prepare_filename(info)
 
+                    # 2. Convert to Standard WAV for Whisper
                     wav_path = f"{project_id}.wav"
                     (
                         ffmpeg.input(downloaded_audio)
@@ -620,11 +616,15 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                     )
                     if os.path.exists(downloaded_audio): os.remove(downloaded_audio)
 
+                    # 3. Whisper AI - CapCut ကဲ့သို့ မီလီစက္ကန့်မလွဲ Timeline ဖတ်ယူခြင်း 🎙️
                     st.info("🎙️ Whisper AI က ဗီဒီယိုအသံကို နားထောင်၍ တိကျသော Timeline ထုတ်ယူနေပါသည်...")
-                    whisper_model = whisper.load_model("base") 
+                    whisper_model = whisper.load_model("base") # ပေါ့ပါးမြန်ဆန်သော Base Model ကိုသုံးပါမည်
                     whisper_result = whisper_model.transcribe(wav_path, word_timestamps=False)
                     
+                    # Whisper မှ ထွက်လာသော သန့်စင်ပြီးသား Timeline segments များ
                     segments = whisper_result.get("segments", [])
+                    
+                    # Gemini သို့ ပို့ရန် စက္ကန့်များနှင့် စာသားများအား ကျစ်လျစ်စွာ ပြင်ဆင်ခြင်း
                     whisper_json = []
                     for seg in segments:
                         whisper_json.append({
@@ -633,9 +633,11 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                             "text": seg["text"].strip()
                         })
 
-                    st.info("🤖 Gemini 3.0 Flash ဖြင့် မူရင်းအချိန်အတိုင်း မြန်မာဘာသာပြန်ဆိုနေပါသည်...")
+                    # 4. Gemini 2.5 Flash - တိကျသော Timeline အတိုင်း မြန်မာဘာသာသို့ အနုပညာဆန်စွာ ပြန်ဆိုခြင်း 🤖
+                    st.info("🤖 Gemini 2.5 Flash ဖြင့် မူရင်းအချိန်အတိုင်း မြန်မာဘာသာပြန်ဆိုနေပါသည်...")
                     response_json = None
                     
+                    # Whisper မှရလာသော တိကျသည့် အချိန်အတုံးလေးများကို မပြောင်းလဲဘဲ text ကိုသာ မြန်မာပြန်ခိုင်းသည့် Prompt
                     prompt = f"""
                     You are an expert movie subtitle translator. You are given a JSON array of subtitles with precise timestamps.
                     Your tasks:
@@ -658,31 +660,26 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                     for index, current_key in enumerate(api_keys):
                         try:
                             st.toast(f"🔑 Key ({index + 1}/{len(api_keys)}) ဖြင့် ကြိုးစားနေပါသည်...", icon="⏳")
+                            genai.configure(api_key=current_key)
                             
-                            payload = {"contents": [{"parts": [{"text": prompt}]}]}
-                            url = "[https://generativelanguage.googleapis.com/v1beta/models/gemini-3.0-flash:generateContent](https://generativelanguage.googleapis.com/v1beta/models/gemini-3.0-flash:generateContent)"
-                            headers = {"x-goog-api-key": current_key, "Content-Type": "application/json"}
-                            res = requests.post(url, headers=headers, json=payload)
+                            model = genai.GenerativeModel('gemini-2.5-flash')
+                            response = model.generate_content(prompt)
                             
-                            if res.status_code == 200:
-                                raw_text = res.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
-                                raw_text = raw_text.replace("```json", "").replace("```", "")
-                                response_json = json.loads(raw_text)
-                                break 
-                            else:
-                                error_logs.append(res.text)
-                                continue
+                            raw_text = response.text.strip().replace("```json", "").replace("```", "")
+                            response_json = json.loads(raw_text)
+                            break 
                         except Exception as api_error:
                             error_logs.append(str(api_error))
                             continue
                     
                     if response_json is None:
-                        st.error(f"🚨 Gemini API Key များ အဆင်မပြေပါ။ Error: {error_logs[-1] if error_logs else 'Unknown'}")
+                        st.error("🚨 Gemini API Key များ အဆင်မပြေပါ။")
                         raise Exception("Gemini Error")
 
                     st.session_state.title_suggestions = response_json.get("titles", [])
                     final_subtitles = response_json.get("subtitles", [])
 
+                    # 5. မီလီစက္ကန့်မလွဲသော SRT ဖိုင်အဖြစ် ပြောင်းလဲထုတ်ယူခြင်း 🛠️
                     st.session_state.srt_path = f"{project_id}.srt"
                     with open(st.session_state.srt_path, "w", encoding="utf-8-sig") as f:
                         for i, sub in enumerate(final_subtitles):
