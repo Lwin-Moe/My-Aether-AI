@@ -40,6 +40,21 @@ def load_key(file_path):
 def save_key(file_path, key):
     with open(file_path, "w", encoding="utf-8") as f: f.write(key)
 
+# 👇 NEW: HTML Base64 Download Link Generator (Prevents Streamlit Refresh)
+def get_download_html(file_path, file_name, btn_text):
+    with open(file_path, "rb") as f:
+        b64 = base64.b64encode(f.read()).decode()
+    return f'''
+    <a href="data:application/octet-stream;base64,{b64}" download="{file_name}" 
+       style="display: block; width: 100%; text-align: center; padding: 14px; 
+              background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); 
+              color: white; font-family: 'Montserrat', sans-serif; font-weight: bold; 
+              border-radius: 8px; text-decoration: none; margin-bottom: 10px; 
+              box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3); transition: all 0.3s ease;">
+        📥 {btn_text}
+    </a>
+    '''
+
 # --- 1. THEME & STYLING (PREMIUM PRO UI) ---
 st.set_page_config(page_title="AETHER STUDIO V52", layout="wide", page_icon="🎬")
 
@@ -342,21 +357,31 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         
         video = ffmpeg.filter(video, 'scale', 'trunc(oh*a/2)*2', 1080, flags='bicubic')
         
-        # Audio Mixing (AI Sync output is directly used as Primary, completely untouched)
+        # 👇 FIX: Bulletproof 2-Pass Audio Mixing to prevent AMIX bug
+        bgm_processed = None
+        if bgm_file and os.path.exists(bgm_file):
+            bgm_processed = "temp_bgm_processed.wav"
+            try:
+                (ffmpeg.input(bgm_file, stream_loop=-1)
+                 .output(bgm_processed, t=v_max_dur, ar=44100, ac=1)
+                 .overwrite_output()
+                 .run(cmd=FFMPEG_BINARY, quiet=True))
+            except:
+                bgm_processed = None
+
         tts_audio = ffmpeg.input(in_a).audio
         audio_streams = [tts_audio]
         
-        # 👇 FIX: ရိုးရိုးရှင်းရှင်း သီချင်းထည့်ခြင်း (Loop နှင့် ရှုပ်ထွေးသော Filter များအားလုံး ဖြုတ်လိုက်ပါပြီ)
         if not mute_orig:
-            orig_audio = ffmpeg.input(in_v).audio.filter('volume', 0.1)
+            orig_audio = ffmpeg.input(in_v).audio.filter('aresample', 44100).filter('volume', 0.1)
             audio_streams.append(orig_audio)
             
-        if bgm_file and os.path.exists(bgm_file):
-            bgm_audio = ffmpeg.input(bgm_file).audio.filter('volume', bgm_vol)
-            audio_streams.append(bgm_audio)
+        if bgm_processed and os.path.exists(bgm_processed):
+            b_a = ffmpeg.input(bgm_processed).audio.filter('volume', bgm_vol)
+            audio_streams.append(b_a)
             
         if len(audio_streams) > 1:
-            final_audio = ffmpeg.filter(audio_streams, 'amix', inputs=len(audio_streams), duration='first')
+            final_audio = ffmpeg.filter(audio_streams, 'amix', inputs=len(audio_streams), duration='longest', dropout_transition=0)
             final_audio = final_audio.filter('volume', str(len(audio_streams)))
         else:
             final_audio = audio_streams[0]
@@ -374,6 +399,8 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
 
         out = ffmpeg.output(video, final_audio, out_v, vcodec='libx264', acodec='aac', preset='fast', crf=21, t=v_max_dur)
         out.run(cmd=FFMPEG_BINARY, overwrite_output=True, capture_stdout=True, capture_stderr=True)
+        
+        if bgm_processed and os.path.exists(bgm_processed): os.remove(bgm_processed)
         return True, "Success"
     except ffmpeg.Error as e: 
         return False, e.stderr.decode('utf-8', errors='ignore') if e.stderr else str(e)
@@ -771,11 +798,10 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                 st.video("AETHER_RECAP_FINAL.mp4")
                 st.markdown('<div class="setting-panel">', unsafe_allow_html=True)
                 st.markdown("<h4>📥 Download Dashboard</h4>", unsafe_allow_html=True)
-                with open("AETHER_RECAP_FINAL.mp4", "rb") as vf: 
-                    st.download_button("📥 Download Recap Video (MP4)", vf, "Aether_Recap.mp4", key="final_v")
+                # 👇 FIX: Using Custom HTML Link to prevent Streamlit Refresh when clicking download
+                st.markdown(get_download_html("AETHER_RECAP_FINAL.mp4", "Aether_Recap.mp4", "Download Recap Video (MP4)"), unsafe_allow_html=True)
                 if os.path.exists("subtitles.srt"):
-                    with open("subtitles.srt", "rb") as sf: 
-                        st.download_button("📥 Download Subtitles (.SRT)", sf, "Aether_Subs.srt", key="final_s")
+                    st.markdown(get_download_html("subtitles.srt", "Aether_Subs.srt", "Download Subtitles (.SRT)"), unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
                 
         with col_out2:
@@ -813,7 +839,7 @@ elif app_mode == "🎥 Veo Video Studio":
                     if success:
                         st.success("🎉 Veo ဗီဒီယို အောင်မြင်စွာ ထွက်လာပါပြီ!")
                         st.video("veo_output.mp4")
-                        with open("veo_output.mp4", "rb") as f: st.download_button("📥 Download Video", f, "Veo_Generated.mp4")
+                        st.markdown(get_download_html("veo_output.mp4", "Veo_Generated.mp4", "Download Video"), unsafe_allow_html=True)
                     else: st.error("❌ API Request Failed. Veo မော်ဒယ်အား ယခု Key ဖြင့် သုံး၍မရသေးပါ။")
                 except Exception as e: st.error(f"Error: {e}")
 
@@ -844,7 +870,7 @@ elif app_mode == "🎵 Lyria Music Studio":
                     if success:
                         st.success("🎉 Lyria ဂီတ အောင်မြင်စွာ ထွက်လာပါပြီ!")
                         st.audio("lyria_output.mp3")
-                        with open("lyria_output.mp3", "rb") as f: st.download_button("📥 Download Music", f, "Lyria_Generated.mp3")
+                        st.markdown(get_download_html("lyria_output.mp3", "Lyria_Generated.mp3", "Download Music"), unsafe_allow_html=True)
                     else: st.error("❌ API Request Failed. Lyria မော်ဒယ်အား ယခု Key ဖြင့် သုံး၍မရသေးပါ။")
                 except Exception as e: st.error(f"Error: {e}")
 
@@ -999,9 +1025,8 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                 st.code(f"{t_title}", language="text")
 
         st.markdown("### 📥 Download Subtitle")
-        with open(st.session_state.srt_path, "rb") as f:
-            st.download_button(label="📥 Download Subtitle (.srt ဖိုင်ရယူရန်)", data=f, file_name="MrZack_Whisper_Perfect.srt", mime="text/plain")
-            st.caption("💡 **ပြီးပြည့်စုံသော နည်းလမ်း:** ယခုထွက်လာသော SRT သည် Whisper က ကွက်တိ နေရာချပေးထားပြီး Gemini က ဘာသာပြန်ပေးထားခြင်း ဖြစ်သဖြင့် CapCut PC ထဲသို့ သွင်းလိုက်ရုံဖြင့် အချိန်ကော စာသားပါ မလွဲမသွေ ကွက်တိကျနေပါလိမ့်မည်။")
+        st.markdown(get_download_html(st.session_state.srt_path, "MrZack_Whisper_Perfect.srt", "Download Subtitle (.srt ဖိုင်ရယူရန်)"), unsafe_allow_html=True)
+        st.caption("💡 **ပြီးပြည့်စုံသော နည်းလမ်း:** ယခုထွက်လာသော SRT သည် Whisper က ကွက်တိ နေရာချပေးထားပြီး Gemini က ဘာသာပြန်ပေးထားခြင်း ဖြစ်သဖြင့် CapCut PC ထဲသို့ သွင်းလိုက်ရုံဖြင့် အချိန်ကော စာသားပါ မလွဲမသွေ ကွက်တိကျနေပါလိမ့်မည်။")
 
         st.markdown("### 📝 Subtitle Preview")
         with open(st.session_state.srt_path, "r", encoding="utf-8") as f:
@@ -1067,10 +1092,4 @@ elif app_mode == "📥 Video Downloader Hub":
         st.markdown("### 🎥 Video Preview")
         st.video(st.session_state.hub_file_path)
         
-        with open(st.session_state.hub_file_path, "rb") as file:
-            st.download_button(
-                label="📥 ကိုယ့်ဖုန်း/စက်ထဲသို့ ရယူရန် (Download Video)",
-                data=file,
-                file_name=st.session_state.hub_file_name,
-                mime="video/mp4"
-            )
+        st.markdown(get_download_html(st.session_state.hub_file_path, st.session_state.hub_file_name, "ကိုယ့်ဖုန်း/စက်ထဲသို့ ရယူရန် (Download Video)"), unsafe_allow_html=True)
