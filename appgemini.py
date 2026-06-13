@@ -3,7 +3,7 @@
 # =====================================================================
 
 import streamlit as st
-from google import genai # 👈 Library အသစ်ပြောင်းထားပါသည်
+from google import genai 
 import os
 import asyncio
 import edge_tts
@@ -39,20 +39,113 @@ def load_key(file_path):
 def save_key(file_path, key):
     with open(file_path, "w", encoding="utf-8") as f: f.write(key)
 
-# --- 1. THEME & STYLING ---
-st.set_page_config(page_title="AETHER FILMWORKS AI // STUDIO V52", layout="wide")
+# --- 1. THEME & STYLING (PREMIUM PRO UI) ---
+st.set_page_config(page_title="AETHER STUDIO V52", layout="wide", page_icon="🎬")
 
 st.markdown('''
     <style>
-    .stApp { background: linear-gradient(135deg, #080510 0%, #0d0820 40%, #130b2e 100%) !important; color: #f0e6ff !important; font-family: 'Inter', sans-serif; }
-    section[data-testid="stSidebar"] { background-color: #080510 !important; border-right: 1px solid rgba(179, 71, 255, 0.2) !important; }
-    h1, h2, h3, h4 { color: #00e5ff !important; font-family: 'Space Grotesk', sans-serif; font-weight: 800 !important; text-shadow: 0 0 15px rgba(0,229,255,0.2); }
-    p, span, label, .stRadio label, .stCheckbox label, .stSelectbox label { color: #b8a9d4 !important; font-size: 14px; }
-    .stTextInput input, div[data-baseweb="select"] { background-color: #130b2e !important; color: #ffffff !important; border: 1px solid rgba(179, 71, 255, 0.3) !important; border-radius: 8px !important; }
-    .stTextArea textarea { background-color: #1a1038 !important; color: #00e5ff !important; border: 1px solid rgba(179, 71, 255, 0.5) !important; font-family: 'JetBrains Mono', monospace; line-height: 1.6; }
-    .setting-panel { background: #0d0820; border: 1px solid rgba(179, 71, 255, 0.15); border-radius: 15px; padding: 25px; margin-bottom: 20px; box-shadow: 0 16px 48px rgba(0,0,0,0.6); }
-    .stButton>button { background: linear-gradient(135deg, #b347ff 0%, #7c4dff 50%, #448aff 100%) !important; color: #ffffff !important; font-weight: 800 !important; font-size: 16px !important; border-radius: 10px !important; border: none !important; width: 100%; padding: 15px !important; transition: 0.3s; }
-    .stButton>button:hover { transform: translateY(-2px); box-shadow: 0px 8px 30px rgba(179, 71, 255, 0.6); }
+    /* Import Premium Fonts */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Montserrat:wght@500;700;800;900&display=swap');
+
+    /* Base App Styling */
+    .stApp { 
+        background-color: #0b0f19 !important; 
+        background-image: radial-gradient(circle at top, #161b2e 0%, #0b0f19 60%) !important;
+        color: #cbd5e1 !important; 
+        font-family: 'Inter', sans-serif; 
+    }
+    
+    /* Sidebar Styling */
+    section[data-testid="stSidebar"] { 
+        background-color: #0d111c !important; 
+        border-right: 1px solid rgba(255, 255, 255, 0.05) !important; 
+    }
+    
+    /* Typography */
+    h1, h2, h3, h4 { 
+        font-family: 'Montserrat', sans-serif !important; 
+        color: #f8fafc !important; 
+        font-weight: 700 !important;
+    }
+    p, span, label, .stRadio label, .stCheckbox label, .stSelectbox label { 
+        color: #94a3b8 !important; 
+        font-size: 14px; 
+    }
+    
+    /* Main Cinematic Title */
+    .main-title {
+        text-align: center;
+        font-family: 'Montserrat', sans-serif;
+        font-size: 3.5rem !important;
+        font-weight: 900;
+        background: linear-gradient(135deg, #38bdf8 0%, #818cf8 50%, #c084fc 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-top: 20px;
+        margin-bottom: 5px;
+        letter-spacing: -1px;
+        text-shadow: 0px 10px 30px rgba(129, 140, 248, 0.2);
+    }
+    .sub-title {
+        text-align: center;
+        color: #64748b;
+        font-family: 'Inter', sans-serif;
+        font-size: 1.1rem;
+        font-weight: 500;
+        margin-bottom: 40px;
+        letter-spacing: 3px;
+        text-transform: uppercase;
+    }
+
+    /* Input Fields & Dropdowns */
+    .stTextInput input, div[data-baseweb="select"], .stTextArea textarea { 
+        background-color: #151b2b !important; 
+        color: #f1f5f9 !important; 
+        border: 1px solid #334155 !important; 
+        border-radius: 8px !important; 
+        transition: all 0.3s ease;
+    }
+    .stTextInput input:focus, div[data-baseweb="select"]:focus-within, .stTextArea textarea:focus {
+        border-color: #818cf8 !important;
+        box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.5) !important;
+    }
+    
+    /* Custom Panel / Card Design */
+    .setting-panel { 
+        background: #111624; 
+        border: 1px solid rgba(255, 255, 255, 0.05); 
+        border-radius: 12px; 
+        padding: 24px; 
+        margin-bottom: 24px; 
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2); 
+    }
+    
+    /* Primary CTA Button */
+    .stButton>button { 
+        background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%) !important; 
+        color: #ffffff !important; 
+        font-family: 'Montserrat', sans-serif !important;
+        font-weight: 700 !important; 
+        font-size: 16px !important; 
+        letter-spacing: 0.5px;
+        border-radius: 8px !important; 
+        border: none !important; 
+        width: 100%; 
+        padding: 16px !important; 
+        transition: all 0.3s ease !important; 
+        box-shadow: 0 4px 15px rgba(124, 58, 237, 0.3);
+    }
+    .stButton>button:hover { 
+        transform: translateY(-3px); 
+        box-shadow: 0 8px 25px rgba(124, 58, 237, 0.5); 
+    }
+    
+    /* Expander / Accordion */
+    .streamlit-expanderHeader {
+        background-color: #151b2b !important;
+        border-radius: 8px !important;
+        color: #f8fafc !important;
+    }
     </style>
 ''', unsafe_allow_html=True)
 
@@ -279,7 +372,8 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         return False, e.stderr.decode('utf-8', errors='ignore') if e.stderr else str(e)
 
 # --- 3. UI INTERFACE & NAVIGATION ---
-st.markdown('<h1 style="text-align:center; margin-bottom: 30px;">▲ AETHER FILMWORKS AI // STUDIO V52</h1>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">AETHER FILMWORKS</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">AI Studio V52 ⚡ Premium Edition</div>', unsafe_allow_html=True)
 
 with st.sidebar:
     st.markdown("### 🧭 Navigation Menu")
@@ -395,7 +489,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                         
                         for idx, current_key in enumerate(keys_list):
                             try:
-                                # 👇 SDK အသစ်ဖြင့် လဲလှယ်ထားသောအပိုင်း
                                 client = genai.Client(api_key=current_key)
                                 audio_file = client.files.upload(file=a_extracted)
                                 
@@ -409,7 +502,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                                 gemini_prompt = "Listen to the ENTIRE audio file from the absolute beginning to the very last second. Do NOT truncate, skip, or summarize the ending. You MUST generate a complete SRT subtitle file in natural spoken Burmese (မြန်မာစကားပြောဟန်) covering the WHOLE video duration until the very end. 🛑 STRICT RULES: 1. Include Synergy Audio Tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers] to guide the voice naturally. 2. NO ENGLISH TRANSLITERATION. 3. Output ONLY valid SRT format."
                                 
                                 response = client.models.generate_content(
-                                    model="gemini-2.5-flash",
+                                    model="gemini-1.5-flash",
                                     contents=[f_info, gemini_prompt]
                                 )
                                 raw_output_text = response.text.strip()
@@ -511,7 +604,6 @@ elif app_mode == "🎥 Veo Video Studio":
                     keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
                     success = False
                     for key in keys_list:
-                        # 👇 API URL ကို အလုပ်လုပ်သော Version ဖြင့် လဲလှယ်ထားပါသည်
                         url = f"https://generativelanguage.googleapis.com/v1beta/models/veo-2.0-generate-001:generateContent?key={key}"
                         payload = {"contents": [{"parts": [{"text": video_prompt}]}], "generationConfig": {"responseModalities": ["VIDEO"]}}
                         res = requests.post(url, json=payload)
@@ -649,12 +741,11 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                     
                     for index, current_key in enumerate(api_keys):
                         try:
-                            # 👇 SDK အသစ်ဖြင့် လဲလှယ်ထားသောအပိုင်း
                             st.toast(f"🔑 Key ({index + 1}/{len(api_keys)}) ဖြင့် ကြိုးစားနေပါသည်...", icon="⏳")
                             client = genai.Client(api_key=current_key)
                             
                             response = client.models.generate_content(
-                                model='gemini-2.5-flash',
+                                model='gemini-1.5-flash',
                                 contents=prompt
                             )
                             
