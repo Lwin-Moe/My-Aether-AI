@@ -342,21 +342,23 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         
         video = ffmpeg.filter(video, 'scale', 'trunc(oh*a/2)*2', 1080, flags='bicubic')
         
-        # Audio Mixing (AI Sync output is directly used as Primary, completely untouched)
+        # Audio Mixing (AI Sync output is directly used as Primary)
         tts_audio = ffmpeg.input(in_a).audio
         audio_streams = [tts_audio]
         
-        # 👇 FIX: Bulletproof TTS Isolation. Forces BGM to match TTS Hz & trims it explicitly to prevent TTS manipulation.
+        # 👇 FIX: "ရှုပ်ရှက်ခက်တာတွေဖယ်ပြီး ရှင်းရှင်းလေး" ပေါင်းစပ်တဲ့ Simple Mixing စနစ်
         if not mute_orig:
-            orig_audio = ffmpeg.input(in_v).audio.filter('aresample', 44100).filter('atrim', duration=a_dur).filter('asetpts', 'PTS-STARTPTS').filter('volume', 0.1)
+            orig_audio = ffmpeg.input(in_v).audio.filter('volume', 0.1)
             audio_streams.append(orig_audio)
             
         if bgm_file and os.path.exists(bgm_file):
-            bgm_audio = ffmpeg.input(bgm_file, stream_loop=-1).audio.filter('aresample', 44100).filter('atrim', duration=a_dur).filter('asetpts', 'PTS-STARTPTS').filter('volume', bgm_vol)
+            # stream_loop ကို filter အဖြစ်မသုံးဘဲ ffmpeg input မှာ တိုက်ရိုက် ထည့်ပေးလိုက်ပါတယ်။
+            bgm_audio = ffmpeg.input(bgm_file, stream_loop=-1).audio.filter('volume', bgm_vol)
             audio_streams.append(bgm_audio)
             
         if len(audio_streams) > 1:
-            final_audio = ffmpeg.filter(audio_streams, 'amix', inputs=len(audio_streams), duration='first', dropout_transition=0)
+            # duration='first' လို့ သုံးထားတဲ့အတွက် AI အသံရဲ့ အချိန်အတိုင်းပဲ အတိအကျ ဖြစ်သွားပါမယ်။ BGM ကြောင့် လုံးဝမရွေ့တော့ပါဘူး။
+            final_audio = ffmpeg.filter(audio_streams, 'amix', inputs=len(audio_streams), duration='first')
             final_audio = final_audio.filter('volume', str(len(audio_streams)))
         else:
             final_audio = audio_streams[0]
