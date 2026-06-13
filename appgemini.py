@@ -45,7 +45,7 @@ st.set_page_config(page_title="AETHER STUDIO V52", layout="wide", page_icon="�
 st.markdown('''
     <style>
     /* Import Premium Fonts */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Montserrat:wght@500;700;800;900&display=swap');
+    @import url('[https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Montserrat:wght@500;700;800;900&display=swap](https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Montserrat:wght@500;700;800;900&display=swap)');
 
     /* Base App Styling */
     .stApp { 
@@ -227,7 +227,7 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
         
         last_err = ""
         for idx, current_key in enumerate(keys_list):
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key={current_key}"
+            url = f"[https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key=){current_key}"
             try:
                 res = requests.post(url, json=payload)
                 if res.status_code == 200:
@@ -259,7 +259,7 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
     elif "ElevenLabs" in engine:
         if not eleven_key: raise Exception("ElevenLabs API Key လိုအပ်ပါသည်။")
         voice_id = custom_eleven_id.strip() if custom_eleven_id else ("21m00Tcm4TlvDq8ikWAM" if "Male" in voice_model else "AZnzlk1XvdvUeBnXmlld")
-        url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+        url = f"[https://api.elevenlabs.io/v1/text-to-speech/](https://api.elevenlabs.io/v1/text-to-speech/){voice_id}"
         headers = { "Accept": "audio/mpeg", "Content-Type": "application/json", "xi-api-key": eleven_key }
         payload = { "text": text, "model_id": "eleven_multilingual_v2", "voice_settings": { "stability": 0.45, "similarity_boost": 0.75 } }
         res = requests.post(url, json=payload, headers=headers)
@@ -270,7 +270,7 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
     elif "TTSMaker" in engine:
         if not ttsmaker_key: raise Exception("TTSMaker API Key လိုအပ်ပါသည်။")
         voice_id = 781 if "Female" in voice_model else 780
-        url = "https://api.ttsmaker.com/v1/create-tts-order"
+        url = "[https://api.ttsmaker.com/v1/create-tts-order](https://api.ttsmaker.com/v1/create-tts-order)"
         payload = { "tts_api_key": ttsmaker_key, "tts_text": text, "voice_id": voice_id, "audio_format": "mp3" }
         res = requests.post(url, json=payload).json()
         if res.get("status") == "success":
@@ -316,10 +316,9 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
         finally:
             if os.path.exists(temp_out): os.remove(temp_out)
 
-# 👇 Updated Subtitle Parser to include Cinematic Fades
 def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
-    clean_srt = raw_srt_text.replace("```srt", "").replace("
-```", "").strip()
+    # 👇 FIX: Changed double quotes to single quotes to prevent SyntaxError
+    clean_srt = raw_srt_text.replace('```srt', '').replace('```', '').strip()
     
     with open(output_file, "w", encoding="utf-8-sig") as f: 
         f.write(clean_srt)
@@ -352,7 +351,6 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
                     return int(h)*3600 + int(m)*60 + int(s) + int(ms)/1000.0
                 
                 text_content = block.strip()
-                # တွဲလျက်ထည့်ပေးထားသော ASS tag (Fade in / out)
                 if use_fade:
                     text_content = "{\\fad(250,250)}" + text_content
                     
@@ -372,7 +370,6 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
         
     return parsed_lines, " ".join(full_speech)
 
-# 👇 Updated to accept Dynamic Subtitle Styling
 def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_bypass=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)", use_mirror=False, use_color=False, use_grain=False, use_fps=False, sub_style_str="FontName=Pyidaungsu,FontSize=22,PrimaryColour=&H0000FFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2.5,Shadow=1,Alignment=2,MarginV=25"):
     try:
         a_dur = get_file_duration(in_a)
@@ -430,7 +427,6 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         except: pass
         
         if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"] and os.path.exists("subtitles.srt"):
-            # 🎨 Injecting the Dynamic Pro Style String
             video = ffmpeg.filter(video, 'subtitles', safe_srt_path_escaped, charenc='UTF-8', fontsdir='.', force_style=sub_style_str)
 
         out = ffmpeg.output(video, audio, out_v, vcodec='libx264', acodec='aac', preset='fast', crf=21, t=v_max_dur)
@@ -563,7 +559,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                 except Exception as e:
                     st.error(f"Sample Error: {e}")
 
-        # 👇 NEW: Subtitle Pro Settings Box
         st.markdown("<div class='sub-box'>", unsafe_allow_html=True)
         st.markdown("<p style='margin-bottom: 10px; font-weight: bold; color: #818cf8 !important; font-size: 16px;'>📝 Subtitle Pro Settings</p>", unsafe_allow_html=True)
         if subtitle_mode in ["Both (Burn + SRT)", "Burn into Video"]:
@@ -610,7 +605,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
 
             with st.spinner(f"⏳ [အဆင့် ၂/၆] {ai_provider} ကိုအသုံးပြု၍ Audio Tags များပါဝင်သော ဇာတ်ညွှန်း ရေးသားနေပါသည်..."):
                 try:
-                    # 👇 Short & Punchy Rule Dynamic Injection
                     hormozi_rule = " 5. SHORT & PUNCHY (ALEX HORMOZI STYLE): Split the subtitles into very short chunks (maximum 3-5 words per subtitle). Do not write long sentences in a single block. Keep them extremely fast-paced and punchy." if sub_short else ""
                     base_prompt = f"You are an expert Myanmar (Burmese) TikTok movie recap narrator. I am providing you with an English SRT file translated from the original audio. Translate and adapt the text into highly engaging, natural spoken Burmese (မြန်မာစကားပြောဟန်). STRICT RULES: 1. SYNERGY AUDIO TAGS: You MUST include inline audio tags to direct the TTS voice. Use tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers], [reluctantly] at the beginning of relevant sentences to add emotion and dramatic pacing. 2. NO ENGLISH TRANSLITERATION: Translate meanings naturally. 3. FORMAT: Keep the EXACT original SRT timecodes and indices. 4. Output ONLY the raw SRT format.{hormozi_rule}"
 
@@ -680,7 +674,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                         response = openai.chat.completions.create(model="gpt-5.5-pro" if "5.5" in ai_provider else "gpt-4o", messages=[{"role": "system", "content": "You are an expert Burmese content creator."}, {"role": "user", "content": f"{base_prompt} --- ORIGINAL SRT --- {transcript_srt}"}])
                         raw_output_text = response.choices[0].message.content
                     
-                    # Passing fade option to parser
                     parsed_timestamps, speech_text = parse_and_save_real_srt(raw_output_text, srt_final, use_fade=sub_fade)
                     st.session_state.generated_script = raw_output_text
                 except Exception as e: st.error(f"{ai_provider} Logic Error: {e}"); st.stop()
@@ -706,13 +699,12 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     st.stop()
 
             with st.spinner("⏳ [အဆင့် ၅+၆] ဗီဒီယိုနှင့် စာတန်းထိုးအား ရွေးချယ်ထားသော စနစ်အတိုင်း ဖန်တီးနေပါသည်..."):
-                # 👇 Constructing the Dynamic ASS Style String
                 align_val = 2
                 margin_v_val = 60
                 if "Center" in sub_position: align_val, margin_v_val = 5, 10
                 elif "Top" in sub_position: align_val, margin_v_val = 8, 60
                 
-                prim_c = "&H0000FFFF" # Yellow
+                prim_c = "&H0000FFFF" 
                 if "White" in sub_color: prim_c = "&H00FFFFFF"
                 elif "Green" in sub_color: prim_c = "&H0000FF00"
                 
@@ -772,7 +764,7 @@ elif app_mode == "🎥 Veo Video Studio":
                     keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
                     success = False
                     for key in keys_list:
-                        url = f"https://generativelanguage.googleapis.com/v1beta/models/veo-2.0-generate-001:generateContent?key={key}"
+                        url = f"[https://generativelanguage.googleapis.com/v1beta/models/veo-2.0-generate-001:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/veo-2.0-generate-001:generateContent?key=){key}"
                         payload = {"contents": [{"parts": [{"text": video_prompt}]}], "generationConfig": {"responseModalities": ["VIDEO"]}}
                         res = requests.post(url, json=payload)
                         if res.status_code == 200:
@@ -803,7 +795,7 @@ elif app_mode == "🎵 Lyria Music Studio":
                     keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
                     success = False
                     for key in keys_list:
-                        url = f"https://generativelanguage.googleapis.com/v1beta/models/lyria-3-pro-preview:generateContent?key={key}"
+                        url = f"[https://generativelanguage.googleapis.com/v1beta/models/lyria-3-pro-preview:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/lyria-3-pro-preview:generateContent?key=){key}"
                         payload = {"contents": [{"parts": [{"text": music_prompt}]}], "generationConfig": {"responseModalities": ["AUDIO"]}}
                         res = requests.post(url, json=payload)
                         if res.status_code == 200:
@@ -917,8 +909,8 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                                 contents=prompt
                             )
                             
-                            raw_text = response.text.strip().replace("
-```json", "").replace("```", "")
+                            # 👇 FIX: Changed double quotes to single quotes to prevent SyntaxError
+                            raw_text = response.text.strip().replace('```json', '').replace('```', '')
                             response_json = json.loads(raw_text)
                             break 
                         except Exception as api_error:
