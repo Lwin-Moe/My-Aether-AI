@@ -146,6 +146,16 @@ st.markdown('''
         border-radius: 8px !important;
         color: #f8fafc !important;
     }
+    
+    /* Subtitle Styling Box */
+    .sub-box {
+        background-color: #1a2235;
+        border: 1px solid rgba(129, 140, 248, 0.3);
+        border-radius: 8px;
+        padding: 20px;
+        margin-top: 15px;
+        margin-bottom: 10px;
+    }
     </style>
 ''', unsafe_allow_html=True)
 
@@ -306,8 +316,10 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
         finally:
             if os.path.exists(temp_out): os.remove(temp_out)
 
-def parse_and_save_real_srt(raw_srt_text, output_file):
-    clean_srt = raw_srt_text.replace("```srt", "").replace("```", "").strip()
+# 👇 Updated Subtitle Parser to include Cinematic Fades
+def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
+    clean_srt = raw_srt_text.replace("```srt", "").replace("
+```", "").strip()
     
     with open(output_file, "w", encoding="utf-8-sig") as f: 
         f.write(clean_srt)
@@ -338,7 +350,13 @@ def parse_and_save_real_srt(raw_srt_text, output_file):
                     s, ms = s_ms.split(',')
                     ms = ms.ljust(3, '0')
                     return int(h)*3600 + int(m)*60 + int(s) + int(ms)/1000.0
-                parsed_lines.append((to_sec(start_str), to_sec(end_str), block.strip()))
+                
+                text_content = block.strip()
+                # တွဲလျက်ထည့်ပေးထားသော ASS tag (Fade in / out)
+                if use_fade:
+                    text_content = "{\\fad(250,250)}" + text_content
+                    
+                parsed_lines.append((to_sec(start_str), to_sec(end_str), text_content))
                 full_speech.append(block.strip())
             except: pass
             
@@ -354,7 +372,8 @@ def parse_and_save_real_srt(raw_srt_text, output_file):
         
     return parsed_lines, " ".join(full_speech)
 
-def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_bypass=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)", use_mirror=False, use_color=False, use_grain=False, use_fps=False):
+# 👇 Updated to accept Dynamic Subtitle Styling
+def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_bypass=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)", use_mirror=False, use_color=False, use_grain=False, use_fps=False, sub_style_str="FontName=Pyidaungsu,FontSize=22,PrimaryColour=&H0000FFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2.5,Shadow=1,Alignment=2,MarginV=25"):
     try:
         a_dur = get_file_duration(in_a)
         v_max_dur = get_file_duration(in_v)
@@ -372,7 +391,6 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         
         video = ffmpeg.input(in_v).video
         
-        # 👇 NEW: Anti-Copyright Visual Filters
         if use_bypass:
             video = ffmpeg.filter(video, 'scale', '2*trunc(iw*1.08/2)', '2*trunc(ih*1.08/2)')
             video = ffmpeg.filter(video, 'crop', 'iw/1.08', 'ih/1.08')
@@ -412,7 +430,8 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         except: pass
         
         if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"] and os.path.exists("subtitles.srt"):
-            video = ffmpeg.filter(video, 'subtitles', safe_srt_path_escaped, charenc='UTF-8', fontsdir='.', force_style="FontName=Pyidaungsu,FontSize=22,PrimaryColour=&H0000FFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2.5,Shadow=1,Alignment=2,MarginV=25")
+            # 🎨 Injecting the Dynamic Pro Style String
+            video = ffmpeg.filter(video, 'subtitles', safe_srt_path_escaped, charenc='UTF-8', fontsdir='.', force_style=sub_style_str)
 
         out = ffmpeg.output(video, audio, out_v, vcodec='libx264', acodec='aac', preset='fast', crf=21, t=v_max_dur)
         out.run(cmd=FFMPEG_BINARY, overwrite_output=True, capture_stdout=True, capture_stderr=True)
@@ -474,7 +493,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         
         key_ttsmaker = st.text_input("TTSMaker API Key", type="password") if "TTSMaker" in audio_engine_choice else ""
 
-        # 👇 NEW: Added individual checkboxes for Visual Manipulations
         st.markdown("---")
         st.markdown("### 📐 4. Layout & Protection")
         video_ratio = st.selectbox("Crop Ratio", ["Original", "9:16 (TikTok/Shorts)", "16:9 (YouTube)"])
@@ -513,7 +531,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
             
         voice_char = st.selectbox("Select Character Voice", dynamic_options, index=0)
         
-        pitch_level = st.slider("🎙️ Voice Pitch (Frequency Adjust)", min_value=-30, max_value=30, value=0, step=5, help="0 = မူရင်းအသံ။ အနုတ်ပြလျှင် အသံပို၍ ဩမည်/ကြီးမည်၊ အပေါင်းပြလျှင် အသံပို၍ စူးမည်/ငယ်မည်။")
+        pitch_level = st.slider("🎙️ Voice Pitch (Frequency Adjust)", min_value=-30, max_value=30, value=0, step=5)
         
         fx_level = st.selectbox("🎧 Cinematic Voice FX", [
             "None (Standard Voice)",
@@ -544,6 +562,29 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     st.audio(sample_file)
                 except Exception as e:
                     st.error(f"Sample Error: {e}")
+
+        # 👇 NEW: Subtitle Pro Settings Box
+        st.markdown("<div class='sub-box'>", unsafe_allow_html=True)
+        st.markdown("<p style='margin-bottom: 10px; font-weight: bold; color: #818cf8 !important; font-size: 16px;'>📝 Subtitle Pro Settings</p>", unsafe_allow_html=True)
+        if subtitle_mode in ["Both (Burn + SRT)", "Burn into Video"]:
+            sub_position = st.selectbox("📍 Position (နေရာ)", ["Bottom (TikTok/Reels Safe Zone)", "Center (အလယ်)", "Top (အပေါ်)"])
+            sub_color = st.selectbox("🎨 Color & Style (အရောင်)", ["Yellow Text + Black Outline", "White Text + Black Outline", "Neon Green Text + Black Outline"])
+            sub_font = st.selectbox("🅰️ Font Family", ["Pyidaungsu", "Myanmar Text", "Padauk"])
+            sub_size = st.slider("🔠 Font Size", 16, 40, 22, 1)
+            sub_thickness = st.slider("✒️ Outline Thickness", 1.0, 5.0, 2.5, 0.5)
+            
+            col_s1, col_s2 = st.columns(2)
+            with col_s1:
+                sub_bg = st.checkbox("🔲 Background Box", value=False)
+                sub_short = st.checkbox("✂️ Short & Punchy (Hormozi)", value=False)
+            with col_s2:
+                sub_fade = st.checkbox("✨ Cinematic Fades", value=False)
+        else:
+            st.info("💡 Subtitle Mode ကို Burn into Video ရွေးထားမှသာ ချိန်ညှိနိုင်ပါမည်။")
+            sub_position, sub_color, sub_font = "Bottom", "Yellow", "Pyidaungsu"
+            sub_size, sub_thickness = 22, 2.5
+            sub_bg, sub_short, sub_fade = False, False, False
+        st.markdown("</div>", unsafe_allow_html=True)
         
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -569,7 +610,9 @@ if app_mode == "🎙️ Movie Dubbing Studio":
 
             with st.spinner(f"⏳ [အဆင့် ၂/၆] {ai_provider} ကိုအသုံးပြု၍ Audio Tags များပါဝင်သော ဇာတ်ညွှန်း ရေးသားနေပါသည်..."):
                 try:
-                    base_prompt = "You are an expert Myanmar (Burmese) TikTok movie recap narrator. I am providing you with an English SRT file translated from the original audio. Translate and adapt the text into highly engaging, natural spoken Burmese (မြန်မာစကားပြောဟန်). STRICT RULES: 1. SYNERGY AUDIO TAGS: You MUST include inline audio tags to direct the TTS voice. Use tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers], [reluctantly] at the beginning of relevant sentences to add emotion and dramatic pacing. 2. NO ENGLISH TRANSLITERATION: Translate meanings naturally. 3. FORMAT: Keep the EXACT original SRT timecodes and indices. 4. Output ONLY the raw SRT format."
+                    # 👇 Short & Punchy Rule Dynamic Injection
+                    hormozi_rule = " 5. SHORT & PUNCHY (ALEX HORMOZI STYLE): Split the subtitles into very short chunks (maximum 3-5 words per subtitle). Do not write long sentences in a single block. Keep them extremely fast-paced and punchy." if sub_short else ""
+                    base_prompt = f"You are an expert Myanmar (Burmese) TikTok movie recap narrator. I am providing you with an English SRT file translated from the original audio. Translate and adapt the text into highly engaging, natural spoken Burmese (မြန်မာစကားပြောဟန်). STRICT RULES: 1. SYNERGY AUDIO TAGS: You MUST include inline audio tags to direct the TTS voice. Use tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers], [reluctantly] at the beginning of relevant sentences to add emotion and dramatic pacing. 2. NO ENGLISH TRANSLITERATION: Translate meanings naturally. 3. FORMAT: Keep the EXACT original SRT timecodes and indices. 4. Output ONLY the raw SRT format.{hormozi_rule}"
 
                     if "Gemini" in ai_provider:
                         keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
@@ -589,7 +632,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                                     else:
                                         break
                                 
-                                gemini_prompt = "Listen to the ENTIRE audio file from the absolute beginning to the very last second. Do NOT truncate, skip, or summarize the ending. You MUST generate a complete SRT subtitle file in natural spoken Burmese (မြန်မာစကားပြောဟန်) covering the WHOLE video duration until the very end. 🛑 STRICT RULES: 1. Include Synergy Audio Tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers] to guide the voice naturally. 2. NO ENGLISH TRANSLITERATION. 3. Output ONLY valid SRT format."
+                                gemini_prompt = f"Listen to the ENTIRE audio file from the absolute beginning to the very last second. Do NOT truncate, skip, or summarize the ending. You MUST generate a complete SRT subtitle file in natural spoken Burmese (မြန်မာစကားပြောဟန်) covering the WHOLE video duration until the very end. 🛑 STRICT RULES: 1. Include Synergy Audio Tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers] to guide the voice naturally. 2. NO ENGLISH TRANSLITERATION. 3. Output ONLY valid SRT format.{hormozi_rule}"
                                 
                                 response = client.models.generate_content(
                                     model="gemini-1.5-flash",
@@ -637,7 +680,8 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                         response = openai.chat.completions.create(model="gpt-5.5-pro" if "5.5" in ai_provider else "gpt-4o", messages=[{"role": "system", "content": "You are an expert Burmese content creator."}, {"role": "user", "content": f"{base_prompt} --- ORIGINAL SRT --- {transcript_srt}"}])
                         raw_output_text = response.choices[0].message.content
                     
-                    parsed_timestamps, speech_text = parse_and_save_real_srt(raw_output_text, srt_final)
+                    # Passing fade option to parser
+                    parsed_timestamps, speech_text = parse_and_save_real_srt(raw_output_text, srt_final, use_fade=sub_fade)
                     st.session_state.generated_script = raw_output_text
                 except Exception as e: st.error(f"{ai_provider} Logic Error: {e}"); st.stop()
 
@@ -662,12 +706,29 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     st.stop()
 
             with st.spinner("⏳ [အဆင့် ၅+၆] ဗီဒီယိုနှင့် စာတန်းထိုးအား ရွေးချယ်ထားသော စနစ်အတိုင်း ဖန်တီးနေပါသည်..."):
-                # 👇 NEW: Passing anti-copyright options to the rendering function
+                # 👇 Constructing the Dynamic ASS Style String
+                align_val = 2
+                margin_v_val = 60
+                if "Center" in sub_position: align_val, margin_v_val = 5, 10
+                elif "Top" in sub_position: align_val, margin_v_val = 8, 60
+                
+                prim_c = "&H0000FFFF" # Yellow
+                if "White" in sub_color: prim_c = "&H00FFFFFF"
+                elif "Green" in sub_color: prim_c = "&H0000FF00"
+                
+                border_s = 3 if sub_bg else 1
+                back_c = "&H80000000" if sub_bg else "&H00000000"
+                out_thick = 0 if sub_bg else sub_thickness
+                font_n = sub_font.split()[0]
+                
+                dynamic_style = f"FontName={font_n},FontSize={sub_size},PrimaryColour={prim_c},OutlineColour=&H00000000,BackColour={back_c},BorderStyle={border_s},Outline={out_thick},Shadow=1,Alignment={align_val},MarginV={margin_v_val}"
+                
                 success, err_msg = render_premium_saas_video(
                     v_input, a_generated, parsed_timestamps, v_final, video_ratio, 
                     use_bypass=cb_bypass, use_blur=cb_blur, watermark=watermark_text, 
                     subtitle_mode=subtitle_mode, 
-                    use_mirror=cb_mirror, use_color=cb_color, use_grain=cb_grain, use_fps=cb_fps
+                    use_mirror=cb_mirror, use_color=cb_color, use_grain=cb_grain, use_fps=cb_fps,
+                    sub_style_str=dynamic_style
                 )
                 if success: st.session_state.render_success = True
                 else: st.error(f"Rendering Sync Failure: {err_msg}")
@@ -856,7 +917,8 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                                 contents=prompt
                             )
                             
-                            raw_text = response.text.strip().replace("```json", "").replace("```", "")
+                            raw_text = response.text.strip().replace("
+```json", "").replace("```", "")
                             response_json = json.loads(raw_text)
                             break 
                         except Exception as api_error:
