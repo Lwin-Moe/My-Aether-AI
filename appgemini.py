@@ -40,20 +40,6 @@ def load_key(file_path):
 def save_key(file_path, key):
     with open(file_path, "w", encoding="utf-8") as f: f.write(key)
 
-def get_download_html(file_path, file_name, btn_text):
-    with open(file_path, "rb") as f:
-        b64 = base64.b64encode(f.read()).decode()
-    return f'''
-    <a href="data:application/octet-stream;base64,{b64}" download="{file_name}" 
-       style="display: block; width: 100%; text-align: center; padding: 14px; 
-              background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); 
-              color: white; font-family: 'Montserrat', sans-serif; font-weight: bold; 
-              border-radius: 8px; text-decoration: none; margin-bottom: 10px; 
-              box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3); transition: all 0.3s ease;">
-        📥 {btn_text}
-    </a>
-    '''
-
 # --- 1. THEME & STYLING (PREMIUM PRO UI) ---
 st.set_page_config(page_title="AETHER STUDIO V52", layout="wide", page_icon="🎬")
 
@@ -250,7 +236,7 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
 
         else:
             voice = "my-MM-ThihaNeural" if "Male" in voice_model else "my-MM-NilarNeural"
-            communicate = edge_tts.Communicate(text, voice, rate='+15%')
+            communicate = edge_tts.Communicate(text, voice)
             await communicate.save(temp_out)
 
         audio = ffmpeg.input(temp_out)
@@ -357,18 +343,24 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         video = ffmpeg.filter(video, 'scale', 'trunc(oh*a/2)*2', 1080, flags='bicubic')
         
         tts_audio = ffmpeg.input(in_a).audio
+        if v_max_dur > 1.0 and a_dur > 0:
+            speed_factor = a_dur / (v_max_dur - 0.5)
+            if 0.5 <= speed_factor <= 2.0:
+                tts_audio = ffmpeg.filter(tts_audio, 'atempo', speed_factor)
+
         audio_streams = [tts_audio]
         
         if not mute_orig:
             orig_audio = ffmpeg.input(in_v).audio.filter('volume', 0.1)
             audio_streams.append(orig_audio)
             
+        # 👇 FIX: ရိုးရိုးရှင်းရှင်း သီချင်းထည့်ခြင်း (Script နှင့် Timeline ကို လုံးဝမထိပါ)
         if bgm_file and os.path.exists(bgm_file):
             bgm_audio = ffmpeg.input(bgm_file).audio.filter('volume', bgm_vol)
             audio_streams.append(bgm_audio)
             
         if len(audio_streams) > 1:
-            final_audio = ffmpeg.filter(audio_streams, 'amix', inputs=len(audio_streams), duration='first')
+            final_audio = ffmpeg.filter(audio_streams, 'amix', inputs=len(audio_streams))
             final_audio = final_audio.filter('volume', str(len(audio_streams)))
         else:
             final_audio = audio_streams[0]
@@ -564,7 +556,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # 👇 FIX: Clear and highly visible Progress Tracker instead of hidden spinners
     if st.button("🚀 START ONE-CLICK WORKFLOW MONETIZE GENERATOR"):
         if not api_key_input: st.error("⚠️ API Key အား ထည့်သွင်းပေးပါ ဆရာကြီး။")
         elif not uploaded_file and not video_url: st.error("⚠️ ဗီဒီယိုဖိုင် သို့မဟုတ် Link တစ်ခုခု ထည့်ပေးပါ။")
@@ -575,218 +566,206 @@ if app_mode == "🎙️ Movie Dubbing Studio":
             
             v_input, a_extracted, a_generated, v_final, srt_final = "input_temp.mp4", "temp_extracted.mp3", "voice_temp.wav", "AETHER_RECAP_FINAL.mp4", "subtitles.srt"
 
-            status_box = st.empty()
-            
-            status_box.info("⏳ [အဆင့် ၁/၄] ဗီဒီယို ဖိုင်အား စနစ်ထဲသို့ ဆွဲသွင်းနေပါသည်...")
-            try:
-                if uploaded_file:
-                    with open(v_input, "wb") as f: f.write(uploaded_file.read())
-                else: 
-                    download_video_from_url(video_url, v_input)
-            except Exception as dl_err:
-                st.error(str(dl_err))
-                st.stop()
-            
-            extracted_res = extract_audio_fast(v_input, a_extracted)
-            if not extracted_res or not os.path.exists(a_extracted):
-                st.error("❌ ဗီဒီယိုထဲကနေ အသံဖိုင် ခွဲထုတ်လို့ မရပါဘူး။")
-                st.stop()
-
-            status_box.info(f"⏳ [အဆင့် ၂/၄] {ai_provider} ဖြင့် ဇာတ်ညွှန်း ရေးသားနေပါသည်...")
-            try:
-                extra_rules = ""
-                if script_hook: extra_rules += " [HOOK]: Start with an extremely engaging 3-second viral hook."
-                if script_slang: extra_rules += " [SLANG]: Use modern Myanmar internet slang and Gen-Z conversational tone instead of formal translation."
-                if script_curiosity: extra_rules += " [CURIOSITY]: Insert curiosity gaps in the middle to retain audience attention (e.g., 'But the real plot twist happens now...')."
-                if script_tone: extra_rules += " [TONE]: Inject strong emotions and character tones matching the scene."
-                if script_cta: extra_rules += " [CTA]: End the script with a strong Call to Action (CTA) asking a question to encourage comments."
-
-                hormozi_rule = " [HORMOZI]: Split the subtitles into very short chunks (maximum 3-5 words per subtitle). Do not write long sentences in a single block." if sub_short else ""
-                concise_rule = " 5. CONCISENESS: Your Burmese translation MUST BE EXTREMELY BRIEF and FAST-PACED to match the exact duration of the English original. Avoid unnecessary words."
+            with st.spinner("⏳ [အဆင့် ၁/၆] ဗီဒီယို ဖိုင်အား စနစ်ထဲသို့ ဆွဲသွင်းနေပါသည်..."):
+                try:
+                    if uploaded_file:
+                        with open(v_input, "wb") as f: f.write(uploaded_file.read())
+                    else: 
+                        download_video_from_url(video_url, v_input)
+                except Exception as dl_err:
+                    st.error(str(dl_err))
+                    st.stop()
                 
-                base_prompt = f"You are an expert Myanmar (Burmese) TikTok movie recap narrator. I am providing you with an English SRT file translated from the original audio. Translate and adapt the text into highly engaging, natural spoken Burmese (မြန်မာစကားပြောဟန်). STRICT RULES: 1. SYNERGY AUDIO TAGS: You MUST include inline audio tags to direct the TTS voice. Use tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers], [reluctantly] at the beginning of relevant sentences to add emotion and dramatic pacing. 2. NO ENGLISH TRANSLITERATION: Translate meanings naturally. 3. FORMAT: Keep the EXACT original SRT timecodes and indices. 4. Output ONLY the raw SRT format.{concise_rule}{extra_rules}{hormozi_rule}"
+                extracted_res = extract_audio_fast(v_input, a_extracted)
+                if not extracted_res or not os.path.exists(a_extracted):
+                    st.error("❌ ဗီဒီယိုထဲကနေ အသံဖိုင် ခွဲထုတ်လို့ မရပါဘူး။")
+                    st.stop()
 
-                if "Gemini" in ai_provider:
-                    keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
-                    success_gemini = False
-                    last_err = ""
-                    st.session_state.original_transcript = "[Gemini Model processed Audio directly.]"
+            with st.spinner(f"⏳ [အဆင့် ၂/၆] {ai_provider} ကိုအသုံးပြု၍ Audio Tags များပါဝင်သော ဇာတ်ညွှန်း ရေးသားနေပါသည်..."):
+                try:
+                    extra_rules = ""
+                    if script_hook: extra_rules += " [HOOK]: Start with an extremely engaging 3-second viral hook."
+                    if script_slang: extra_rules += " [SLANG]: Use modern Myanmar internet slang and Gen-Z conversational tone instead of formal translation."
+                    if script_curiosity: extra_rules += " [CURIOSITY]: Insert curiosity gaps in the middle to retain audience attention (e.g., 'But the real plot twist happens now...')."
+                    if script_tone: extra_rules += " [TONE]: Inject strong emotions and character tones matching the scene."
+                    if script_cta: extra_rules += " [CTA]: End the script with a strong Call to Action (CTA) asking a question to encourage comments."
+
+                    hormozi_rule = " [HORMOZI]: Split the subtitles into very short chunks (maximum 3-5 words per subtitle). Do not write long sentences in a single block." if sub_short else ""
+                    concise_rule = " 5. CONCISENESS: Your Burmese translation MUST BE EXTREMELY BRIEF and FAST-PACED to match the exact duration of the English original. Avoid unnecessary words."
                     
-                    for idx, current_key in enumerate(keys_list):
-                        try:
-                            client = genai.Client(api_key=current_key)
-                            audio_file = client.files.upload(file=a_extracted)
-                            
-                            while True:
-                                f_info = client.files.get(name=audio_file.name)
-                                if "PROCESSING" in str(f_info.state):
-                                    time.sleep(2)
+                    base_prompt = f"You are an expert Myanmar (Burmese) TikTok movie recap narrator. I am providing you with an English SRT file translated from the original audio. Translate and adapt the text into highly engaging, natural spoken Burmese (မြန်မာစကားပြောဟန်). STRICT RULES: 1. SYNERGY AUDIO TAGS: You MUST include inline audio tags to direct the TTS voice. Use tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers], [reluctantly] at the beginning of relevant sentences to add emotion and dramatic pacing. 2. NO ENGLISH TRANSLITERATION: Translate meanings naturally. 3. FORMAT: Keep the EXACT original SRT timecodes and indices. 4. Output ONLY the raw SRT format.{concise_rule}{extra_rules}{hormozi_rule}"
+
+                    if "Gemini" in ai_provider:
+                        keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
+                        success_gemini = False
+                        last_err = ""
+                        st.session_state.original_transcript = "[Gemini Model processed Audio directly.]"
+                        
+                        for idx, current_key in enumerate(keys_list):
+                            try:
+                                client = genai.Client(api_key=current_key)
+                                audio_file = client.files.upload(file=a_extracted)
+                                
+                                while True:
+                                    f_info = client.files.get(name=audio_file.name)
+                                    if "PROCESSING" in str(f_info.state):
+                                        time.sleep(2)
+                                    else:
+                                        break
+                                
+                                gemini_prompt = f"Listen to the ENTIRE audio file from the absolute beginning to the very last second. Do NOT truncate, skip, or summarize the ending. You MUST generate a complete SRT subtitle file in natural spoken Burmese (မြန်မာစကားပြောဟန်) covering the WHOLE video duration until the very end. 🛑 STRICT RULES: 1. Include Synergy Audio Tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers] to guide the voice naturally. 2. NO ENGLISH TRANSLITERATION. 3. Output ONLY valid SRT format.{concise_rule}{extra_rules}{hormozi_rule}"
+                                
+                                response = client.models.generate_content(
+                                    model="gemini-2.5-flash",
+                                    contents=[f_info, gemini_prompt]
+                                )
+                                
+                                bt = chr(96)
+                                tbt = bt * 3
+                                raw_output_text = response.text.strip().replace(f"{tbt}srt", "").replace(tbt, "")
+                                client.files.delete(name=f_info.name)
+                                success_gemini = True
+                                break 
+                            except Exception as e:
+                                last_err = str(e)
+                                if "429" in last_err or "503" in last_err or "unavailable" in last_err.lower() or "quota" in last_err.lower() or "exhausted" in last_err.lower() or "limit" in last_err.lower():
+                                    st.toast(f"⚠️ Key {idx+1} တွင် ခေတ္တပြဿနာရှိပါသဖြင့် နောက် Key ကို ပြောင်းလဲချိတ်ဆက်နေပါသည်...", icon="🔄")
+                                    continue
                                 else:
-                                    break
-                            
-                            gemini_prompt = f"Listen to the ENTIRE audio file from the absolute beginning to the very last second. Do NOT truncate, skip, or summarize the ending. You MUST generate a complete SRT subtitle file in natural spoken Burmese (မြန်မာစကားပြောဟန်) covering the WHOLE video duration until the very end. 🛑 STRICT RULES: 1. Include Synergy Audio Tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers] to guide the voice naturally. 2. NO ENGLISH TRANSLITERATION. 3. Output ONLY valid SRT format.{concise_rule}{extra_rules}{hormozi_rule}"
-                            
-                            response = client.models.generate_content(
-                                model="gemini-2.5-flash",
-                                contents=[f_info, gemini_prompt]
-                            )
-                            
-                            bt = chr(96)
-                            tbt = bt * 3
-                            raw_output_text = response.text.strip().replace(f"{tbt}srt", "").replace(tbt, "")
-                            client.files.delete(name=f_info.name)
-                            success_gemini = True
-                            break 
-                        except Exception as e:
-                            last_err = str(e)
-                            if "429" in last_err or "503" in last_err or "unavailable" in last_err.lower() or "quota" in last_err.lower() or "exhausted" in last_err.lower() or "limit" in last_err.lower():
-                                st.toast(f"⚠️ Key {idx+1} တွင် ခေတ္တပြဿနာရှိပါသဖြင့် နောက် Key ကို ပြောင်းလဲချိတ်ဆက်နေပါသည်...", icon="🔄")
-                                continue
-                            else:
-                                continue
+                                    continue
 
-                    if not success_gemini: raise Exception(f"Gemini API များကို အသုံးပြု၍မရပါ: {last_err}")
+                        if not success_gemini: raise Exception(f"Gemini API များကို အသုံးပြု၍မရပါ: {last_err}")
 
-                elif "Groq" in ai_provider:
-                    client = Groq(api_key=api_key_input)
-                    with open(a_extracted, "rb") as file:
-                        transcription = client.audio.translations.create(file=(a_extracted, file.read()), model="whisper-large-v3", response_format="verbose_json")
+                    elif "Groq" in ai_provider:
+                        client = Groq(api_key=api_key_input)
+                        with open(a_extracted, "rb") as file:
+                            transcription = client.audio.translations.create(file=(a_extracted, file.read()), model="whisper-large-v3", response_format="verbose_json")
+                        
+                        transcript_srt = ""
+                        segments = getattr(transcription, 'segments', None)
+                        if not segments and isinstance(transcription, dict): segments = transcription.get('segments')
+                        if segments:
+                            for i, seg in enumerate(segments, start=1):
+                                start_t = seg.get('start', 0) if isinstance(seg, dict) else getattr(seg, 'start', 0)
+                                end_t = seg.get('end', 0) if isinstance(seg, dict) else getattr(seg, 'end', 0)
+                                text_seg = seg.get('text', '') if isinstance(seg, dict) else getattr(seg, 'text', '')
+                                def fmt_t(s): return f"{int(s//3600):02d}:{int((s%3600)//60):02d}:{int(s%60):02d},{int((s-int(s))*1000):03d}"
+                                transcript_srt += f"{i}\n{fmt_t(start_t)} --> {fmt_t(end_t)}\n{text_seg.strip()}\n\n"
+                        else: transcript_srt = getattr(transcription, 'text', str(transcription))
+                        
+                        st.session_state.original_transcript = transcript_srt
+                        completion = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role": "system", "content": "You are a professional Burmese movie recap narrator."}, {"role": "user", "content": f"{base_prompt} --- ORIGINAL SRT --- {transcript_srt}"}])
+                        raw_output_text = completion.choices[0].message.content
+
+                    else: # OpenAI
+                        openai.api_key = api_key_input
+                        with open(a_extracted, "rb") as file: transcription = openai.audio.translations.create(model="whisper-1", file=file, response_format="srt")
+                        transcript_srt = transcription if isinstance(transcription, str) else transcription.text
+                        st.session_state.original_transcript = transcript_srt
+                        response = openai.chat.completions.create(model="gpt-5.5-pro" if "5.5" in ai_provider else "gpt-4o", messages=[{"role": "system", "content": "You are an expert Burmese content creator."}, {"role": "user", "content": f"{base_prompt} --- ORIGINAL SRT --- {transcript_srt}"}])
+                        raw_output_text = response.choices[0].message.content
                     
-                    transcript_srt = ""
-                    segments = getattr(transcription, 'segments', None)
-                    if not segments and isinstance(transcription, dict): segments = transcription.get('segments')
-                    if segments:
-                        for i, seg in enumerate(segments, start=1):
-                            start_t = seg.get('start', 0) if isinstance(seg, dict) else getattr(seg, 'start', 0)
-                            end_t = seg.get('end', 0) if isinstance(seg, dict) else getattr(seg, 'end', 0)
-                            text_seg = seg.get('text', '') if isinstance(seg, dict) else getattr(seg, 'text', '')
-                            def fmt_t(s): return f"{int(s//3600):02d}:{int((s%3600)//60):02d}:{int(s%60):02d},{int((s-int(s))*1000):03d}"
-                            transcript_srt += f"{i}\n{fmt_t(start_t)} --> {fmt_t(end_t)}\n{text_seg.strip()}\n\n"
-                    else: transcript_srt = getattr(transcription, 'text', str(transcription))
-                    
-                    st.session_state.original_transcript = transcript_srt
-                    completion = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role": "system", "content": "You are a professional Burmese movie recap narrator."}, {"role": "user", "content": f"{base_prompt} --- ORIGINAL SRT --- {transcript_srt}"}])
-                    raw_output_text = completion.choices[0].message.content
+                    parsed_timestamps, speech_text = parse_and_save_real_srt(raw_output_text, srt_final, use_fade=sub_fade)
+                    st.session_state.generated_script = raw_output_text
+                except Exception as e: st.error(f"{ai_provider} Logic Error: {e}"); st.stop()
 
-                else: # OpenAI
-                    openai.api_key = api_key_input
-                    with open(a_extracted, "rb") as file: transcription = openai.audio.translations.create(model="whisper-1", file=file, response_format="srt")
-                    transcript_srt = transcription if isinstance(transcription, str) else transcription.text
-                    st.session_state.original_transcript = transcript_srt
-                    response = openai.chat.completions.create(model="gpt-5.5-pro" if "5.5" in ai_provider else "gpt-4o", messages=[{"role": "system", "content": "You are an expert Burmese content creator."}, {"role": "user", "content": f"{base_prompt} --- ORIGINAL SRT --- {transcript_srt}"}])
-                    raw_output_text = response.choices[0].message.content
-                
-                parsed_timestamps, speech_text = parse_and_save_real_srt(raw_output_text, srt_final, use_fade=sub_fade)
-                st.session_state.generated_script = raw_output_text
-            except Exception as e: st.error(f"{ai_provider} Logic Error: {e}"); st.stop()
-
-            status_box.info("⏳ [အဆင့် ၃/၄] AI Voice Over တစ်ကြောင်းချင်းစီ Sync ညှိနေပါသည်... (ဤအဆင့်သည် အချိန်အနည်းငယ် ယူနိုင်ပါသည်)")
-            try:
-                timeline_list = "concat_list.txt"
-                temp_files_to_cleanup = []
-                
-                custom_id = locals().get('custom_eleven_id', '')
-                final_gemini_key = locals().get('synergy_key', api_key_input)
-                
-                with open(timeline_list, "w", encoding="utf-8") as f_list:
-                    current_time = 0.0
-                    total_lines = len(parsed_timestamps)
+            with st.spinner(f"⏳ [အဆင့် ၄/၆] {audio_engine_choice} စနစ်ဖြင့် AI Voice Over တစ်ကြောင်းချင်းစီ Sync ညှိနေပါသည်... (ဤအဆင့်သည် အချိန်အနည်းငယ် ယူနိုင်ပါသည်)"):
+                try:
+                    timeline_list = "concat_list.txt"
+                    temp_files_to_cleanup = []
                     
-                    # 👇 FIX: Explicit and clear progress tracking UI
-                    progress_text = st.empty()
-                    progress_bar = st.progress(0)
+                    custom_id = locals().get('custom_eleven_id', '')
+                    final_gemini_key = locals().get('synergy_key', api_key_input)
                     
-                    for idx, (start, end, raw_text) in enumerate(parsed_timestamps):
-                        clean_txt = re.sub(r'\[.*?\]', '', raw_text)
-                        clean_txt = re.sub(r'\{.*?\}', '', clean_txt).strip()
+                    with open(timeline_list, "w", encoding="utf-8") as f_list:
+                        current_time = 0.0
+                        total_lines = len(parsed_timestamps)
+                        progress_bar = st.progress(0)
                         
-                        if not clean_txt: continue
-                        
-                        if start > current_time:
-                            sil_dur = start - current_time
-                            sil_file = f"silence_{idx}.wav"
-                            create_silence(sil_dur, sil_file)
-                            f_list.write(f"file '{sil_file}'\n")
-                            temp_files_to_cleanup.append(sil_file)
-                            current_time = start
+                        for idx, (start, end, raw_text) in enumerate(parsed_timestamps):
+                            clean_txt = re.sub(r'\[.*?\]', '', raw_text)
+                            clean_txt = re.sub(r'\{.*?\}', '', clean_txt).strip()
                             
-                        temp_tts = f"temp_tts_{idx}.wav"
-                        sync_tts = f"sync_tts_{idx}.wav"
-                        
-                        asyncio.run(generate_tts(
-                            clean_txt, voice_char, temp_tts, 
-                            engine=audio_engine_choice, ttsmaker_key=key_ttsmaker, 
-                            eleven_key=locals().get('eleven_key_input', ''), 
-                            custom_eleven_id=custom_id, gemini_key=final_gemini_key,
-                            pitch=pitch_level, voice_fx=fx_level 
-                        ))
-                        
-                        if "Synergy" in audio_engine_choice: time.sleep(1.0)
-                        
-                        tgt_dur = end - start
-                        actual_dur = adjust_audio_speed(temp_tts, sync_tts, tgt_dur)
-                        
-                        f_list.write(f"file '{sync_tts}'\n")
-                        temp_files_to_cleanup.extend([temp_tts, sync_tts])
-                        current_time += actual_dur
-                        
-                        progress_text.markdown(f"<p style='color:#38bdf8; font-weight:bold;'>🎙️ အသံထုတ်လုပ်နေသည်... ( {idx + 1} / {total_lines} စာကြောင်း ပြီးစီးပါပြီ )</p>", unsafe_allow_html=True)
-                        progress_bar.progress(float(idx + 1) / total_lines)
-                
-                progress_text.empty()
-                progress_bar.empty()
-                
-                (ffmpeg.input(timeline_list, format='concat', safe=0)
-                 .output(a_generated, c='copy')
-                 .overwrite_output()
-                 .run(cmd=FFMPEG_BINARY, quiet=True))
-                 
-                for f in temp_files_to_cleanup:
-                    if os.path.exists(f): os.remove(f)
-                if os.path.exists(timeline_list): os.remove(timeline_list)
-                
-            except Exception as e:
-                st.error(f"အသံထုတ်လုပ်ခြင်း မအောင်မြင်ပါ (Audio Sync Error): {e}")
-                st.stop()
+                            if not clean_txt: continue
+                            
+                            if start > current_time:
+                                sil_dur = start - current_time
+                                sil_file = f"silence_{idx}.wav"
+                                create_silence(sil_dur, sil_file)
+                                f_list.write(f"file '{sil_file}'\n")
+                                temp_files_to_cleanup.append(sil_file)
+                                current_time = start
+                                
+                            temp_tts = f"temp_tts_{idx}.wav"
+                            sync_tts = f"sync_tts_{idx}.wav"
+                            
+                            asyncio.run(generate_tts(
+                                clean_txt, voice_char, temp_tts, 
+                                engine=audio_engine_choice, ttsmaker_key=key_ttsmaker, 
+                                eleven_key=locals().get('eleven_key_input', ''), 
+                                custom_eleven_id=custom_id, gemini_key=final_gemini_key,
+                                pitch=pitch_level, voice_fx=fx_level 
+                            ))
+                            
+                            if "Synergy" in audio_engine_choice: time.sleep(1.0)
+                            
+                            tgt_dur = end - start
+                            actual_dur = adjust_audio_speed(temp_tts, sync_tts, tgt_dur)
+                            
+                            f_list.write(f"file '{sync_tts}'\n")
+                            temp_files_to_cleanup.extend([temp_tts, sync_tts])
+                            current_time += actual_dur
+                            
+                            progress_bar.progress((idx + 1) / total_lines)
+                    
+                    (ffmpeg.input(timeline_list, format='concat', safe=0)
+                     .output(a_generated, c='copy')
+                     .overwrite_output()
+                     .run(cmd=FFMPEG_BINARY, quiet=True))
+                     
+                    for f in temp_files_to_cleanup:
+                        if os.path.exists(f): os.remove(f)
+                    if os.path.exists(timeline_list): os.remove(timeline_list)
+                    
+                except Exception as e:
+                    st.error(f"အသံထုတ်လုပ်ခြင်း မအောင်မြင်ပါ (Audio Sync Error): {e}")
+                    st.stop()
 
-            status_box.info("⏳ [အဆင့် ၄/၄] ဗီဒီယို၊ အသံနှင့် စာတန်းထိုးအား ပေါင်းစပ် ဖန်တီးနေပါသည်...")
-            align_val = 2
-            margin_v_val = 60
-            if "Center" in sub_position: align_val, margin_v_val = 5, 10
-            elif "Top" in sub_position: align_val, margin_v_val = 8, 60
-            
-            prim_c = "&H0000FFFF" 
-            if "White" in sub_color: prim_c = "&H00FFFFFF"
-            elif "Green" in sub_color: prim_c = "&H0000FF00"
-            
-            border_s = 3 if sub_bg else 1
-            back_c = "&H80000000" if sub_bg else "&H00000000"
-            out_thick = 0 if sub_bg else sub_thickness
-            font_n = sub_font.split()[0]
-            
-            dynamic_style = f"FontName={font_n},FontSize={sub_size},PrimaryColour={prim_c},OutlineColour=&H00000000,BackColour={back_c},BorderStyle={border_s},Outline={out_thick},Shadow=1,Alignment={align_val},MarginV={margin_v_val}"
-            
-            selected_bgm_path = None
-            if selected_bgm not in ["None (BGM မထည့်ပါ)", "🤖 Auto (Random Select)"]:
-                selected_bgm_path = os.path.join("bgm_tracks", selected_bgm)
-            elif selected_bgm == "🤖 Auto (Random Select)" and bgm_files:
-                selected_bgm_path = os.path.join("bgm_tracks", random.choice(bgm_files))
-            
-            success, err_msg = render_premium_saas_video(
-                v_input, a_generated, parsed_timestamps, v_final, video_ratio, 
-                use_bypass=cb_bypass, use_blur=cb_blur, watermark=watermark_text, 
-                subtitle_mode=subtitle_mode, 
-                use_mirror=cb_mirror, use_color=cb_color, use_grain=cb_grain, use_fps=cb_fps,
-                sub_style_str=dynamic_style,
-                mute_orig=cb_mute_orig,
-                bgm_file=selected_bgm_path,
-                bgm_vol=bgm_volume
-            )
-            if success: 
-                status_box.empty()
-                st.session_state.render_success = True
-            else: 
-                st.error(f"Rendering Sync Failure: {err_msg}")
+            with st.spinner("⏳ [အဆင့် ၅+၆] ဗီဒီယိုနှင့် စာတန်းထိုးအား ရွေးချယ်ထားသော စနစ်အတိုင်း ဖန်တီးနေပါသည်..."):
+                align_val = 2
+                margin_v_val = 60
+                if "Center" in sub_position: align_val, margin_v_val = 5, 10
+                elif "Top" in sub_position: align_val, margin_v_val = 8, 60
+                
+                prim_c = "&H0000FFFF" 
+                if "White" in sub_color: prim_c = "&H00FFFFFF"
+                elif "Green" in sub_color: prim_c = "&H0000FF00"
+                
+                border_s = 3 if sub_bg else 1
+                back_c = "&H80000000" if sub_bg else "&H00000000"
+                out_thick = 0 if sub_bg else sub_thickness
+                font_n = sub_font.split()[0]
+                
+                dynamic_style = f"FontName={font_n},FontSize={sub_size},PrimaryColour={prim_c},OutlineColour=&H00000000,BackColour={back_c},BorderStyle={border_s},Outline={out_thick},Shadow=1,Alignment={align_val},MarginV={margin_v_val}"
+                
+                selected_bgm_path = None
+                if selected_bgm not in ["None (BGM မထည့်ပါ)", "🤖 Auto (Random Select)"]:
+                    selected_bgm_path = os.path.join("bgm_tracks", selected_bgm)
+                elif selected_bgm == "🤖 Auto (Random Select)" and bgm_files:
+                    selected_bgm_path = os.path.join("bgm_tracks", random.choice(bgm_files))
+                
+                success, err_msg = render_premium_saas_video(
+                    v_input, a_generated, parsed_timestamps, v_final, video_ratio, 
+                    use_bypass=cb_bypass, use_blur=cb_blur, watermark=watermark_text, 
+                    subtitle_mode=subtitle_mode, 
+                    use_mirror=cb_mirror, use_color=cb_color, use_grain=cb_grain, use_fps=cb_fps,
+                    sub_style_str=dynamic_style,
+                    mute_orig=cb_mute_orig,
+                    bgm_file=selected_bgm_path,
+                    bgm_vol=bgm_volume
+                )
+                if success: st.session_state.render_success = True
+                else: st.error(f"Rendering Sync Failure: {err_msg}")
 
     if st.session_state.render_success:
         st.balloons(); st.success(f"🎉 One-Click ဗီဒီယိုနှင့် စာတန်းထိုး အောင်မြင်စွာ ထွက်လာပါပြီ!")
@@ -796,9 +775,11 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                 st.video("AETHER_RECAP_FINAL.mp4")
                 st.markdown('<div class="setting-panel">', unsafe_allow_html=True)
                 st.markdown("<h4>📥 Download Dashboard</h4>", unsafe_allow_html=True)
-                st.markdown(get_download_html("AETHER_RECAP_FINAL.mp4", "Aether_Recap.mp4", "Download Recap Video (MP4)"), unsafe_allow_html=True)
+                with open("AETHER_RECAP_FINAL.mp4", "rb") as vf: 
+                    st.download_button("📥 Download Recap Video (MP4)", vf, "Aether_Recap.mp4", key="final_v")
                 if os.path.exists("subtitles.srt"):
-                    st.markdown(get_download_html("subtitles.srt", "Aether_Subs.srt", "Download Subtitles (.SRT)"), unsafe_allow_html=True)
+                    with open("subtitles.srt", "rb") as sf: 
+                        st.download_button("📥 Download Subtitles (.SRT)", sf, "Aether_Subs.srt", key="final_s")
                 st.markdown('</div>', unsafe_allow_html=True)
                 
         with col_out2:
@@ -836,7 +817,7 @@ elif app_mode == "🎥 Veo Video Studio":
                     if success:
                         st.success("🎉 Veo ဗီဒီယို အောင်မြင်စွာ ထွက်လာပါပြီ!")
                         st.video("veo_output.mp4")
-                        st.markdown(get_download_html("veo_output.mp4", "Veo_Generated.mp4", "Download Video"), unsafe_allow_html=True)
+                        with open("veo_output.mp4", "rb") as f: st.download_button("📥 Download Video", f, "Veo_Generated.mp4")
                     else: st.error("❌ API Request Failed. Veo မော်ဒယ်အား ယခု Key ဖြင့် သုံး၍မရသေးပါ။")
                 except Exception as e: st.error(f"Error: {e}")
 
@@ -867,7 +848,7 @@ elif app_mode == "🎵 Lyria Music Studio":
                     if success:
                         st.success("🎉 Lyria ဂီတ အောင်မြင်စွာ ထွက်လာပါပြီ!")
                         st.audio("lyria_output.mp3")
-                        st.markdown(get_download_html("lyria_output.mp3", "Lyria_Generated.mp3", "Download Music"), unsafe_allow_html=True)
+                        with open("lyria_output.mp3", "rb") as f: st.download_button("📥 Download Music", f, "Lyria_Generated.mp3")
                     else: st.error("❌ API Request Failed. Lyria မော်ဒယ်အား ယခု Key ဖြင့် သုံး၍မရသေးပါ။")
                 except Exception as e: st.error(f"Error: {e}")
 
@@ -1022,8 +1003,9 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                 st.code(f"{t_title}", language="text")
 
         st.markdown("### 📥 Download Subtitle")
-        st.markdown(get_download_html(st.session_state.srt_path, "MrZack_Whisper_Perfect.srt", "Download Subtitle (.srt ဖိုင်ရယူရန်)"), unsafe_allow_html=True)
-        st.caption("💡 **ပြီးပြည့်စုံသော နည်းလမ်း:** ယခုထွက်လာသော SRT သည် Whisper က ကွက်တိ နေရာချပေးထားပြီး Gemini က ဘာသာပြန်ပေးထားခြင်း ဖြစ်သဖြင့် CapCut PC ထဲသို့ သွင်းလိုက်ရုံဖြင့် အချိန်ကော စာသားပါ မလွဲမသွေ ကွက်တိကျနေပါလိမ့်မည်။")
+        with open(st.session_state.srt_path, "rb") as f:
+            st.download_button(label="📥 Download Subtitle (.srt ဖိုင်ရယူရန်)", data=f, file_name="MrZack_Whisper_Perfect.srt", mime="text/plain")
+            st.caption("💡 **ပြီးပြည့်စုံသော နည်းလမ်း:** ယခုထွက်လာသော SRT သည် Whisper က ကွက်တိ နေရာချပေးထားပြီး Gemini က ဘာသာပြန်ပေးထားခြင်း ဖြစ်သဖြင့် CapCut PC ထဲသို့ သွင်းလိုက်ရုံဖြင့် အချိန်ကော စာသားပါ မလွဲမသွေ ကွက်တိကျနေပါလိမ့်မည်။")
 
         st.markdown("### 📝 Subtitle Preview")
         with open(st.session_state.srt_path, "r", encoding="utf-8") as f:
@@ -1089,4 +1071,10 @@ elif app_mode == "📥 Video Downloader Hub":
         st.markdown("### 🎥 Video Preview")
         st.video(st.session_state.hub_file_path)
         
-        st.markdown(get_download_html(st.session_state.hub_file_path, st.session_state.hub_file_name, "ကိုယ့်ဖုန်း/စက်ထဲသို့ ရယူရန် (Download Video)"), unsafe_allow_html=True)
+        with open(st.session_state.hub_file_path, "rb") as file:
+            st.download_button(
+                label="📥 ကိုယ့်ဖုန်း/စက်ထဲသို့ ရယူရန် (Download Video)",
+                data=file,
+                file_name=st.session_state.hub_file_name,
+                mime="video/mp4"
+            )
