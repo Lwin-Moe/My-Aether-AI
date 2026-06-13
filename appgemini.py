@@ -45,7 +45,7 @@ st.set_page_config(page_title="AETHER STUDIO V52", layout="wide", page_icon="�
 st.markdown('''
     <style>
     /* Import Premium Fonts */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Montserrat:wght@500;700;800;900&display=swap');
+    @import url('[https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Montserrat:wght@500;700;800;900&display=swap](https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Montserrat:wght@500;700;800;900&display=swap)');
 
     /* Base App Styling */
     .stApp { 
@@ -227,9 +227,8 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
         
         last_err = ""
         for idx, current_key in enumerate(keys_list):
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key={current_key}"
+            url = f"[https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key=){current_key}"
             try:
-                # 👇 FIX: Added timeout=300 (5 minutes) to prevent infinite hangs
                 res = requests.post(url, json=payload, timeout=300)
                 if res.status_code == 200:
                     candidate = res.json().get("candidates", [{}])[0]
@@ -260,10 +259,9 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
     elif "ElevenLabs" in engine:
         if not eleven_key: raise Exception("ElevenLabs API Key လိုအပ်ပါသည်။")
         voice_id = custom_eleven_id.strip() if custom_eleven_id else ("21m00Tcm4TlvDq8ikWAM" if "Male" in voice_model else "AZnzlk1XvdvUeBnXmlld")
-        url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+        url = f"[https://api.elevenlabs.io/v1/text-to-speech/](https://api.elevenlabs.io/v1/text-to-speech/){voice_id}"
         headers = { "Accept": "audio/mpeg", "Content-Type": "application/json", "xi-api-key": eleven_key }
         payload = { "text": text, "model_id": "eleven_multilingual_v2", "voice_settings": { "stability": 0.45, "similarity_boost": 0.75 } }
-        # 👇 FIX: Added timeout
         res = requests.post(url, json=payload, headers=headers, timeout=300)
         if res.status_code == 200:
             with open(temp_out, "wb") as f: f.write(res.content)
@@ -272,9 +270,8 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
     elif "TTSMaker" in engine:
         if not ttsmaker_key: raise Exception("TTSMaker API Key လိုအပ်ပါသည်။")
         voice_id = 781 if "Female" in voice_model else 780
-        url = "https://api.ttsmaker.com/v1/create-tts-order"
+        url = "[https://api.ttsmaker.com/v1/create-tts-order](https://api.ttsmaker.com/v1/create-tts-order)"
         payload = { "tts_api_key": ttsmaker_key, "tts_text": text, "voice_id": voice_id, "audio_format": "mp3" }
-        # 👇 FIX: Added timeout
         res = requests.post(url, json=payload, timeout=300).json()
         if res.get("status") == "success":
             audio_data = requests.get(res["audio_file_url"]).content
@@ -307,8 +304,10 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
             if os.path.exists(temp_out): os.remove(temp_out)
 
 def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
-    clean_srt = raw_srt_text.replace('```srt', '').replace('
-```', '').strip()
+    # 👇 FIX: Bulletproof way to remove backticks without breaking String format
+    marker = chr(96) * 3
+    clean_srt = raw_srt_text.replace(f"{marker}srt", "").replace(marker, "").strip()
+    
     with open(output_file, "w", encoding="utf-8-sig") as f: f.write(clean_srt)
     parsed_lines = []
     full_speech = []
@@ -434,11 +433,13 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         client = genai.Client(api_key=api_key_input)
         audio_file = client.files.upload(file=a_extracted)
         response = client.models.generate_content(model='gemini-2.5-flash', contents=[audio_file, f"Generate Burmese SRT.{hormozi_rule}"])
-        raw_text = response.text.strip().replace('```srt', '').replace('```', '')
+        
+        # 👇 FIX: Bulletproof way to remove backticks
+        marker = chr(96) * 3
+        raw_text = response.text.strip().replace(f"{marker}srt", "").replace(marker, "")
         
         parsed_timestamps, speech_text = parse_and_save_real_srt(raw_text, srt_final, use_fade=sub_fade)
         
-        # 👇 FIX: Removed ASS tags from text before sending to TTS engine
         raw_speech_text = " ".join([t for _,_,t in parsed_timestamps])
         clean_speech_text = re.sub(r'\{.*?\}', '', raw_speech_text)
         
@@ -453,7 +454,108 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         st.video(v_final)
 
 # --- Other modes (Veo/Lyria/Translation/Downloader) remain unchanged ---
-elif app_mode == "🎥 Veo Video Studio": pass
-elif app_mode == "🎵 Lyria Music Studio": pass
-elif app_mode == "⚡ Translation/Transcript Studio": pass
-elif app_mode == "📥 Video Downloader Hub": pass
+elif app_mode == "🎥 Veo Video Studio": 
+    st.markdown('<div class="setting-panel"><h3>🎥 Veo 2.0 Cinematic Video Generator</h3>', unsafe_allow_html=True)
+    st.markdown("Movie Recap ဗီဒီယိုများအတွက် လိုအပ်သော B-Roll နှင့် နောက်ခံရုပ်သံဖိုင်များကို AI ဖြင့် အလွယ်တကူ ဖန်တီးပါ။")
+    video_prompt = st.text_area("🎬 Enter Video Prompt", placeholder="e.g., A cinematic slow-motion drone shot...")
+    if st.button("🚀 Generate Veo Video"):
+        pass
+
+elif app_mode == "🎵 Lyria Music Studio": 
+    st.markdown('<div class="setting-panel"><h3>🎵 Lyria 3 Pro Music Generator</h3>', unsafe_allow_html=True)
+    st.markdown("Movie Recap ဗီဒီယိုများအတွက် ဇာတ်ဝင်ခန်းနှင့် လိုက်ဖက်မည့် နောက်ခံဂီတ (BGM) များကို AI ဖြင့် ဖန်တီးပါ။")
+    music_prompt = st.text_area("🎧 Enter Music Prompt", placeholder="e.g., Epic cinematic orchestral background music...")
+    if st.button("🚀 Generate Lyria Music"):
+        pass
+
+elif app_mode == "⚡ Translation/Transcript Studio": 
+    st.markdown('<h2 style="color:#00e5ff;">⚡ Translation & Subtitle Studio (AI Dual Engine)</h2>', unsafe_allow_html=True)
+    st.markdown("Whisper AI ဖြင့် မီလီစက္ကန့်မလွဲ Timeline ယူ၍ Gemini 2.5 ဖြင့် အဓိပ္ပာယ်မှန်ကန်စွာ ဘာသာပြန်ဆိုခြင်း")
+
+    st.markdown("### 📥 1. Video URL ထည့်ရန်")
+    video_url = st.text_input("YouTube / FB / TikTok / Rednote URL ထည့်ပါ:")
+    
+    if "srt_path" not in st.session_state: st.session_state.srt_path = None
+    if "title_suggestions" not in st.session_state: st.session_state.title_suggestions = []
+    if "process_done" not in st.session_state: st.session_state.process_done = False
+
+    if st.button("🚀 စတင်လုပ်ဆောင်မည်"):
+        raw_keys = load_key(API_KEY_FILE)
+        api_keys = [k.strip() for k in raw_keys.split(",") if k.strip()] if raw_keys else []
+        if not api_keys: st.error("⚠️ API Key လိုအပ်ပါသည်။")
+        elif not video_url: st.error("⚠️ URL ထည့်သွင်းပါ။")
+        else:
+            st.session_state.process_done = False
+            with st.spinner("🔄 အလုပ်လုပ်နေပါသည်..."):
+                try:
+                    import whisper 
+                    project_id = "project_" + str(int(time.time()))
+                    ydl_opts = {'format': 'bestaudio/best', 'outtmpl': f'{project_id}.%(ext)s', 'quiet': True}
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        info = ydl.extract_info(video_url, download=True)
+                        downloaded_audio = ydl.prepare_filename(info)
+
+                    wav_path = f"{project_id}.wav"
+                    (ffmpeg.input(downloaded_audio).output(wav_path, format='wav', acodec='pcm_s16le', ac=1, ar='16k').overwrite_output().run(quiet=True))
+                    if os.path.exists(downloaded_audio): os.remove(downloaded_audio)
+
+                    whisper_model = whisper.load_model("base") 
+                    whisper_result = whisper_model.transcribe(wav_path, word_timestamps=False)
+                    
+                    whisper_json = [{"start": round(s["start"], 3), "end": round(s["end"], 3), "text": s["text"].strip()} for s in whisper_result.get("segments", [])]
+                    
+                    prompt = f"Translate and structure subtitles as strict JSON: {json.dumps(whisper_json)}"
+                    
+                    for current_key in api_keys:
+                        try:
+                            client = genai.Client(api_key=current_key)
+                            response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
+                            # 👇 FIX: Bulletproof way to remove backticks for JSON
+                            marker = chr(96) * 3
+                            raw_text = response.text.strip().replace(f"{marker}json", "").replace(marker, "")
+                            response_json = json.loads(raw_text)
+                            break 
+                        except Exception: continue
+                    
+                    if response_json:
+                        st.session_state.title_suggestions = response_json.get("titles", [])
+                        final_subtitles = response_json.get("subtitles", [])
+
+                        st.session_state.srt_path = f"{project_id}.srt"
+                        with open(st.session_state.srt_path, "w", encoding="utf-8-sig") as f:
+                            for i, sub in enumerate(final_subtitles):
+                                def format_seconds(secs):
+                                    t = float(secs)
+                                    return f"{int(t//3600):02d}:{int((t%3600)//60):02d}:{int(t%60):02d},{int(round((t%1)*1000)):03d}"
+                                f.write(f"{i+1}\n{format_seconds(sub['start'])} --> {format_seconds(sub['end'])}\n{sub['text']}\n\n")
+
+                        st.session_state.process_done = True
+                        st.rerun()
+                except Exception as e: st.error(f"❌ Error: {e}")
+                finally:
+                    if os.path.exists(wav_path): os.remove(wav_path)
+
+    if st.session_state.process_done and st.session_state.srt_path and os.path.exists(st.session_state.srt_path):
+        st.markdown("---")
+        with open(st.session_state.srt_path, "rb") as f:
+            st.download_button("📥 Download Subtitle (.srt)", data=f, file_name="Translated_Subs.srt", mime="text/plain")
+        with open(st.session_state.srt_path, "r", encoding="utf-8") as f:
+            st.text_area("SRT Preview", value="".join(f.readlines()[:20]), height=150)
+
+elif app_mode == "📥 Video Downloader Hub": 
+    st.markdown('<h2 style="color:#00e5ff;">📥 Video Downloader Hub</h2>', unsafe_allow_html=True)
+    st.markdown("YouTube, TikTok, Facebook, Rednote (小红书) စသည့် ဗီဒီယိုများကို မူရင်းအတိုင်း ဒေါင်းလုဒ်ဆွဲရန်")
+    dl_url = st.text_input("ဗီဒီယို URL ကို ဒီမှာ ထည့်ပါ:")
+    if st.button("⬇️ ဗီဒီယို ဒေါင်းလုဒ်ဆွဲမည်") and dl_url:
+        with st.spinner("🔄 ဗီဒီယို ဖတ်ယူနေပါသည်..."):
+            try:
+                dl_project_id = "dl_" + str(int(time.time()))
+                ydl_hub_opts = {'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best', 'outtmpl': f'{dl_project_id}.%(ext)s', 'quiet': True}
+                with yt_dlp.YoutubeDL(ydl_hub_opts) as ydl:
+                    info_dict = ydl.extract_info(dl_url, download=True)
+                    dl_path = ydl.prepare_filename(info_dict)
+                st.success("🎉 အောင်မြင်ပါသည်!")
+                st.video(dl_path)
+                with open(dl_path, "rb") as file:
+                    st.download_button("📥 Download Video", data=file, file_name="Downloaded_Video.mp4", mime="video/mp4")
+            except Exception as e: st.error(f"❌ Error: {e}")
