@@ -191,7 +191,6 @@ def extract_audio_fast(video_in, audio_out="temp_extracted.mp3"):
 async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default Free)", ttsmaker_key="", eleven_key="", custom_eleven_id="", gemini_key="", pitch=0, voice_fx="None (Standard Voice)"):
     if not text.strip(): return
     
-    # ယာယီအသံဖိုင် သတ်မှတ်ခြင်း (Pitch သို့မဟုတ် FX ပြောင်းလဲရန် လိုအပ်ပါက)
     needs_ffmpeg = pitch != 0 or voice_fx != "None (Standard Voice)"
     temp_out = "temp_raw_audio_fx.wav" if needs_ffmpeg else output_file
 
@@ -274,18 +273,15 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
         communicate = edge_tts.Communicate(text, voice)
         await communicate.save(temp_out)
 
-    # 🎚️ Pitch & Cinematic Voice FX (FFmpeg အသုံးပြု၍ ပေါင်းစပ်အသံပြောင်းခြင်း)
     if needs_ffmpeg:
         audio = ffmpeg.input(temp_out)
         
-        # 1. Pitch Shift (အသံအနိမ့်အမြင့်)
         if pitch != 0:
             factor = 1.0 + (pitch / 100.0) 
             new_sr = int(44100 * factor)
             atempo_val = 1.0 / factor
             audio = audio.filter('asetrate', new_sr).filter('atempo', atempo_val)
         
-        # 2. Cinematic FX 
         if "Epic" in voice_fx:
             audio = audio.filter('bass', g=12, f=120)
         elif "Walkie-Talkie" in voice_fx:
@@ -358,7 +354,7 @@ def parse_and_save_real_srt(raw_srt_text, output_file):
         
     return parsed_lines, " ".join(full_speech)
 
-def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_bypass=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)"):
+def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_bypass=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)", use_mirror=False, use_color=False, use_grain=False, use_fps=False):
     try:
         a_dur = get_file_duration(in_a)
         v_max_dur = get_file_duration(in_v)
@@ -375,9 +371,23 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
                 f.write(f"{i}\n{fmt_t(start)} --> {fmt_t(safe_end)}\n{text}\n\n")
         
         video = ffmpeg.input(in_v).video
+        
+        # 👇 NEW: Anti-Copyright Visual Filters
         if use_bypass:
             video = ffmpeg.filter(video, 'scale', '2*trunc(iw*1.08/2)', '2*trunc(ih*1.08/2)')
             video = ffmpeg.filter(video, 'crop', 'iw/1.08', 'ih/1.08')
+            
+        if use_mirror:
+            video = ffmpeg.filter(video, 'hflip')
+            
+        if use_color:
+            video = ffmpeg.filter(video, 'eq', brightness=0.02, contrast=1.05, saturation=1.1)
+            
+        if use_grain:
+            video = ffmpeg.filter(video, 'noise', alls=2, allf='t+u')
+            
+        if use_fps:
+            video = ffmpeg.filter(video, 'fps', fps=24, round='near')
         
         video = ffmpeg.filter(video, 'scale', 'trunc(oh*a/2)*2', 1080, flags='bicubic')
         audio = ffmpeg.input(in_a).audio
@@ -464,11 +474,20 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         
         key_ttsmaker = st.text_input("TTSMaker API Key", type="password") if "TTSMaker" in audio_engine_choice else ""
 
+        # 👇 NEW: Added individual checkboxes for Visual Manipulations
         st.markdown("---")
         st.markdown("### 📐 4. Layout & Protection")
         video_ratio = st.selectbox("Crop Ratio", ["Original", "9:16 (TikTok/Shorts)", "16:9 (YouTube)"])
-        cb_bypass = st.checkbox("🔒 Copyright Bypass Mode (Smart Zoom)", value=True)
-        cb_blur = st.checkbox("👁️ Cinematic Black Mask (Hide Chinese Subs)", value=True)
+        
+        st.markdown("<p style='margin-bottom: 5px; font-weight: bold; color: #818cf8 !important;'>🛡️ Anti-Copyright Options</p>", unsafe_allow_html=True)
+        cb_bypass = st.checkbox("🔍 Smart Zoom (ဖြတ်တောက်မည်)", value=True)
+        cb_mirror = st.checkbox("🪞 Mirror Effect (ဘယ်ညာလှန်မည်)", value=False)
+        cb_color = st.checkbox("🎨 Color Tweaks (အရောင်ကစားမည်)", value=False)
+        cb_grain = st.checkbox("🎞️ Subtle Film Grain (ရုပ်ရှင်အမှုန်ထည့်မည်)", value=False)
+        cb_fps = st.checkbox("🎬 Cinematic 24 FPS (Frame Rate ပြောင်းမည်)", value=False)
+        
+        st.markdown("<p style='margin-bottom: 5px; margin-top: 10px; font-weight: bold; color: #818cf8 !important;'>🎬 Visual & Subs</p>", unsafe_allow_html=True)
+        cb_blur = st.checkbox("👁️ Cinematic Black Mask (တရုတ်စာတန်းဖျောက်)", value=True)
         watermark_text = st.text_input("Text Watermark", "")
 
         st.markdown("---")
@@ -494,7 +513,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
             
         voice_char = st.selectbox("Select Character Voice", dynamic_options, index=0)
         
-        # 👇 NEW: Pitch & FX Controls in Column 2
         pitch_level = st.slider("🎙️ Voice Pitch (Frequency Adjust)", min_value=-30, max_value=30, value=0, step=5, help="0 = မူရင်းအသံ။ အနုတ်ပြလျှင် အသံပို၍ ဩမည်/ကြီးမည်၊ အပေါင်းပြလျှင် အသံပို၍ စူးမည်/ငယ်မည်။")
         
         fx_level = st.selectbox("🎧 Cinematic Voice FX", [
@@ -521,7 +539,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                         custom_eleven_id=custom_id, 
                         gemini_key=final_gemini_key,
                         pitch=pitch_level,
-                        voice_fx=fx_level # FX အား Sample တွင်ထည့်သွင်းခြင်း
+                        voice_fx=fx_level 
                     ))
                     st.audio(sample_file)
                 except Exception as e:
@@ -637,14 +655,20 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                         custom_eleven_id=custom_id, 
                         gemini_key=final_gemini_key,
                         pitch=pitch_level,
-                        voice_fx=fx_level # Final Render တွင် FX ထည့်သွင်းခြင်း
+                        voice_fx=fx_level 
                     ))
                 except Exception as e:
                     st.error(f"အသံထုတ်လုပ်ခြင်း မအောင်မြင်ပါ: {e}")
                     st.stop()
 
             with st.spinner("⏳ [အဆင့် ၅+၆] ဗီဒီယိုနှင့် စာတန်းထိုးအား ရွေးချယ်ထားသော စနစ်အတိုင်း ဖန်တီးနေပါသည်..."):
-                success, err_msg = render_premium_saas_video(v_input, a_generated, parsed_timestamps, v_final, video_ratio, cb_bypass, cb_blur, watermark_text, subtitle_mode)
+                # 👇 NEW: Passing anti-copyright options to the rendering function
+                success, err_msg = render_premium_saas_video(
+                    v_input, a_generated, parsed_timestamps, v_final, video_ratio, 
+                    use_bypass=cb_bypass, use_blur=cb_blur, watermark=watermark_text, 
+                    subtitle_mode=subtitle_mode, 
+                    use_mirror=cb_mirror, use_color=cb_color, use_grain=cb_grain, use_fps=cb_fps
+                )
                 if success: st.session_state.render_success = True
                 else: st.error(f"Rendering Sync Failure: {err_msg}")
 
