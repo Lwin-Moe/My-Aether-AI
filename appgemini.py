@@ -21,6 +21,7 @@ import wave
 import subprocess
 import json
 import datetime
+import random
 
 FFMPEG_BINARY = imageio_ffmpeg.get_ffmpeg_exe()
 
@@ -539,6 +540,20 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         script_cta = st.checkbox("💬 Call to Action (Comment ခေါ်မည်)", value=False)
         st.markdown("</div>", unsafe_allow_html=True)
 
+        # 👇 ADDED: Audio Mixing & BGM Selection Box
+        st.markdown("<div class='sub-box'>", unsafe_allow_html=True)
+        st.markdown("<p style='margin-bottom: 10px; font-weight: bold; color: #10b981 !important; font-size: 16px;'>🎵 Audio Mixing & BGM</p>", unsafe_allow_html=True)
+        bgm_options = ["None (BGM မထည့်ပါ)"]
+        bgm_files = []
+        if os.path.exists("bgm_tracks"):
+            bgm_files = [f for f in os.listdir("bgm_tracks") if f.endswith(".mp3")]
+            if bgm_files:
+                bgm_options.insert(1, "🤖 Auto (Random Select)")
+                bgm_options.extend(bgm_files)
+        selected_bgm = st.selectbox("🎼 Background Music", bgm_options)
+        bgm_volume = st.slider("🔊 BGM Volume", 1, 50, 10) / 100.0
+        st.markdown("</div>", unsafe_allow_html=True)
+
     with col_in2:
         if "Synergy" in audio_engine_choice:
             dynamic_options = ["Synergy Puck (Male)", "Synergy Aoede (Female)", "Synergy Charon (Male - Deep)"]
@@ -676,7 +691,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                                 break 
                             except Exception as e:
                                 last_err = str(e)
-                                # 👇 FIX: 503 error check added. Automatically loop to next key instead of breaking.
                                 if "429" in last_err or "503" in last_err or "unavailable" in last_err.lower() or "quota" in last_err.lower() or "exhausted" in last_err.lower() or "limit" in last_err.lower():
                                     st.toast(f"⚠️ Key {idx+1} တွင် ခေတ္တပြဿနာရှိပါသဖြင့် နောက် Key ကို ပြောင်းလဲချိတ်ဆက်နေပါသည်...", icon="🔄")
                                     continue
@@ -742,7 +756,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     st.error(f"အသံထုတ်လုပ်ခြင်း မအောင်မြင်ပါ: {e}")
                     st.stop()
 
-            with st.spinner("⏳ [အဆင့် ၅+၆] ဗီဒီယိုနှင့် စာတန်းထိုးအား ရွေးချယ်ထားသော စနစ်အတိုင်း ဖန်တီးနေပါသည်..."):
+            with st.spinner("⏳ [အဆင့် ၅/၆] ဗီဒီယိုနှင့် စာတန်းထိုးအား ရွေးချယ်ထားသော စနစ်အတိုင်း ဖန်တီးနေပါသည်..."):
                 align_val = 2
                 margin_v_val = 60
                 if "Center" in sub_position: align_val, margin_v_val = 5, 10
@@ -766,8 +780,43 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     use_mirror=cb_mirror, use_color=cb_color, use_grain=cb_grain, use_fps=cb_fps,
                     sub_style_str=dynamic_style
                 )
-                if success: st.session_state.render_success = True
-                else: st.error(f"Rendering Sync Failure: {err_msg}")
+                if not success: 
+                    st.error(f"Rendering Sync Failure: {err_msg}")
+
+            # 👇 ADDED: Two-Step BGM Render Pass (Only touches audio on top of the perfectly synced video)
+            if success and selected_bgm not in ["None (BGM မထည့်ပါ)"]:
+                with st.spinner("⏳ [အဆင့် အပို] BGM သီချင်း ထပ်မံပေါင်းစပ်နေပါသည်..."):
+                    selected_bgm_path = None
+                    if selected_bgm == "🤖 Auto (Random Select)" and bgm_files:
+                        selected_bgm_path = os.path.join("bgm_tracks", random.choice(bgm_files))
+                    else:
+                        selected_bgm_path = os.path.join("bgm_tracks", selected_bgm)
+                        
+                    if selected_bgm_path and os.path.exists(selected_bgm_path):
+                        try:
+                            temp_final = "temp_with_bgm.mp4"
+                            v_dur = get_file_duration(v_final)
+                            in_video = ffmpeg.input(v_final)
+                            in_bgm = ffmpeg.input(selected_bgm_path, stream_loop=-1)
+                            
+                            # Force BGM to 44100 to prevent speed issues and scale volume
+                            bgm_audio = in_bgm.audio.filter('aresample', 44100).filter('volume', bgm_volume)
+                            
+                            # Mix perfectly synced video audio with BGM
+                            mixed_audio = ffmpeg.filter([in_video.audio, bgm_audio], 'amix', inputs=2, duration='first').filter('volume', 2.0)
+                            
+                            # Use vcodec='copy' to preserve original video quality and render instantly
+                            (ffmpeg.output(in_video.video, mixed_audio, temp_final, vcodec='copy', acodec='aac', t=v_dur)
+                             .overwrite_output()
+                             .run(cmd=FFMPEG_BINARY, quiet=True))
+                            
+                            import shutil
+                            shutil.move(temp_final, v_final)
+                        except Exception as e:
+                            pass # Fallback: Even if BGM fails, user still gets the perfectly synced first-pass video
+            
+            if success:
+                st.session_state.render_success = True
 
     if st.session_state.render_success:
         st.balloons(); st.success(f"🎉 One-Click ဗီဒီယိုနှင့် စာတန်းထိုး အောင်မြင်စွာ ထွက်လာပါပြီ!")
@@ -956,8 +1005,9 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                                 contents=prompt
                             )
                             
-                            marker = chr(96) * 3
-                            raw_text = response.text.strip().replace(f"{marker}json", "").replace(marker, "")
+                            bt = chr(96)
+                            tbt = bt * 3
+                            raw_text = response.text.strip().replace(f"{tbt}json", "").replace(tbt, "")
                             response_json = json.loads(raw_text)
                             break 
                         except Exception as api_error:
