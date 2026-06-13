@@ -180,7 +180,7 @@ def get_file_duration(file_path):
 def download_video_from_url(url, output_path="input_temp.mp4"):
     if os.path.exists(output_path): os.remove(output_path)
     
-    # 👇 FIX: Added Extractor Args to bypass YouTube Bot Blocks (Android/Web Client spoofing)
+    # 👇 FIX: Aggressive 403 Bypass configuration for yt-dlp
     ydl_opts = {
         'outtmpl': output_path, 
         'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best', 
@@ -188,9 +188,12 @@ def download_video_from_url(url, output_path="input_temp.mp4"):
         'no_warnings': True,
         'nocheckcertificate': True,
         'ffmpeg_location': FFMPEG_BINARY,
-        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
+        'source_address': '0.0.0.0',  # Bypass IPv6 blocks
+        'extractor_args': {'youtube': {'player_client': ['tv', 'ios', 'web']}}, # Use TV/iOS clients
         'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Sec-Fetch-Mode': 'navigate'
         }
     }
     try:
@@ -198,7 +201,7 @@ def download_video_from_url(url, output_path="input_temp.mp4"):
             ydl.download([url])
         return output_path
     except Exception as e: 
-        raise Exception(f"YouTube Download Error: ဗီဒီယိုကို ဆွဲယူ၍မရပါ။ Server IP Block ခံရခြင်း (သို့) Private Video ဖြစ်နိုင်ပါသည်။ ({str(e)})")
+        raise Exception(f"YouTube Download Error: ဗီဒီယိုကို ဆွဲယူ၍မရပါ။ Server IP Block ခံရခြင်း (သို့) Private Video ဖြစ်နိုင်ပါသည်။ (ERROR: {str(e)})")
 
 def extract_audio_fast(video_in, audio_out="temp_extracted.mp3"):
     if os.path.exists(audio_out): os.remove(audio_out)
@@ -208,14 +211,15 @@ def extract_audio_fast(video_in, audio_out="temp_extracted.mp3"):
         if os.path.exists(audio_out): return audio_out
     except: pass
     try:
-        # 👇 FIX: Consistent YouTube bypass for audio extraction
+        # 👇 FIX: Aggressive 403 Bypass for audio extraction fallback
         ydl_opts = {
             'format': 'bestaudio/best', 
             'outtmpl': 'temp_extracted', 
             'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'}], 
             'quiet': True, 
             'nocheckcertificate': True,
-            'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
+            'source_address': '0.0.0.0',
+            'extractor_args': {'youtube': {'player_client': ['tv', 'ios', 'web']}},
             'ffmpeg_location': FFMPEG_BINARY
         }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl: 
@@ -606,7 +610,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
             v_input, a_extracted, a_generated, v_final, srt_final = "input_temp.mp4", "temp_extracted.mp3", "voice_temp.wav", "AETHER_RECAP_FINAL.mp4", "subtitles.srt"
 
             with st.spinner("⏳ [အဆင့် ၁/၆] ဗီဒီယို ဖိုင်အား စနစ်ထဲသို့ ဆွဲသွင်းနေပါသည်..."):
-                # 👇 FIX: Added try-except so Streamlit catches the YouTube DL Error gracefully
                 try:
                     if uploaded_file:
                         with open(v_input, "wb") as f: f.write(uploaded_file.read())
@@ -866,16 +869,17 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                     project_id = "project_" + str(int(time.time()))
                     
                     st.info("⬇️ ဗီဒီယိုမှ အသံလမ်းကြောင်းကို ရယူနေပါသည်...")
-                    # 👇 FIX: Consistent bypass for Whisper Downloader
+                    # 👇 FIX: Added Extractor Args for Translation Hub as well
                     ydl_opts = {
                         'format': 'bestaudio/best',
                         'outtmpl': f'{project_id}.%(ext)s',
                         'quiet': True,
                         'no_warnings': True,
                         'nocheckcertificate': True,
-                        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
+                        'source_address': '0.0.0.0',
+                        'extractor_args': {'youtube': {'player_client': ['tv', 'ios', 'web']}},
                         'http_headers': {
-                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
                         }
                     }
                     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -1014,16 +1018,17 @@ elif app_mode == "📥 Video Downloader Hub":
                 try:
                     dl_project_id = "dl_" + str(int(time.time()))
                     
-                    # 👇 FIX: Consistent bypass for Video Downloader Hub
+                    # 👇 FIX: Extractor Args for Video Downloader Hub
                     ydl_hub_opts = {
                         'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
                         'outtmpl': f'{dl_project_id}.%(ext)s',
                         'quiet': True,
                         'no_warnings': True,
                         'nocheckcertificate': True,
-                        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
+                        'source_address': '0.0.0.0',
+                        'extractor_args': {'youtube': {'player_client': ['tv', 'ios', 'web']}},
                         'http_headers': {
-                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
                         }
                     }
                     
@@ -1040,7 +1045,7 @@ elif app_mode == "📥 Video Downloader Hub":
                     st.rerun()
 
                 except Exception as dl_err:
-                    st.error(f"❌ ဗီဒီယို ဒေါင်းလုဒ်ဆွဲခြင်း မအောင်မြင်ပါ။ Link မှားနေခြင်း (သို့မဟုတ်) ပုဂ္ဂလိက ဗီဒီယို ဖြစ်နိုင်ပါသည်။")
+                    st.error(f"❌ YouTube Download Error: ဗီဒီယို ဒေါင်းလုဒ်ဆွဲခြင်း မအောင်မြင်ပါ။ IP Block ခံရခြင်း (သို့) Private Video ဖြစ်နိုင်ပါသည်။ ({str(dl_err)})")
                     with st.expander("🔍 အသေးစိတ် Error Details ကြည့်ရန်"):
                         st.write(str(dl_err))
 
