@@ -342,24 +342,21 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         
         video = ffmpeg.filter(video, 'scale', 'trunc(oh*a/2)*2', 1080, flags='bicubic')
         
-        # Audio Mixing (AI Sync output is directly used as Primary)
+        # Audio Mixing (AI Sync output is directly used as Primary, completely untouched)
         tts_audio = ffmpeg.input(in_a).audio
         audio_streams = [tts_audio]
         
-        # 👇 FIX: Bulletproof BGM Mixing (Prevents PTS Desync & Volume Drop)
+        # 👇 FIX: Bulletproof TTS Isolation. Forces BGM to match TTS Hz & trims it explicitly to prevent TTS manipulation.
         if not mute_orig:
-            orig_audio = ffmpeg.input(in_v).audio.filter('volume', 0.1)
+            orig_audio = ffmpeg.input(in_v).audio.filter('aresample', 44100).filter('atrim', duration=a_dur).filter('asetpts', 'PTS-STARTPTS').filter('volume', 0.1)
             audio_streams.append(orig_audio)
             
         if bgm_file and os.path.exists(bgm_file):
-            # asetpts is crucial here so looped BGM doesn't drag the AI speech out of sync
-            bgm_audio = ffmpeg.input(bgm_file, stream_loop=-1).audio.filter('asetpts', 'N/SR/TB').filter('volume', bgm_vol)
+            bgm_audio = ffmpeg.input(bgm_file, stream_loop=-1).audio.filter('aresample', 44100).filter('atrim', duration=a_dur).filter('asetpts', 'PTS-STARTPTS').filter('volume', bgm_vol)
             audio_streams.append(bgm_audio)
             
         if len(audio_streams) > 1:
-            # duration='first' perfectly locks the final output to the AI Speech length.
             final_audio = ffmpeg.filter(audio_streams, 'amix', inputs=len(audio_streams), duration='first', dropout_transition=0)
-            # Restore the primary volume that amix automatically reduced
             final_audio = final_audio.filter('volume', str(len(audio_streams)))
         else:
             final_audio = audio_streams[0]
@@ -589,7 +586,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     if script_tone: extra_rules += " [TONE]: Inject strong emotions and character tones matching the scene."
                     if script_cta: extra_rules += " [CTA]: End the script with a strong Call to Action (CTA) asking a question to encourage comments."
 
-                    hormozi_rule = " [HORMOZI]: Split the subtitles into very short chunks (maximum 3-5 words per subtitle). Do not write long sentences in a single block. Keep them extremely fast-paced and punchy." if sub_short else ""
+                    hormozi_rule = " [HORMOZI]: Split the subtitles into very short chunks (maximum 3-5 words per subtitle). Do not write long sentences in a single block." if sub_short else ""
                     concise_rule = " 5. CONCISENESS: Your Burmese translation MUST BE EXTREMELY BRIEF and FAST-PACED to match the exact duration of the English original. Avoid unnecessary words."
                     
                     base_prompt = f"You are an expert Myanmar (Burmese) TikTok movie recap narrator. I am providing you with an English SRT file translated from the original audio. Translate and adapt the text into highly engaging, natural spoken Burmese (မြန်မာစကားပြောဟန်). STRICT RULES: 1. SYNERGY AUDIO TAGS: You MUST include inline audio tags to direct the TTS voice. Use tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers], [reluctantly] at the beginning of relevant sentences to add emotion and dramatic pacing. 2. NO ENGLISH TRANSLITERATION: Translate meanings naturally. 3. FORMAT: Keep the EXACT original SRT timecodes and indices. 4. Output ONLY the raw SRT format.{concise_rule}{extra_rules}{hormozi_rule}"
