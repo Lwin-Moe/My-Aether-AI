@@ -188,8 +188,11 @@ def extract_audio_fast(video_in, audio_out="temp_extracted.mp3"):
         return audio_out
     except: return None
 
-async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default Free)", ttsmaker_key="", eleven_key="", custom_eleven_id="", gemini_key=""):
+async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default Free)", ttsmaker_key="", eleven_key="", custom_eleven_id="", gemini_key="", pitch=0):
     if not text.strip(): return
+    
+    # ယာယီအသံဖိုင် သတ်မှတ်ခြင်း (Pitch ပြောင်းလဲရန်)
+    temp_out = "temp_raw_audio_pitch.wav" if pitch != 0 else output_file
 
     if "Synergy" in engine:
         if not gemini_key: raise Exception("Gemini Synergy TTS အား အသုံးပြုရန် API Key လိုအပ်ပါသည်။")
@@ -224,12 +227,12 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
                     
                     audio_b64 = candidate["content"]["parts"][0]["inlineData"]["data"]
                     pcm_data = base64.b64decode(audio_b64)
-                    with wave.open(output_file, "wb") as wf:
+                    with wave.open(temp_out, "wb") as wf:
                         wf.setnchannels(1)
                         wf.setsampwidth(2)
                         wf.setframerate(24000)
                         wf.writeframes(pcm_data)
-                    return
+                    break
                 elif res.status_code == 429:
                     last_err = f"Key {current_key[-4:]} ၏ တစ်နေ့စာ Limit ပြည့်သွားပါပြီ။"
                     continue
@@ -240,7 +243,8 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
                 last_err = str(e)
                 continue
                 
-        raise Exception(f"ထည့်သွင်းထားသော Key များအားလုံး Limit ပြည့်သွားပါပြီ။ Key အသစ် ထပ်ထည့်ပါ။ နောက်ဆုံး Error: {last_err}")
+        if not os.path.exists(temp_out):
+            raise Exception(f"ထည့်သွင်းထားသော Key များအားလုံး Limit ပြည့်သွားပါပြီ။ Key အသစ် ထပ်ထည့်ပါ။ နောက်ဆုံး Error: {last_err}")
 
     elif "ElevenLabs" in engine:
         if not eleven_key: raise Exception("ElevenLabs API Key လိုအပ်ပါသည်။")
@@ -250,8 +254,7 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
         payload = { "text": text, "model_id": "eleven_multilingual_v2", "voice_settings": { "stability": 0.45, "similarity_boost": 0.75 } }
         res = requests.post(url, json=payload, headers=headers)
         if res.status_code == 200:
-            with open(output_file, "wb") as f: f.write(res.content)
-            return
+            with open(temp_out, "wb") as f: f.write(res.content)
         else: raise Exception(f"ElevenLabs API Error: {res.text}")
             
     elif "TTSMaker" in engine:
@@ -262,14 +265,34 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
         res = requests.post(url, json=payload).json()
         if res.get("status") == "success":
             audio_data = requests.get(res["audio_file_url"]).content
-            with open(output_file, "wb") as f: f.write(audio_data)
-            return
+            with open(temp_out, "wb") as f: f.write(audio_data)
         else: raise Exception(f"TTSMaker API Error: {res}")
 
     else:
         voice = "my-MM-ThihaNeural" if "Male" in voice_model else "my-MM-NilarNeural"
         communicate = edge_tts.Communicate(text, voice)
-        await communicate.save(output_file)
+        await communicate.save(temp_out)
+
+    # 🎚️ Pitch Control / Frequency Shift (FFmpeg အသုံးပြု၍ မူရင်းအမြန်နှုန်းအတိုင်း အသံပြောင်းခြင်း)
+    if pitch != 0:
+        factor = 1.0 + (pitch / 100.0) # -30 -> 0.7 (အသံဩမည်), +30 -> 1.3 (အသံစူးမည်)
+        new_sr = int(44100 * factor)
+        atempo_val = 1.0 / factor
+        try:
+            (
+                ffmpeg
+                .input(temp_out)
+                .filter('asetrate', new_sr)
+                .filter('atempo', atempo_val)
+                .output(output_file, acodec='pcm_s16le', ac=1, ar='44100')
+                .overwrite_output()
+                .run(cmd=FFMPEG_BINARY, quiet=True)
+            )
+        except Exception as e:
+            import shutil
+            shutil.copy(temp_out, output_file)
+        finally:
+            if os.path.exists(temp_out): os.remove(temp_out)
 
 def parse_and_save_real_srt(raw_srt_text, output_file):
     clean_srt = raw_srt_text.replace("```srt", "").replace("```", "").strip()
@@ -455,6 +478,29 @@ if app_mode == "🎙️ Movie Dubbing Studio":
             
         voice_char = st.selectbox("Select Character Voice", dynamic_options, index=0)
         
+        # 👇 NEW: Pitch Control & Sample Generator
+        pitch_level = st.slider("🎙️ Voice Pitch (Frequency Adjust)", min_value=-30, max_value=30, value=0, step=5, help="0 = မူရင်းအသံ။ အနုတ်ပြလျှင် အသံပို၍ ဩမည်/ကြီးမည်၊ အပေါင်းပြလျှင် အသံပို၍ စူးမည်/ငယ်မည်။")
+        
+        if st.button("🔊 Play Voice Sample"):
+            sample_txt = "မင်္ဂလာပါ၊ Aether Studio မှ ကြိုဆိုပါတယ်။"
+            sample_file = "sample_preview.wav"
+            with st.spinner("အသံဖန်တီးနေပါသည်..."):
+                try:
+                    custom_id = locals().get('custom_eleven_id', '')
+                    final_gemini_key = locals().get('synergy_key', api_key_input)
+                    asyncio.run(generate_tts(
+                        sample_txt, voice_char, sample_file, 
+                        engine=audio_engine_choice, 
+                        ttsmaker_key=key_ttsmaker, 
+                        eleven_key=locals().get('eleven_key_input', ''), 
+                        custom_eleven_id=custom_id, 
+                        gemini_key=final_gemini_key,
+                        pitch=pitch_level
+                    ))
+                    st.audio(sample_file)
+                except Exception as e:
+                    st.error(f"Sample Error: {e}")
+        
     st.markdown('</div>', unsafe_allow_html=True)
 
     if st.button("🚀 START ONE-CLICK WORKFLOW MONETIZE GENERATOR"):
@@ -555,7 +601,17 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                 try:
                     custom_id = locals().get('custom_eleven_id', '')
                     final_gemini_key = locals().get('synergy_key', api_key_input)
-                    asyncio.run(generate_tts(" ".join([t for _,_,t in parsed_timestamps]), voice_char, a_generated, engine=audio_engine_choice, ttsmaker_key=key_ttsmaker, eleven_key=locals().get('eleven_key_input', ''), custom_eleven_id=custom_id, gemini_key=final_gemini_key))
+                    asyncio.run(generate_tts(
+                        " ".join([t for _,_,t in parsed_timestamps]), 
+                        voice_char, 
+                        a_generated, 
+                        engine=audio_engine_choice, 
+                        ttsmaker_key=key_ttsmaker, 
+                        eleven_key=locals().get('eleven_key_input', ''), 
+                        custom_eleven_id=custom_id, 
+                        gemini_key=final_gemini_key,
+                        pitch=pitch_level # 👇 Added pitch control logic here
+                    ))
                 except Exception as e:
                     st.error(f"အသံထုတ်လုပ်ခြင်း မအောင်မြင်ပါ: {e}")
                     st.stop()
