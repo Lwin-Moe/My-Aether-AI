@@ -3,7 +3,7 @@
 # =====================================================================
 
 import streamlit as st
-import google.generativeai as genai
+from google import genai # 👈 Library အသစ်ပြောင်းထားပါသည်
 import os
 import asyncio
 import edge_tts
@@ -181,7 +181,6 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
 def parse_and_save_real_srt(raw_srt_text, output_file):
     clean_srt = raw_srt_text.replace("```srt", "").replace("```", "").strip()
     
-    # ပြင်ဆင်ချက် ၁: Linux FFmpeg အတွက် utf-8-sig ဖြင့် သိမ်းခြင်း
     with open(output_file, "w", encoding="utf-8-sig") as f: 
         f.write(clean_srt)
         
@@ -235,7 +234,6 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         safe_srt_path = os.path.abspath("subtitles.srt").replace('\\', '/')
         safe_srt_path_escaped = safe_srt_path.replace(':', '\\:')
         
-        # ပြင်ဆင်ချက် ၁ (ဆက်လက်): Safe filter ပိုင်းကိုလည်း utf-8-sig ဖြင့် သိမ်းခြင်း
         with open("subtitles.srt", "w", encoding="utf-8-sig") as f:
             for i, (start, end, text) in enumerate(parsed_timestamps, start=1):
                 if start >= v_max_dur: continue
@@ -272,7 +270,6 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         except: pass
         
         if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"] and os.path.exists("subtitles.srt"):
-            # ပြင်ဆင်ချက် ၂: charenc='UTF-8' နှင့် fontsdir='.' ကို အတင်းအကျပ် ထည့်သွင်းခြင်း
             video = ffmpeg.filter(video, 'subtitles', safe_srt_path_escaped, charenc='UTF-8', fontsdir='.', force_style="FontName=Pyidaungsu,FontSize=22,PrimaryColour=&H0000FFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2.5,Shadow=1,Alignment=2,MarginV=25")
 
         out = ffmpeg.output(video, audio, out_v, vcodec='libx264', acodec='aac', preset='fast', crf=21, t=v_max_dur)
@@ -398,25 +395,25 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                         
                         for idx, current_key in enumerate(keys_list):
                             try:
-                                genai.configure(api_key=current_key)
-                                audio_file = genai.upload_file(path=a_extracted)
-                                while audio_file.state.name == "PROCESSING":
-                                    time.sleep(2)
-                                    audio_file = genai.get_file(audio_file.name)
+                                # 👇 SDK အသစ်ဖြင့် လဲလှယ်ထားသောအပိုင်း
+                                client = genai.Client(api_key=current_key)
+                                audio_file = client.files.upload(file=a_extracted)
                                 
-                                model = genai.GenerativeModel(
-                                    model_name="gemini-2.5-flash",
-                                    safety_settings=[
-                                        {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                                        {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-                                        {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-                                        {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
-                                    ]
-                                )
+                                while True:
+                                    f_info = client.files.get(name=audio_file.name)
+                                    if "PROCESSING" in str(f_info.state):
+                                        time.sleep(2)
+                                    else:
+                                        break
+                                
                                 gemini_prompt = "Listen to the ENTIRE audio file from the absolute beginning to the very last second. Do NOT truncate, skip, or summarize the ending. You MUST generate a complete SRT subtitle file in natural spoken Burmese (မြန်မာစကားပြောဟန်) covering the WHOLE video duration until the very end. 🛑 STRICT RULES: 1. Include Synergy Audio Tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers] to guide the voice naturally. 2. NO ENGLISH TRANSLITERATION. 3. Output ONLY valid SRT format."
-                                response = model.generate_content([audio_file, gemini_prompt])
+                                
+                                response = client.models.generate_content(
+                                    model="gemini-2.5-flash",
+                                    contents=[f_info, gemini_prompt]
+                                )
                                 raw_output_text = response.text.strip()
-                                genai.delete_file(audio_file.name)
+                                client.files.delete(name=f_info.name)
                                 success_gemini = True
                                 break 
                             except Exception as e:
@@ -514,7 +511,8 @@ elif app_mode == "🎥 Veo Video Studio":
                     keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
                     success = False
                     for key in keys_list:
-                        url = f"https://generativelanguage.googleapis.com/v1beta/models/veo-2.0-preview:generateContent?key={key}"
+                        # 👇 API URL ကို အလုပ်လုပ်သော Version ဖြင့် လဲလှယ်ထားပါသည်
+                        url = f"https://generativelanguage.googleapis.com/v1beta/models/veo-2.0-generate-001:generateContent?key={key}"
                         payload = {"contents": [{"parts": [{"text": video_prompt}]}], "generationConfig": {"responseModalities": ["VIDEO"]}}
                         res = requests.post(url, json=payload)
                         if res.status_code == 200:
@@ -561,7 +559,7 @@ elif app_mode == "🎵 Lyria Music Studio":
                 except Exception as e: st.error(f"Error: {e}")
 
 # =====================================================================
-# 📌 MODE 4: TRANSLATION / TRANSCRIPT STUDIO (Whisper Timeline + Gemini Translation)
+# 📌 MODE 4: TRANSLATION / TRANSCRIPT STUDIO
 # =====================================================================
 elif app_mode == "⚡ Translation/Transcript Studio":
     st.markdown('<h2 style="color:#00e5ff;">⚡ Translation & Subtitle Studio (AI Dual Engine)</h2>', unsafe_allow_html=True)
@@ -589,10 +587,9 @@ elif app_mode == "⚡ Translation/Transcript Studio":
             with st.spinner("🔄 စနစ်နှစ်ခုစလုံး အလုပ်လုပ်နေပါသည်... (ကျေးဇူးပြု၍ စောင့်ပါ)"):
                 error_logs = []
                 try:
-                    import whisper # Whisper library အား အသုံးပြုခြင်း
+                    import whisper 
                     project_id = "project_" + str(int(time.time()))
                     
-                    # 1. Download Audio ONLY ⚡
                     st.info("⬇️ ဗီဒီယိုမှ အသံလမ်းကြောင်းကို ရယူနေပါသည်...")
                     ydl_opts = {
                         'format': 'bestaudio/best',
@@ -607,7 +604,6 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                         info = ydl.extract_info(video_url, download=True)
                         downloaded_audio = ydl.prepare_filename(info)
 
-                    # 2. Convert to Standard WAV for Whisper
                     wav_path = f"{project_id}.wav"
                     (
                         ffmpeg.input(downloaded_audio)
@@ -616,15 +612,11 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                     )
                     if os.path.exists(downloaded_audio): os.remove(downloaded_audio)
 
-                    # 3. Whisper AI - CapCut ကဲ့သို့ မီလီစက္ကန့်မလွဲ Timeline ဖတ်ယူခြင်း 🎙️
                     st.info("🎙️ Whisper AI က ဗီဒီယိုအသံကို နားထောင်၍ တိကျသော Timeline ထုတ်ယူနေပါသည်...")
-                    whisper_model = whisper.load_model("base") # ပေါ့ပါးမြန်ဆန်သော Base Model ကိုသုံးပါမည်
+                    whisper_model = whisper.load_model("base") 
                     whisper_result = whisper_model.transcribe(wav_path, word_timestamps=False)
                     
-                    # Whisper မှ ထွက်လာသော သန့်စင်ပြီးသား Timeline segments များ
                     segments = whisper_result.get("segments", [])
-                    
-                    # Gemini သို့ ပို့ရန် စက္ကန့်များနှင့် စာသားများအား ကျစ်လျစ်စွာ ပြင်ဆင်ခြင်း
                     whisper_json = []
                     for seg in segments:
                         whisper_json.append({
@@ -633,11 +625,9 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                             "text": seg["text"].strip()
                         })
 
-                    # 4. Gemini 2.5 Flash - တိကျသော Timeline အတိုင်း မြန်မာဘာသာသို့ အနုပညာဆန်စွာ ပြန်ဆိုခြင်း 🤖
                     st.info("🤖 Gemini 2.5 Flash ဖြင့် မူရင်းအချိန်အတိုင်း မြန်မာဘာသာပြန်ဆိုနေပါသည်...")
                     response_json = None
                     
-                    # Whisper မှရလာသော တိကျသည့် အချိန်အတုံးလေးများကို မပြောင်းလဲဘဲ text ကိုသာ မြန်မာပြန်ခိုင်းသည့် Prompt
                     prompt = f"""
                     You are an expert movie subtitle translator. You are given a JSON array of subtitles with precise timestamps.
                     Your tasks:
@@ -659,11 +649,14 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                     
                     for index, current_key in enumerate(api_keys):
                         try:
+                            # 👇 SDK အသစ်ဖြင့် လဲလှယ်ထားသောအပိုင်း
                             st.toast(f"🔑 Key ({index + 1}/{len(api_keys)}) ဖြင့် ကြိုးစားနေပါသည်...", icon="⏳")
-                            genai.configure(api_key=current_key)
+                            client = genai.Client(api_key=current_key)
                             
-                            model = genai.GenerativeModel('gemini-2.5-flash')
-                            response = model.generate_content(prompt)
+                            response = client.models.generate_content(
+                                model='gemini-2.5-flash',
+                                contents=prompt
+                            )
                             
                             raw_text = response.text.strip().replace("```json", "").replace("```", "")
                             response_json = json.loads(raw_text)
@@ -679,7 +672,6 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                     st.session_state.title_suggestions = response_json.get("titles", [])
                     final_subtitles = response_json.get("subtitles", [])
 
-                    # 5. မီလီစက္ကန့်မလွဲသော SRT ဖိုင်အဖြစ် ပြောင်းလဲထုတ်ယူခြင်း 🛠️
                     st.session_state.srt_path = f"{project_id}.srt"
                     with open(st.session_state.srt_path, "w", encoding="utf-8-sig") as f:
                         for i, sub in enumerate(final_subtitles):
@@ -704,9 +696,6 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                 finally:
                     if os.path.exists(wav_path): os.remove(wav_path)
 
-    # ---------------------------------------------------------
-    # 📺 UI OUTPUT AREA
-    # ---------------------------------------------------------
     if st.session_state.process_done and st.session_state.srt_path and os.path.exists(st.session_state.srt_path):
         st.markdown("---")
         
@@ -725,7 +714,7 @@ elif app_mode == "⚡ Translation/Transcript Studio":
             st.text_area("SRT Preview", value="".join(f.readlines()[:20]), height=150)
 
 # =====================================================================
-# 📌 MODE 5: VIDEO DOWNLOADER HUB (Original Quality Multi-Platform Downloader)
+# 📌 MODE 5: VIDEO DOWNLOADER HUB
 # =====================================================================
 elif app_mode == "📥 Video Downloader Hub":
     st.markdown('<h2 style="color:#00e5ff;">📥 Video Downloader Hub</h2>', unsafe_allow_html=True)
@@ -734,7 +723,6 @@ elif app_mode == "📥 Video Downloader Hub":
     st.markdown("### 🔗 ဗီဒီယို Link ထည့်ရန်")
     dl_url = st.text_input("ဗီဒီယို URL ကို ဒီမှာ ထည့်ပါ (ဥပမာ- TikTok, YouTube, Rednote, FB):", key="hub_dl_url")
     
-    # Session State ဖိုင်လမ်းကြောင်း သိမ်းဆည်းရန်
     if "hub_file_path" not in st.session_state: st.session_state.hub_file_path = None
     if "hub_file_name" not in st.session_state: st.session_state.hub_file_name = "downloaded_video.mp4"
     if "hub_done" not in st.session_state: st.session_state.hub_done = False
@@ -746,32 +734,23 @@ elif app_mode == "📥 Video Downloader Hub":
             st.session_state.hub_done = False
             with st.spinner("🔄 ဗီဒီယိုအား Platform မှ မူရင်းအတိုင်း ဖတ်ယူနေပါသည်... (ကျေးဇူးပြု၍ စောင့်ပါ)"):
                 try:
-                    # ဖိုင်နာမည် မထပ်စေရန် Time ID သုံးခြင်း
                     dl_project_id = "dl_" + str(int(time.time()))
                     
-                    # 🚀 Multi-Platform & Original Quality အတွက် yt-dlp Options ချိန်ညှိခြင်း
                     ydl_hub_opts = {
-                        # အကောင်းဆုံး Video ရော Audio ကိုပါ မူရင်းအတိုင်း ပေါင်းစပ်ထုတ်ယူရန် စနစ်
                         'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
                         'outtmpl': f'{dl_project_id}.%(ext)s',
                         'quiet': True,
                         'no_warnings': True,
-                        # Rednote သို့မဟုတ် အချို့ တရုတ်ဆာဗာများအတွက် ပိတ်မကျသွားစေရန် Header ဖြည့်ခြင်း
                         'http_headers': {
                             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                         }
                     }
                     
                     with yt_dlp.YoutubeDL(ydl_hub_opts) as ydl:
-                        # ဗီဒီယို အချက်အလက်များ ဖတ်ယူခြင်း
                         info_dict = ydl.extract_info(dl_url, download=True)
-                        
-                        # ဒေါင်းလုဒ်ပြီးသွားသော ဖိုင်လမ်းကြောင်းအား သိမ်းဆည်းခြင်း
                         st.session_state.hub_file_path = ydl.prepare_filename(info_dict)
                         
-                        # ဗီဒီယို ခေါင်းစဉ်ကို ရယူပြီး ဖိုင်နာမည်အဖြစ် သတ်မှတ်ခြင်း (မရပါက Default သုံးမည်)
                         video_title = info_dict.get('title', 'downloaded_video')
-                        # ဖိုင်နာမည်ထဲတွင် မပါသင့်သော သင်္ကေတများအား ဖယ်ရှားခြင်း
                         clean_title = "".join([c for c in video_title if c.isalpha() or c.isdigit() or c==' ']).strip()
                         st.session_state.hub_file_name = f"{clean_title or 'video'}.mp4"
                     
@@ -784,18 +763,13 @@ elif app_mode == "📥 Video Downloader Hub":
                     with st.expander("🔍 အသေးစိတ် Error Details ကြည့်ရန်"):
                         st.write(str(dl_err))
 
-    # ---------------------------------------------------------
-    # 📺 DOWNLOAD BUTTON AREA (အလုပ်ပြီးပါက ချက်ချင်း ပေါ်လာမည့်နေရာ)
-    # ---------------------------------------------------------
     if st.session_state.hub_done and st.session_state.hub_file_path and os.path.exists(st.session_state.hub_file_path):
         st.markdown("---")
         st.success("🎉 ဗီဒီယို အဆင်သင့်ဖြစ်ပါပြီ။ အောက်ပါခလုတ်ကို နှိပ်၍ ဖုန်း/ကွန်ပျူတာထဲသို့ သိမ်းဆည်းနိုင်ပါပြီ။")
         
-        # ဗီဒီယို အစမ်းကြည့်ရှုရန် Player
         st.markdown("### 🎥 Video Preview")
         st.video(st.session_state.hub_file_path)
         
-        # Local ထဲသို့ အပြီးသတ် ဒေါင်းလုဒ်ဆွဲမည့် ခလုတ်
         with open(st.session_state.hub_file_path, "rb") as file:
             st.download_button(
                 label="📥 ကိုယ့်ဖုန်း/စက်ထဲသို့ ရယူရန် (Download Video)",
