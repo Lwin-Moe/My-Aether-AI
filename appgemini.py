@@ -342,20 +342,25 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         
         video = ffmpeg.filter(video, 'scale', 'trunc(oh*a/2)*2', 1080, flags='bicubic')
         
-        # Audio Mixing (AI Sync output is directly used)
-        audio_streams = [ffmpeg.input(in_a).audio]
+        # Audio Mixing (AI Sync output is directly used as Primary)
+        tts_audio = ffmpeg.input(in_a).audio
+        audio_streams = [tts_audio]
         
-        # 👇 NEW: BGM and Original Audio Mixing Logic
+        # 👇 FIX: Bulletproof BGM Mixing (Prevents PTS Desync & Volume Drop)
         if not mute_orig:
             orig_audio = ffmpeg.input(in_v).audio.filter('volume', 0.1)
             audio_streams.append(orig_audio)
             
         if bgm_file and os.path.exists(bgm_file):
-            bgm_audio = ffmpeg.input(bgm_file, stream_loop=-1).audio.filter('atrim', duration=v_max_dur).filter('volume', bgm_vol)
+            # asetpts is crucial here so looped BGM doesn't drag the AI speech out of sync
+            bgm_audio = ffmpeg.input(bgm_file, stream_loop=-1).audio.filter('asetpts', 'N/SR/TB').filter('volume', bgm_vol)
             audio_streams.append(bgm_audio)
             
         if len(audio_streams) > 1:
-            final_audio = ffmpeg.filter(audio_streams, 'amix', inputs=len(audio_streams), duration='longest', dropout_transition=2)
+            # duration='first' perfectly locks the final output to the AI Speech length.
+            final_audio = ffmpeg.filter(audio_streams, 'amix', inputs=len(audio_streams), duration='first', dropout_transition=0)
+            # Restore the primary volume that amix automatically reduced
+            final_audio = final_audio.filter('volume', str(len(audio_streams)))
         else:
             final_audio = audio_streams[0]
         
@@ -466,7 +471,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         script_cta = st.checkbox("💬 Call to Action (Comment ခေါ်မည်)", value=False)
         st.markdown("</div>", unsafe_allow_html=True)
 
-        # 👇 NEW: UI for Audio Mixing & BGM
         st.markdown("<div class='sub-box'>", unsafe_allow_html=True)
         st.markdown("<p style='margin-bottom: 10px; font-weight: bold; color: #10b981 !important; font-size: 16px;'>🎵 Audio Mixing & BGM</p>", unsafe_allow_html=True)
         cb_mute_orig = st.checkbox("🔇 Mute Original Audio (မူရင်းအသံဖျောက်ပြီး Copyright ရှောင်မည်)", value=True)
@@ -585,7 +589,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     if script_tone: extra_rules += " [TONE]: Inject strong emotions and character tones matching the scene."
                     if script_cta: extra_rules += " [CTA]: End the script with a strong Call to Action (CTA) asking a question to encourage comments."
 
-                    hormozi_rule = " [HORMOZI]: Split the subtitles into very short chunks (maximum 3-5 words per subtitle). Do not write long sentences in a single block." if sub_short else ""
+                    hormozi_rule = " [HORMOZI]: Split the subtitles into very short chunks (maximum 3-5 words per subtitle). Do not write long sentences in a single block. Keep them extremely fast-paced and punchy." if sub_short else ""
                     concise_rule = " 5. CONCISENESS: Your Burmese translation MUST BE EXTREMELY BRIEF and FAST-PACED to match the exact duration of the English original. Avoid unnecessary words."
                     
                     base_prompt = f"You are an expert Myanmar (Burmese) TikTok movie recap narrator. I am providing you with an English SRT file translated from the original audio. Translate and adapt the text into highly engaging, natural spoken Burmese (မြန်မာစကားပြောဟန်). STRICT RULES: 1. SYNERGY AUDIO TAGS: You MUST include inline audio tags to direct the TTS voice. Use tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers], [reluctantly] at the beginning of relevant sentences to add emotion and dramatic pacing. 2. NO ENGLISH TRANSLITERATION: Translate meanings naturally. 3. FORMAT: Keep the EXACT original SRT timecodes and indices. 4. Output ONLY the raw SRT format.{concise_rule}{extra_rules}{hormozi_rule}"
@@ -743,7 +747,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                 
                 dynamic_style = f"FontName={font_n},FontSize={sub_size},PrimaryColour={prim_c},OutlineColour=&H00000000,BackColour={back_c},BorderStyle={border_s},Outline={out_thick},Shadow=1,Alignment={align_val},MarginV={margin_v_val}"
                 
-                # 👇 NEW: Logic for BGM Path resolution
                 selected_bgm_path = None
                 if selected_bgm not in ["None (BGM မထည့်ပါ)", "🤖 Auto (Random Select)"]:
                     selected_bgm_path = os.path.join("bgm_tracks", selected_bgm)
