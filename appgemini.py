@@ -21,6 +21,7 @@ import wave
 import subprocess
 import json
 import datetime
+import random
 
 FFMPEG_BINARY = imageio_ffmpeg.get_ffmpeg_exe()
 
@@ -44,118 +45,20 @@ st.set_page_config(page_title="AETHER STUDIO V52", layout="wide", page_icon="�
 
 st.markdown('''
     <style>
-    /* Import Premium Fonts */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Montserrat:wght@500;700;800;900&display=swap');
-
-    /* Base App Styling */
-    .stApp { 
-        background-color: #0b0f19 !important; 
-        background-image: radial-gradient(circle at top, #161b2e 0%, #0b0f19 60%) !important;
-        color: #cbd5e1 !important; 
-        font-family: 'Inter', sans-serif; 
-    }
-    
-    /* Sidebar Styling */
-    section[data-testid="stSidebar"] { 
-        background-color: #0d111c !important; 
-        border-right: 1px solid rgba(255, 255, 255, 0.05) !important; 
-    }
-    
-    /* Typography */
-    h1, h2, h3, h4 { 
-        font-family: 'Montserrat', sans-serif !important; 
-        color: #f8fafc !important; 
-        font-weight: 700 !important;
-    }
-    p, span, label, .stRadio label, .stCheckbox label, .stSelectbox label { 
-        color: #94a3b8 !important; 
-        font-size: 14px; 
-    }
-    
-    /* Main Cinematic Title */
-    .main-title {
-        text-align: center;
-        font-family: 'Montserrat', sans-serif;
-        font-size: 3.5rem !important;
-        font-weight: 900;
-        background: linear-gradient(135deg, #38bdf8 0%, #818cf8 50%, #c084fc 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        margin-top: 20px;
-        margin-bottom: 5px;
-        letter-spacing: -1px;
-        text-shadow: 0px 10px 30px rgba(129, 140, 248, 0.2);
-    }
-    .sub-title {
-        text-align: center;
-        color: #64748b;
-        font-family: 'Inter', sans-serif;
-        font-size: 1.1rem;
-        font-weight: 500;
-        margin-bottom: 40px;
-        letter-spacing: 3px;
-        text-transform: uppercase;
-    }
-
-    /* Input Fields & Dropdowns */
-    .stTextInput input, div[data-baseweb="select"], .stTextArea textarea { 
-        background-color: #151b2b !important; 
-        color: #f1f5f9 !important; 
-        border: 1px solid #334155 !important; 
-        border-radius: 8px !important; 
-        transition: all 0.3s ease;
-    }
-    .stTextInput input:focus, div[data-baseweb="select"]:focus-within, .stTextArea textarea:focus {
-        border-color: #818cf8 !important;
-        box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.5) !important;
-    }
-    
-    /* Custom Panel / Card Design */
-    .setting-panel { 
-        background: #111624; 
-        border: 1px solid rgba(255, 255, 255, 0.05); 
-        border-radius: 12px; 
-        padding: 24px; 
-        margin-bottom: 24px; 
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2); 
-    }
-    
-    /* Primary CTA Button */
-    .stButton>button { 
-        background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%) !important; 
-        color: #ffffff !important; 
-        font-family: 'Montserrat', sans-serif !important;
-        font-weight: 700 !important; 
-        font-size: 16px !important; 
-        letter-spacing: 0.5px;
-        border-radius: 8px !important; 
-        border: none !important; 
-        width: 100%; 
-        padding: 16px !important; 
-        transition: all 0.3s ease !important; 
-        box-shadow: 0 4px 15px rgba(124, 58, 237, 0.3);
-    }
-    .stButton>button:hover { 
-        transform: translateY(-3px); 
-        box-shadow: 0 8px 25px rgba(124, 58, 237, 0.5); 
-    }
-    
-    /* Expander / Accordion */
-    .streamlit-expanderHeader {
-        background-color: #151b2b !important;
-        border-radius: 8px !important;
-        color: #f8fafc !important;
-    }
-    
-    /* Subtitle Styling Box */
-    .sub-box {
-        background-color: #1a2235;
-        border: 1px solid rgba(129, 140, 248, 0.3);
-        border-radius: 8px;
-        padding: 20px;
-        margin-top: 15px;
-        margin-bottom: 10px;
-    }
+    .stApp { background-color: #0b0f19 !important; background-image: radial-gradient(circle at top, #161b2e 0%, #0b0f19 60%) !important; color: #cbd5e1 !important; font-family: 'Inter', sans-serif; }
+    section[data-testid="stSidebar"] { background-color: #0d111c !important; border-right: 1px solid rgba(255, 255, 255, 0.05) !important; }
+    h1, h2, h3, h4 { font-family: 'Montserrat', sans-serif !important; color: #f8fafc !important; font-weight: 700 !important; }
+    p, span, label, .stRadio label, .stCheckbox label, .stSelectbox label { color: #94a3b8 !important; font-size: 14px; }
+    .main-title { text-align: center; font-family: 'Montserrat', sans-serif; font-size: 3.5rem !important; font-weight: 900; background: linear-gradient(135deg, #38bdf8 0%, #818cf8 50%, #c084fc 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-top: 20px; margin-bottom: 5px; letter-spacing: -1px; text-shadow: 0px 10px 30px rgba(129, 140, 248, 0.2); }
+    .sub-title { text-align: center; color: #64748b; font-family: 'Inter', sans-serif; font-size: 1.1rem; font-weight: 500; margin-bottom: 40px; letter-spacing: 3px; text-transform: uppercase; }
+    .stTextInput input, div[data-baseweb="select"], .stTextArea textarea { background-color: #151b2b !important; color: #f1f5f9 !important; border: 1px solid #334155 !important; border-radius: 8px !important; transition: all 0.3s ease; }
+    .stTextInput input:focus, div[data-baseweb="select"]:focus-within, .stTextArea textarea:focus { border-color: #818cf8 !important; box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.5) !important; }
+    .setting-panel { background: #111624; border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2); }
+    .stButton>button { background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%) !important; color: #ffffff !important; font-family: 'Montserrat', sans-serif !important; font-weight: 700 !important; font-size: 16px !important; letter-spacing: 0.5px; border-radius: 8px !important; border: none !important; width: 100%; padding: 16px !important; transition: all 0.3s ease !important; box-shadow: 0 4px 15px rgba(124, 58, 237, 0.3); }
+    .stButton>button:hover { transform: translateY(-3px); box-shadow: 0 8px 25px rgba(124, 58, 237, 0.5); }
+    .streamlit-expanderHeader { background-color: #151b2b !important; border-radius: 8px !important; color: #f8fafc !important; }
+    .sub-box { background-color: #1a2235; border: 1px solid rgba(129, 140, 248, 0.3); border-radius: 8px; padding: 20px; margin-top: 15px; margin-bottom: 10px; }
     </style>
 ''', unsafe_allow_html=True)
 
@@ -177,9 +80,47 @@ def get_file_duration(file_path):
         pass
     return 600.0 
 
+def create_silence(duration_sec, out_file):
+    with wave.open(out_file, 'wb') as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(44100)
+        num_frames = int(duration_sec * 44100)
+        wf.writeframes(b'\x00\x00' * num_frames)
+
+def adjust_audio_speed(in_file, out_file, target_duration):
+    if not os.path.exists(in_file):
+        create_silence(target_duration, out_file)
+        return target_duration
+        
+    actual_dur = get_file_duration(in_file)
+    if actual_dur <= 0.1 or target_duration <= 0.1:
+        import shutil
+        shutil.copy(in_file, out_file)
+        return actual_dur
+        
+    speed = actual_dur / target_duration
+    if 0.90 <= speed <= 1.10: 
+         import shutil
+         shutil.copy(in_file, out_file)
+         return actual_dur
+         
+    if speed > 2.5: speed = 2.5 
+    if speed < 0.6: speed = 0.6
+    
+    try:
+         audio = ffmpeg.input(in_file).audio.filter('atempo', speed)
+         (ffmpeg.output(audio, out_file, acodec='pcm_s16le', ac=1, ar='44100')
+          .overwrite_output()
+          .run(cmd=FFMPEG_BINARY, quiet=True))
+         return actual_dur / speed
+    except:
+         import shutil
+         shutil.copy(in_file, out_file)
+         return actual_dur
+
 def download_video_from_url(url, output_path="input_temp.mp4"):
     if os.path.exists(output_path): os.remove(output_path)
-    
     ydl_opts = {
         'outtmpl': output_path, 
         'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best', 
@@ -196,8 +137,7 @@ def download_video_from_url(url, output_path="input_temp.mp4"):
         }
     }
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl: 
-            ydl.download([url])
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl: ydl.download([url])
         return output_path
     except Exception as e: 
         raise Exception(f"YouTube Download Error: ဗီဒီယိုကို ဆွဲယူ၍မရပါ။ Server IP Block ခံရခြင်း (သို့) Private Video ဖြစ်နိုင်ပါသည်။ (ERROR: {str(e)})")
@@ -220,97 +160,85 @@ def extract_audio_fast(video_in, audio_out="temp_extracted.mp3"):
             'extractor_args': {'youtube': {'player_client': ['tv', 'ios', 'web']}},
             'ffmpeg_location': FFMPEG_BINARY
         }
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl: 
-            ydl.extract_info(video_in, download=True)
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl: ydl.extract_info(video_in, download=True)
         return audio_out
     except: return None
 
 async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default Free)", ttsmaker_key="", eleven_key="", custom_eleven_id="", gemini_key="", pitch=0, voice_fx="None (Standard Voice)"):
-    if not text.strip(): return
-    
-    needs_ffmpeg = pitch != 0 or voice_fx != "None (Standard Voice)"
-    temp_out = "temp_raw_audio_fx.wav" if needs_ffmpeg else output_file
+    if not text.strip(): 
+        create_silence(1.0, output_file)
+        return
+        
+    temp_out = f"raw_api_{random.randint(10000,99999)}.wav"
 
-    if "Synergy" in engine:
-        if not gemini_key: raise Exception("Gemini Synergy TTS အား အသုံးပြုရန် API Key လိုအပ်ပါသည်။")
-        keys_list = [k.strip() for k in gemini_key.split(",") if k.strip()]
-        
-        voice_name = "Puck" if "Puck" in voice_model else ("Charon" if "Charon" in voice_model else "Aoede")
-        prompt_text = "You are a professional Burmese movie narrator. Read the following text naturally and expressively. " + text
-        
-        payload = {
-            "contents": [{"parts": [{"text": prompt_text}]}],
-            "safetySettings": [
-                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
-            ],
-            "generationConfig": {
-                "responseModalities": ["AUDIO"],
-                "speechConfig": { "voiceConfig": { "prebuiltVoiceConfig": { "voiceName": voice_name } } }
-            }
-        }
-        
-        last_err = ""
-        for idx, current_key in enumerate(keys_list):
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key={current_key}"
-            try:
-                res = requests.post(url, json=payload, timeout=300)
-                if res.status_code == 200:
-                    candidate = res.json().get("candidates", [{}])[0]
-                    if candidate.get("finishReason") == "SAFETY":
-                        raise Exception("Safety Error: AI မှ အသံထွက်ပေးရန် ငြင်းဆိုလိုက်ပါသည်။")
-                    
-                    audio_b64 = candidate["content"]["parts"][0]["inlineData"]["data"]
-                    pcm_data = base64.b64decode(audio_b64)
-                    with wave.open(temp_out, "wb") as wf:
-                        wf.setnchannels(1)
-                        wf.setsampwidth(2)
-                        wf.setframerate(24000)
-                        wf.writeframes(pcm_data)
-                    break
-                elif res.status_code == 429:
-                    last_err = f"Key {current_key[-4:]} ၏ တစ်နေ့စာ Limit ပြည့်သွားပါပြီ။"
-                    continue
-                else:
-                    last_err = f"Gemini API Error ({res.status_code}): {res.text}"
-                    continue
-            except Exception as e: 
-                last_err = str(e)
-                continue
-                
-        if not os.path.exists(temp_out):
-            raise Exception(f"ထည့်သွင်းထားသော Key များအားလုံး Limit ပြည့်သွားပါပြီ။ Key အသစ် ထပ်ထည့်ပါ။ နောက်ဆုံး Error: {last_err}")
-
-    elif "ElevenLabs" in engine:
-        if not eleven_key: raise Exception("ElevenLabs API Key လိုအပ်ပါသည်။")
-        voice_id = custom_eleven_id.strip() if custom_eleven_id else ("21m00Tcm4TlvDq8ikWAM" if "Male" in voice_model else "AZnzlk1XvdvUeBnXmlld")
-        url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
-        headers = { "Accept": "audio/mpeg", "Content-Type": "application/json", "xi-api-key": eleven_key }
-        payload = { "text": text, "model_id": "eleven_multilingual_v2", "voice_settings": { "stability": 0.45, "similarity_boost": 0.75 } }
-        res = requests.post(url, json=payload, headers=headers, timeout=300)
-        if res.status_code == 200:
-            with open(temp_out, "wb") as f: f.write(res.content)
-        else: raise Exception(f"ElevenLabs API Error: {res.text}")
+    try:
+        if "Synergy" in engine:
+            if not gemini_key: raise Exception("Gemini Synergy TTS အား အသုံးပြုရန် API Key လိုအပ်ပါသည်။")
+            keys_list = [k.strip() for k in gemini_key.split(",") if k.strip()]
+            voice_name = "Puck" if "Puck" in voice_model else ("Charon" if "Charon" in voice_model else "Aoede")
+            prompt_text = "You are a professional Burmese movie narrator. Read the following text naturally and expressively. " + text
             
-    elif "TTSMaker" in engine:
-        if not ttsmaker_key: raise Exception("TTSMaker API Key လိုအပ်ပါသည်။")
-        voice_id = 781 if "Female" in voice_model else 780
-        url = "https://api.ttsmaker.com/v1/create-tts-order"
-        payload = { "tts_api_key": ttsmaker_key, "tts_text": text, "voice_id": voice_id, "audio_format": "mp3" }
-        res = requests.post(url, json=payload, timeout=300).json()
-        if res.get("status") == "success":
-            audio_data = requests.get(res["audio_file_url"]).content
-            with open(temp_out, "wb") as f: f.write(audio_data)
-        else: raise Exception(f"TTSMaker API Error: {res}")
+            payload = {
+                "contents": [{"parts": [{"text": prompt_text}]}],
+                "safetySettings": [
+                    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+                ],
+                "generationConfig": {
+                    "responseModalities": ["AUDIO"],
+                    "speechConfig": { "voiceConfig": { "prebuiltVoiceConfig": { "voiceName": voice_name } } }
+                }
+            }
+            
+            success = False
+            for current_key in keys_list:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key={current_key}"
+                try:
+                    res = requests.post(url, json=payload, timeout=300)
+                    if res.status_code == 200:
+                        candidate = res.json().get("candidates", [{}])[0]
+                        if candidate.get("finishReason") == "SAFETY": continue
+                        audio_b64 = candidate["content"]["parts"][0]["inlineData"]["data"]
+                        pcm_data = base64.b64decode(audio_b64)
+                        with wave.open(temp_out, "wb") as wf:
+                            wf.setnchannels(1)
+                            wf.setsampwidth(2)
+                            wf.setframerate(24000)
+                            wf.writeframes(pcm_data)
+                        success = True
+                        break
+                except: continue
+            if not success: create_silence(2.0, temp_out)
 
-    else:
-        voice = "my-MM-ThihaNeural" if "Male" in voice_model else "my-MM-NilarNeural"
-        communicate = edge_tts.Communicate(text, voice)
-        await communicate.save(temp_out)
+        elif "ElevenLabs" in engine:
+            if not eleven_key: raise Exception("ElevenLabs API Key လိုအပ်ပါသည်။")
+            voice_id = custom_eleven_id.strip() if custom_eleven_id else ("21m00Tcm4TlvDq8ikWAM" if "Male" in voice_model else "AZnzlk1XvdvUeBnXmlld")
+            url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+            headers = { "Accept": "audio/mpeg", "Content-Type": "application/json", "xi-api-key": eleven_key }
+            payload = { "text": text, "model_id": "eleven_multilingual_v2", "voice_settings": { "stability": 0.45, "similarity_boost": 0.75 } }
+            res = requests.post(url, json=payload, headers=headers, timeout=300)
+            if res.status_code == 200:
+                with open(temp_out, "wb") as f: f.write(res.content)
+            else: create_silence(2.0, temp_out)
+                
+        elif "TTSMaker" in engine:
+            if not ttsmaker_key: raise Exception("TTSMaker API Key လိုအပ်ပါသည်။")
+            voice_id = 781 if "Female" in voice_model else 780
+            url = "https://api.ttsmaker.com/v1/create-tts-order"
+            payload = { "tts_api_key": ttsmaker_key, "tts_text": text, "voice_id": voice_id, "audio_format": "mp3" }
+            res = requests.post(url, json=payload, timeout=300).json()
+            if res.get("status") == "success":
+                audio_data = requests.get(res["audio_file_url"]).content
+                with open(temp_out, "wb") as f: f.write(audio_data)
+            else: create_silence(2.0, temp_out)
 
-    if needs_ffmpeg:
+        else:
+            voice = "my-MM-ThihaNeural" if "Male" in voice_model else "my-MM-NilarNeural"
+            communicate = edge_tts.Communicate(text, voice, rate='+15%')
+            await communicate.save(temp_out)
+
         audio = ffmpeg.input(temp_out)
         if pitch != 0:
             factor = 1.0 + (pitch / 100.0) 
@@ -322,17 +250,18 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
         elif "Reverb" in voice_fx: audio = audio.filter('aecho', 0.8, 0.88, 60, 0.4)
         elif "Demon" in voice_fx: audio = audio.filter('bass', g=15, f=100).filter('aecho', 0.8, 0.88, 40, 0.5)
         elif "ASMR" in voice_fx: audio = audio.filter('treble', g=12, f=6000).filter('volume', 1.5)
-        try:
-            (audio.output(output_file, acodec='pcm_s16le', ac=1, ar='44100').overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True))
-        except Exception as e:
-            import shutil
-            shutil.copy(temp_out, output_file)
-        finally:
-            if os.path.exists(temp_out): os.remove(temp_out)
+        
+        (audio.output(output_file, acodec='pcm_s16le', ac=1, ar='44100').overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True))
+
+    except Exception as e:
+        create_silence(2.0, output_file)
+    finally:
+        if os.path.exists(temp_out): os.remove(temp_out)
 
 def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
-    marker = chr(96) * 3
-    clean_srt = raw_srt_text.replace(f"{marker}srt", "").replace(marker, "").strip()
+    bt = chr(96)
+    tbt = bt * 3
+    clean_srt = raw_srt_text.replace(f"{tbt}srt", "").replace(f"{tbt}json", "").replace(tbt, "").strip()
     
     with open(output_file, "w", encoding="utf-8-sig") as f: 
         f.write(clean_srt)
@@ -384,7 +313,7 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
         
     return parsed_lines, " ".join(full_speech)
 
-def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_bypass=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)", use_mirror=False, use_color=False, use_grain=False, use_fps=False, sub_style_str="FontName=Pyidaungsu,FontSize=22,PrimaryColour=&H0000FFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2.5,Shadow=1,Alignment=2,MarginV=25"):
+def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_bypass=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)", use_mirror=False, use_color=False, use_grain=False, use_fps=False, sub_style_str="", mute_orig=True, bgm_file=None, bgm_vol=0.1):
     try:
         a_dur = get_file_duration(in_a)
         v_max_dur = get_file_duration(in_v)
@@ -406,44 +335,42 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
             video = ffmpeg.filter(video, 'scale', '2*trunc(iw*1.08/2)', '2*trunc(ih*1.08/2)')
             video = ffmpeg.filter(video, 'crop', 'iw/1.08', 'ih/1.08')
             
-        if use_mirror:
-            video = ffmpeg.filter(video, 'hflip')
-            
-        if use_color:
-            video = ffmpeg.filter(video, 'eq', brightness=0.02, contrast=1.05, saturation=1.1)
-            
-        if use_grain:
-            video = ffmpeg.filter(video, 'noise', alls=2, allf='t+u')
-            
-        if use_fps:
-            video = ffmpeg.filter(video, 'fps', fps=24, round='near')
+        if use_mirror: video = ffmpeg.filter(video, 'hflip')
+        if use_color: video = ffmpeg.filter(video, 'eq', brightness=0.02, contrast=1.05, saturation=1.1)
+        if use_grain: video = ffmpeg.filter(video, 'noise', alls=2, allf='t+u')
+        if use_fps: video = ffmpeg.filter(video, 'fps', fps=24, round='near')
         
         video = ffmpeg.filter(video, 'scale', 'trunc(oh*a/2)*2', 1080, flags='bicubic')
-        audio = ffmpeg.input(in_a).audio
         
-        if v_max_dur > 1.0 and a_dur > 0:
-            target_a_dur = v_max_dur - 0.5
-            speed_factor = a_dur / target_a_dur
-            if 0.5 <= speed_factor <= 2.0:
-                audio = ffmpeg.filter(audio, 'atempo', speed_factor)
+        # Audio Mixing (AI Sync output is directly used)
+        audio_streams = [ffmpeg.input(in_a).audio]
+        
+        # 👇 NEW: BGM and Original Audio Mixing Logic
+        if not mute_orig:
+            orig_audio = ffmpeg.input(in_v).audio.filter('volume', 0.1)
+            audio_streams.append(orig_audio)
+            
+        if bgm_file and os.path.exists(bgm_file):
+            bgm_audio = ffmpeg.input(bgm_file, stream_loop=-1).audio.filter('atrim', duration=v_max_dur).filter('volume', bgm_vol)
+            audio_streams.append(bgm_audio)
+            
+        if len(audio_streams) > 1:
+            final_audio = ffmpeg.filter(audio_streams, 'amix', inputs=len(audio_streams), duration='longest', dropout_transition=2)
+        else:
+            final_audio = audio_streams[0]
         
         if use_blur: 
             video = ffmpeg.filter(video, 'drawbox', x=0, y='ih-90', w='iw', h=90, color='black@0.95', thickness='fill')
             
-        if ratio == "9:16 (TikTok/Shorts)": 
-            video = ffmpeg.filter(video, 'crop', 'min(iw, ih*9/16)', 'ih')
-        elif ratio == "16:9 (YouTube)": 
-            video = ffmpeg.filter(video, 'crop', 'iw', 'min(ih, iw*9/16)')
+        if ratio == "9:16 (TikTok/Shorts)": video = ffmpeg.filter(video, 'crop', 'min(iw, ih*9/16)', 'ih')
+        elif ratio == "16:9 (YouTube)": video = ffmpeg.filter(video, 'crop', 'iw', 'min(ih, iw*9/16)')
         
-        try:
-            if watermark: 
-                video = ffmpeg.filter(video, 'drawtext', text=watermark, x='w-tw-15', y='15', fontsize=30, fontcolor='white@0.5')
-        except: pass
+        if watermark: video = ffmpeg.filter(video, 'drawtext', text=watermark, x='w-tw-15', y='15', fontsize=30, fontcolor='white@0.5')
         
         if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"] and os.path.exists("subtitles.srt"):
             video = ffmpeg.filter(video, 'subtitles', safe_srt_path_escaped, charenc='UTF-8', fontsdir='.', force_style=sub_style_str)
 
-        out = ffmpeg.output(video, audio, out_v, vcodec='libx264', acodec='aac', preset='fast', crf=21, t=v_max_dur)
+        out = ffmpeg.output(video, final_audio, out_v, vcodec='libx264', acodec='aac', preset='fast', crf=21, t=v_max_dur)
         out.run(cmd=FFMPEG_BINARY, overwrite_output=True, capture_stdout=True, capture_stderr=True)
         return True, "Success"
     except ffmpeg.Error as e: 
@@ -537,6 +464,23 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         script_curiosity = st.checkbox("🤯 Curiosity Gaps (စိတ်ဝင်စားမှု အရှိန်တင်မည်)", value=True)
         script_tone = st.checkbox("🎭 Emotion & Tone (ဇာတ်ကောင်စရိုက် သွင်းမည်)", value=True)
         script_cta = st.checkbox("💬 Call to Action (Comment ခေါ်မည်)", value=False)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        # 👇 NEW: UI for Audio Mixing & BGM
+        st.markdown("<div class='sub-box'>", unsafe_allow_html=True)
+        st.markdown("<p style='margin-bottom: 10px; font-weight: bold; color: #10b981 !important; font-size: 16px;'>🎵 Audio Mixing & BGM</p>", unsafe_allow_html=True)
+        cb_mute_orig = st.checkbox("🔇 Mute Original Audio (မူရင်းအသံဖျောက်ပြီး Copyright ရှောင်မည်)", value=True)
+        
+        bgm_options = ["None (BGM မထည့်ပါ)"]
+        bgm_files = []
+        if os.path.exists("bgm_tracks"):
+            bgm_files = [f for f in os.listdir("bgm_tracks") if f.endswith(".mp3")]
+            if bgm_files:
+                bgm_options.insert(1, "🤖 Auto (Random Select)")
+                bgm_options.extend(bgm_files)
+                
+        selected_bgm = st.selectbox("🎼 Background Music", bgm_options)
+        bgm_volume = st.slider("🔊 BGM Volume", 1, 50, 10) / 100.0
         st.markdown("</div>", unsafe_allow_html=True)
 
     with col_in2:
@@ -641,9 +585,10 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     if script_tone: extra_rules += " [TONE]: Inject strong emotions and character tones matching the scene."
                     if script_cta: extra_rules += " [CTA]: End the script with a strong Call to Action (CTA) asking a question to encourage comments."
 
-                    hormozi_rule = " [HORMOZI]: Split the subtitles into very short chunks (maximum 3-5 words per subtitle). Do not write long sentences in a single block. Keep them extremely fast-paced and punchy." if sub_short else ""
+                    hormozi_rule = " [HORMOZI]: Split the subtitles into very short chunks (maximum 3-5 words per subtitle). Do not write long sentences in a single block." if sub_short else ""
+                    concise_rule = " 5. CONCISENESS: Your Burmese translation MUST BE EXTREMELY BRIEF and FAST-PACED to match the exact duration of the English original. Avoid unnecessary words."
                     
-                    base_prompt = f"You are an expert Myanmar (Burmese) TikTok movie recap narrator. I am providing you with an English SRT file translated from the original audio. Translate and adapt the text into highly engaging, natural spoken Burmese (မြန်မာစကားပြောဟန်). STRICT RULES: 1. SYNERGY AUDIO TAGS: You MUST include inline audio tags to direct the TTS voice. Use tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers], [reluctantly] at the beginning of relevant sentences to add emotion and dramatic pacing. 2. NO ENGLISH TRANSLITERATION: Translate meanings naturally. 3. FORMAT: Keep the EXACT original SRT timecodes and indices. 4. Output ONLY the raw SRT format.{extra_rules}{hormozi_rule}"
+                    base_prompt = f"You are an expert Myanmar (Burmese) TikTok movie recap narrator. I am providing you with an English SRT file translated from the original audio. Translate and adapt the text into highly engaging, natural spoken Burmese (မြန်မာစကားပြောဟန်). STRICT RULES: 1. SYNERGY AUDIO TAGS: You MUST include inline audio tags to direct the TTS voice. Use tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers], [reluctantly] at the beginning of relevant sentences to add emotion and dramatic pacing. 2. NO ENGLISH TRANSLITERATION: Translate meanings naturally. 3. FORMAT: Keep the EXACT original SRT timecodes and indices. 4. Output ONLY the raw SRT format.{concise_rule}{extra_rules}{hormozi_rule}"
 
                     if "Gemini" in ai_provider:
                         keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
@@ -663,20 +608,21 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                                     else:
                                         break
                                 
-                                gemini_prompt = f"Listen to the ENTIRE audio file from the absolute beginning to the very last second. Do NOT truncate, skip, or summarize the ending. You MUST generate a complete SRT subtitle file in natural spoken Burmese (မြန်မာစကားပြောဟန်) covering the WHOLE video duration until the very end. 🛑 STRICT RULES: 1. Include Synergy Audio Tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers] to guide the voice naturally. 2. NO ENGLISH TRANSLITERATION. 3. Output ONLY valid SRT format.{extra_rules}{hormozi_rule}"
+                                gemini_prompt = f"Listen to the ENTIRE audio file from the absolute beginning to the very last second. Do NOT truncate, skip, or summarize the ending. You MUST generate a complete SRT subtitle file in natural spoken Burmese (မြန်မာစကားပြောဟန်) covering the WHOLE video duration until the very end. 🛑 STRICT RULES: 1. Include Synergy Audio Tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers] to guide the voice naturally. 2. NO ENGLISH TRANSLITERATION. 3. Output ONLY valid SRT format.{concise_rule}{extra_rules}{hormozi_rule}"
                                 
                                 response = client.models.generate_content(
                                     model="gemini-2.5-flash",
                                     contents=[f_info, gemini_prompt]
                                 )
-                                marker = chr(96) * 3
-                                raw_output_text = response.text.strip().replace(f"{marker}srt", "").replace(marker, "")
+                                
+                                bt = chr(96)
+                                tbt = bt * 3
+                                raw_output_text = response.text.strip().replace(f"{tbt}srt", "").replace(tbt, "")
                                 client.files.delete(name=f_info.name)
                                 success_gemini = True
                                 break 
                             except Exception as e:
                                 last_err = str(e)
-                                # 👇 FIX: 503 error check added. Automatically loop to next key instead of breaking.
                                 if "429" in last_err or "503" in last_err or "unavailable" in last_err.lower() or "quota" in last_err.lower() or "exhausted" in last_err.lower() or "limit" in last_err.lower():
                                     st.toast(f"⚠️ Key {idx+1} တွင် ခေတ္တပြဿနာရှိပါသဖြင့် နောက် Key ကို ပြောင်းလဲချိတ်ဆက်နေပါသည်...", icon="🔄")
                                     continue
@@ -718,28 +664,66 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     st.session_state.generated_script = raw_output_text
                 except Exception as e: st.error(f"{ai_provider} Logic Error: {e}"); st.stop()
 
-            with st.spinner(f"⏳ [အဆင့် ၄/၆] {audio_engine_choice} စနစ်ဖြင့် AI Voice Over ထုတ်လုပ်နေပါသည်..."):
+            with st.spinner(f"⏳ [အဆင့် ၄/၆] {audio_engine_choice} စနစ်ဖြင့် AI Voice Over တစ်ကြောင်းချင်းစီ Sync ညှိနေပါသည်... (ဤအဆင့်သည် အချိန်အနည်းငယ် ယူနိုင်ပါသည်)"):
                 try:
+                    timeline_list = "concat_list.txt"
+                    temp_files_to_cleanup = []
+                    
                     custom_id = locals().get('custom_eleven_id', '')
                     final_gemini_key = locals().get('synergy_key', api_key_input)
                     
-                    raw_speech = " ".join([t for _,_,t in parsed_timestamps])
-                    clean_speech = re.sub(r'\{.*?\}', '', raw_speech)
+                    with open(timeline_list, "w", encoding="utf-8") as f_list:
+                        current_time = 0.0
+                        total_lines = len(parsed_timestamps)
+                        progress_bar = st.progress(0)
+                        
+                        for idx, (start, end, raw_text) in enumerate(parsed_timestamps):
+                            clean_txt = re.sub(r'\[.*?\]', '', raw_text)
+                            clean_txt = re.sub(r'\{.*?\}', '', clean_txt).strip()
+                            
+                            if not clean_txt: continue
+                            
+                            if start > current_time:
+                                sil_dur = start - current_time
+                                sil_file = f"silence_{idx}.wav"
+                                create_silence(sil_dur, sil_file)
+                                f_list.write(f"file '{sil_file}'\n")
+                                temp_files_to_cleanup.append(sil_file)
+                                current_time = start
+                                
+                            temp_tts = f"temp_tts_{idx}.wav"
+                            sync_tts = f"sync_tts_{idx}.wav"
+                            
+                            asyncio.run(generate_tts(
+                                clean_txt, voice_char, temp_tts, 
+                                engine=audio_engine_choice, ttsmaker_key=key_ttsmaker, 
+                                eleven_key=locals().get('eleven_key_input', ''), 
+                                custom_eleven_id=custom_id, gemini_key=final_gemini_key,
+                                pitch=pitch_level, voice_fx=fx_level 
+                            ))
+                            
+                            if "Synergy" in audio_engine_choice: time.sleep(1.0)
+                            
+                            tgt_dur = end - start
+                            actual_dur = adjust_audio_speed(temp_tts, sync_tts, tgt_dur)
+                            
+                            f_list.write(f"file '{sync_tts}'\n")
+                            temp_files_to_cleanup.extend([temp_tts, sync_tts])
+                            current_time += actual_dur
+                            
+                            progress_bar.progress((idx + 1) / total_lines)
                     
-                    asyncio.run(generate_tts(
-                        clean_speech, 
-                        voice_char, 
-                        a_generated, 
-                        engine=audio_engine_choice, 
-                        ttsmaker_key=key_ttsmaker, 
-                        eleven_key=locals().get('eleven_key_input', ''), 
-                        custom_eleven_id=custom_id, 
-                        gemini_key=final_gemini_key,
-                        pitch=pitch_level,
-                        voice_fx=fx_level 
-                    ))
+                    (ffmpeg.input(timeline_list, format='concat', safe=0)
+                     .output(a_generated, c='copy')
+                     .overwrite_output()
+                     .run(cmd=FFMPEG_BINARY, quiet=True))
+                     
+                    for f in temp_files_to_cleanup:
+                        if os.path.exists(f): os.remove(f)
+                    if os.path.exists(timeline_list): os.remove(timeline_list)
+                    
                 except Exception as e:
-                    st.error(f"အသံထုတ်လုပ်ခြင်း မအောင်မြင်ပါ: {e}")
+                    st.error(f"အသံထုတ်လုပ်ခြင်း မအောင်မြင်ပါ (Audio Sync Error): {e}")
                     st.stop()
 
             with st.spinner("⏳ [အဆင့် ၅+၆] ဗီဒီယိုနှင့် စာတန်းထိုးအား ရွေးချယ်ထားသော စနစ်အတိုင်း ဖန်တီးနေပါသည်..."):
@@ -759,12 +743,22 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                 
                 dynamic_style = f"FontName={font_n},FontSize={sub_size},PrimaryColour={prim_c},OutlineColour=&H00000000,BackColour={back_c},BorderStyle={border_s},Outline={out_thick},Shadow=1,Alignment={align_val},MarginV={margin_v_val}"
                 
+                # 👇 NEW: Logic for BGM Path resolution
+                selected_bgm_path = None
+                if selected_bgm not in ["None (BGM မထည့်ပါ)", "🤖 Auto (Random Select)"]:
+                    selected_bgm_path = os.path.join("bgm_tracks", selected_bgm)
+                elif selected_bgm == "🤖 Auto (Random Select)" and bgm_files:
+                    selected_bgm_path = os.path.join("bgm_tracks", random.choice(bgm_files))
+                
                 success, err_msg = render_premium_saas_video(
                     v_input, a_generated, parsed_timestamps, v_final, video_ratio, 
                     use_bypass=cb_bypass, use_blur=cb_blur, watermark=watermark_text, 
                     subtitle_mode=subtitle_mode, 
                     use_mirror=cb_mirror, use_color=cb_color, use_grain=cb_grain, use_fps=cb_fps,
-                    sub_style_str=dynamic_style
+                    sub_style_str=dynamic_style,
+                    mute_orig=cb_mute_orig,
+                    bgm_file=selected_bgm_path,
+                    bgm_vol=bgm_volume
                 )
                 if success: st.session_state.render_success = True
                 else: st.error(f"Rendering Sync Failure: {err_msg}")
@@ -956,8 +950,9 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                                 contents=prompt
                             )
                             
-                            marker = chr(96) * 3
-                            raw_text = response.text.strip().replace(f"{marker}json", "").replace(marker, "")
+                            bt = chr(96)
+                            tbt = bt * 3
+                            raw_text = response.text.strip().replace(f"{tbt}json", "").replace(tbt, "")
                             response_json = json.loads(raw_text)
                             break 
                         except Exception as api_error:
