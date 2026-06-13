@@ -188,11 +188,12 @@ def extract_audio_fast(video_in, audio_out="temp_extracted.mp3"):
         return audio_out
     except: return None
 
-async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default Free)", ttsmaker_key="", eleven_key="", custom_eleven_id="", gemini_key="", pitch=0):
+async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default Free)", ttsmaker_key="", eleven_key="", custom_eleven_id="", gemini_key="", pitch=0, voice_fx="None (Standard Voice)"):
     if not text.strip(): return
     
-    # ယာယီအသံဖိုင် သတ်မှတ်ခြင်း (Pitch ပြောင်းလဲရန်)
-    temp_out = "temp_raw_audio_pitch.wav" if pitch != 0 else output_file
+    # ယာယီအသံဖိုင် သတ်မှတ်ခြင်း (Pitch သို့မဟုတ် FX ပြောင်းလဲရန် လိုအပ်ပါက)
+    needs_ffmpeg = pitch != 0 or voice_fx != "None (Standard Voice)"
+    temp_out = "temp_raw_audio_fx.wav" if needs_ffmpeg else output_file
 
     if "Synergy" in engine:
         if not gemini_key: raise Exception("Gemini Synergy TTS အား အသုံးပြုရန် API Key လိုအပ်ပါသည်။")
@@ -273,17 +274,32 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
         communicate = edge_tts.Communicate(text, voice)
         await communicate.save(temp_out)
 
-    # 🎚️ Pitch Control / Frequency Shift (FFmpeg အသုံးပြု၍ မူရင်းအမြန်နှုန်းအတိုင်း အသံပြောင်းခြင်း)
-    if pitch != 0:
-        factor = 1.0 + (pitch / 100.0) # -30 -> 0.7 (အသံဩမည်), +30 -> 1.3 (အသံစူးမည်)
-        new_sr = int(44100 * factor)
-        atempo_val = 1.0 / factor
+    # 🎚️ Pitch & Cinematic Voice FX (FFmpeg အသုံးပြု၍ ပေါင်းစပ်အသံပြောင်းခြင်း)
+    if needs_ffmpeg:
+        audio = ffmpeg.input(temp_out)
+        
+        # 1. Pitch Shift (အသံအနိမ့်အမြင့်)
+        if pitch != 0:
+            factor = 1.0 + (pitch / 100.0) 
+            new_sr = int(44100 * factor)
+            atempo_val = 1.0 / factor
+            audio = audio.filter('asetrate', new_sr).filter('atempo', atempo_val)
+        
+        # 2. Cinematic FX 
+        if "Epic" in voice_fx:
+            audio = audio.filter('bass', g=12, f=120)
+        elif "Walkie-Talkie" in voice_fx:
+            audio = audio.filter('highpass', f=400).filter('lowpass', f=3000).filter('volume', 1.5)
+        elif "Reverb" in voice_fx:
+            audio = audio.filter('aecho', 0.8, 0.88, 60, 0.4)
+        elif "Demon" in voice_fx:
+            audio = audio.filter('bass', g=15, f=100).filter('aecho', 0.8, 0.88, 40, 0.5)
+        elif "ASMR" in voice_fx:
+            audio = audio.filter('treble', g=12, f=6000).filter('volume', 1.5)
+
         try:
             (
-                ffmpeg
-                .input(temp_out)
-                .filter('asetrate', new_sr)
-                .filter('atempo', atempo_val)
+                audio
                 .output(output_file, acodec='pcm_s16le', ac=1, ar='44100')
                 .overwrite_output()
                 .run(cmd=FFMPEG_BINARY, quiet=True)
@@ -478,8 +494,17 @@ if app_mode == "🎙️ Movie Dubbing Studio":
             
         voice_char = st.selectbox("Select Character Voice", dynamic_options, index=0)
         
-        # 👇 NEW: Pitch Control & Sample Generator
+        # 👇 NEW: Pitch & FX Controls in Column 2
         pitch_level = st.slider("🎙️ Voice Pitch (Frequency Adjust)", min_value=-30, max_value=30, value=0, step=5, help="0 = မူရင်းအသံ။ အနုတ်ပြလျှင် အသံပို၍ ဩမည်/ကြီးမည်၊ အပေါင်းပြလျှင် အသံပို၍ စူးမည်/ငယ်မည်။")
+        
+        fx_level = st.selectbox("🎧 Cinematic Voice FX", [
+            "None (Standard Voice)",
+            "🎙️ Epic Trailer Voice (Bass Boost)",
+            "📻 Walkie-Talkie (Radio Effect)",
+            "🏛️ Cinematic Reverb (Echo)",
+            "👹 Demon / Monster (Deep & Distorted)",
+            "🤫 ASMR / Whisper Mode"
+        ])
         
         if st.button("🔊 Play Voice Sample"):
             sample_txt = "မင်္ဂလာပါ၊ Aether Studio မှ ကြိုဆိုပါတယ်။"
@@ -495,7 +520,8 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                         eleven_key=locals().get('eleven_key_input', ''), 
                         custom_eleven_id=custom_id, 
                         gemini_key=final_gemini_key,
-                        pitch=pitch_level
+                        pitch=pitch_level,
+                        voice_fx=fx_level # FX အား Sample တွင်ထည့်သွင်းခြင်း
                     ))
                     st.audio(sample_file)
                 except Exception as e:
@@ -610,7 +636,8 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                         eleven_key=locals().get('eleven_key_input', ''), 
                         custom_eleven_id=custom_id, 
                         gemini_key=final_gemini_key,
-                        pitch=pitch_level # 👇 Added pitch control logic here
+                        pitch=pitch_level,
+                        voice_fx=fx_level # Final Render တွင် FX ထည့်သွင်းခြင်း
                     ))
                 except Exception as e:
                     st.error(f"အသံထုတ်လုပ်ခြင်း မအောင်မြင်ပါ: {e}")
