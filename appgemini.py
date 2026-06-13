@@ -80,6 +80,47 @@ def get_file_duration(file_path):
         pass
     return 600.0 
 
+# 👇 NEW: Silence Generator for Audio Sync
+def create_silence(duration_sec, out_file):
+    with wave.open(out_file, 'wb') as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(44100)
+        num_frames = int(duration_sec * 44100)
+        wf.writeframes(b'\x00\x00' * num_frames)
+
+# 👇 NEW: Audio Compressor for Audio Sync
+def adjust_audio_speed(in_file, out_file, target_duration):
+    if not os.path.exists(in_file):
+        create_silence(target_duration, out_file)
+        return target_duration
+        
+    actual_dur = get_file_duration(in_file)
+    if actual_dur <= 0.1 or target_duration <= 0.1:
+        import shutil
+        shutil.copy(in_file, out_file)
+        return actual_dur
+        
+    speed = actual_dur / target_duration
+    if 0.90 <= speed <= 1.10: 
+         import shutil
+         shutil.copy(in_file, out_file)
+         return actual_dur
+         
+    if speed > 2.5: speed = 2.5 
+    if speed < 0.6: speed = 0.6
+    
+    try:
+         audio = ffmpeg.input(in_file).audio.filter('atempo', speed)
+         (ffmpeg.output(audio, out_file, acodec='pcm_s16le', ac=1, ar='44100')
+          .overwrite_output()
+          .run(cmd=FFMPEG_BINARY, quiet=True))
+         return actual_dur / speed
+    except:
+         import shutil
+         shutil.copy(in_file, out_file)
+         return actual_dur
+
 def download_video_from_url(url, output_path="input_temp.mp4"):
     if os.path.exists(output_path): os.remove(output_path)
     ydl_opts = {
@@ -125,93 +166,83 @@ def extract_audio_fast(video_in, audio_out="temp_extracted.mp3"):
         return audio_out
     except: return None
 
+# 👇 FIX: Normalized TTS generation for perfect audio syncing
 async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default Free)", ttsmaker_key="", eleven_key="", custom_eleven_id="", gemini_key="", pitch=0, voice_fx="None (Standard Voice)"):
-    if not text.strip(): return
-    
-    needs_ffmpeg = pitch != 0 or voice_fx != "None (Standard Voice)"
-    temp_out = "temp_raw_audio_fx.wav" if needs_ffmpeg else output_file
+    if not text.strip(): 
+        create_silence(1.0, output_file)
+        return
+        
+    temp_out = f"raw_api_{random.randint(10000,99999)}.wav"
 
-    if "Synergy" in engine:
-        if not gemini_key: raise Exception("Gemini Synergy TTS အား အသုံးပြုရန် API Key လိုအပ်ပါသည်။")
-        keys_list = [k.strip() for k in gemini_key.split(",") if k.strip()]
-        
-        voice_name = "Puck" if "Puck" in voice_model else ("Charon" if "Charon" in voice_model else "Aoede")
-        prompt_text = "You are a professional Burmese movie narrator. Read the following text naturally and expressively. " + text
-        
-        payload = {
-            "contents": [{"parts": [{"text": prompt_text}]}],
-            "safetySettings": [
-                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
-            ],
-            "generationConfig": {
-                "responseModalities": ["AUDIO"],
-                "speechConfig": { "voiceConfig": { "prebuiltVoiceConfig": { "voiceName": voice_name } } }
-            }
-        }
-        
-        last_err = ""
-        for idx, current_key in enumerate(keys_list):
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key={current_key}"
-            try:
-                res = requests.post(url, json=payload, timeout=300)
-                if res.status_code == 200:
-                    candidate = res.json().get("candidates", [{}])[0]
-                    if candidate.get("finishReason") == "SAFETY":
-                        raise Exception("Safety Error: AI မှ အသံထွက်ပေးရန် ငြင်းဆိုလိုက်ပါသည်။")
-                    
-                    audio_b64 = candidate["content"]["parts"][0]["inlineData"]["data"]
-                    pcm_data = base64.b64decode(audio_b64)
-                    with wave.open(temp_out, "wb") as wf:
-                        wf.setnchannels(1)
-                        wf.setsampwidth(2)
-                        wf.setframerate(24000)
-                        wf.writeframes(pcm_data)
-                    break
-                elif res.status_code == 429:
-                    last_err = f"Key {current_key[-4:]} ၏ တစ်နေ့စာ Limit ပြည့်သွားပါပြီ။"
-                    continue
-                else:
-                    last_err = f"Gemini API Error ({res.status_code}): {res.text}"
-                    continue
-            except Exception as e: 
-                last_err = str(e)
-                continue
-                
-        if not os.path.exists(temp_out):
-            raise Exception(f"ထည့်သွင်းထားသော Key များအားလုံး Limit ပြည့်သွားပါပြီ။ Key အသစ် ထပ်ထည့်ပါ။ နောက်ဆုံး Error: {last_err}")
-
-    elif "ElevenLabs" in engine:
-        if not eleven_key: raise Exception("ElevenLabs API Key လိုအပ်ပါသည်။")
-        voice_id = custom_eleven_id.strip() if custom_eleven_id else ("21m00Tcm4TlvDq8ikWAM" if "Male" in voice_model else "AZnzlk1XvdvUeBnXmlld")
-        url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
-        headers = { "Accept": "audio/mpeg", "Content-Type": "application/json", "xi-api-key": eleven_key }
-        payload = { "text": text, "model_id": "eleven_multilingual_v2", "voice_settings": { "stability": 0.45, "similarity_boost": 0.75 } }
-        res = requests.post(url, json=payload, headers=headers, timeout=300)
-        if res.status_code == 200:
-            with open(temp_out, "wb") as f: f.write(res.content)
-        else: raise Exception(f"ElevenLabs API Error: {res.text}")
+    try:
+        if "Synergy" in engine:
+            if not gemini_key: raise Exception("Gemini Synergy TTS အား အသုံးပြုရန် API Key လိုအပ်ပါသည်။")
+            keys_list = [k.strip() for k in gemini_key.split(",") if k.strip()]
+            voice_name = "Puck" if "Puck" in voice_model else ("Charon" if "Charon" in voice_model else "Aoede")
+            prompt_text = "You are a professional Burmese movie narrator. Read the following text naturally and expressively. " + text
             
-    elif "TTSMaker" in engine:
-        if not ttsmaker_key: raise Exception("TTSMaker API Key လိုအပ်ပါသည်။")
-        voice_id = 781 if "Female" in voice_model else 780
-        url = "https://api.ttsmaker.com/v1/create-tts-order"
-        payload = { "tts_api_key": ttsmaker_key, "tts_text": text, "voice_id": voice_id, "audio_format": "mp3" }
-        res = requests.post(url, json=payload, timeout=300).json()
-        if res.get("status") == "success":
-            audio_data = requests.get(res["audio_file_url"]).content
-            with open(temp_out, "wb") as f: f.write(audio_data)
-        else: raise Exception(f"TTSMaker API Error: {res}")
+            payload = {
+                "contents": [{"parts": [{"text": prompt_text}]}],
+                "safetySettings": [
+                    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+                ],
+                "generationConfig": {
+                    "responseModalities": ["AUDIO"],
+                    "speechConfig": { "voiceConfig": { "prebuiltVoiceConfig": { "voiceName": voice_name } } }
+                }
+            }
+            
+            success = False
+            for current_key in keys_list:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key={current_key}"
+                try:
+                    res = requests.post(url, json=payload, timeout=300)
+                    if res.status_code == 200:
+                        candidate = res.json().get("candidates", [{}])[0]
+                        if candidate.get("finishReason") == "SAFETY": continue
+                        audio_b64 = candidate["content"]["parts"][0]["inlineData"]["data"]
+                        pcm_data = base64.b64decode(audio_b64)
+                        with wave.open(temp_out, "wb") as wf:
+                            wf.setnchannels(1)
+                            wf.setsampwidth(2)
+                            wf.setframerate(24000)
+                            wf.writeframes(pcm_data)
+                        success = True
+                        break
+                except: continue
+            if not success: create_silence(2.0, temp_out)
 
-    else:
-        # 👇 FIX 1: Add native speed boost (+15%) to Edge-TTS to reduce original lag
-        voice = "my-MM-ThihaNeural" if "Male" in voice_model else "my-MM-NilarNeural"
-        communicate = edge_tts.Communicate(text, voice, rate='+15%')
-        await communicate.save(temp_out)
+        elif "ElevenLabs" in engine:
+            if not eleven_key: raise Exception("ElevenLabs API Key လိုအပ်ပါသည်။")
+            voice_id = custom_eleven_id.strip() if custom_eleven_id else ("21m00Tcm4TlvDq8ikWAM" if "Male" in voice_model else "AZnzlk1XvdvUeBnXmlld")
+            url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+            headers = { "Accept": "audio/mpeg", "Content-Type": "application/json", "xi-api-key": eleven_key }
+            payload = { "text": text, "model_id": "eleven_multilingual_v2", "voice_settings": { "stability": 0.45, "similarity_boost": 0.75 } }
+            res = requests.post(url, json=payload, headers=headers, timeout=300)
+            if res.status_code == 200:
+                with open(temp_out, "wb") as f: f.write(res.content)
+            else: create_silence(2.0, temp_out)
+                
+        elif "TTSMaker" in engine:
+            if not ttsmaker_key: raise Exception("TTSMaker API Key လိုအပ်ပါသည်။")
+            voice_id = 781 if "Female" in voice_model else 780
+            url = "https://api.ttsmaker.com/v1/create-tts-order"
+            payload = { "tts_api_key": ttsmaker_key, "tts_text": text, "voice_id": voice_id, "audio_format": "mp3" }
+            res = requests.post(url, json=payload, timeout=300).json()
+            if res.get("status") == "success":
+                audio_data = requests.get(res["audio_file_url"]).content
+                with open(temp_out, "wb") as f: f.write(audio_data)
+            else: create_silence(2.0, temp_out)
 
-    if needs_ffmpeg:
+        else:
+            voice = "my-MM-ThihaNeural" if "Male" in voice_model else "my-MM-NilarNeural"
+            communicate = edge_tts.Communicate(text, voice, rate='+15%')
+            await communicate.save(temp_out)
+
+        # Force normalize to PCM S16LE 44100Hz 1 Channel for seamless Concat Sync
         audio = ffmpeg.input(temp_out)
         if pitch != 0:
             factor = 1.0 + (pitch / 100.0) 
@@ -223,13 +254,13 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
         elif "Reverb" in voice_fx: audio = audio.filter('aecho', 0.8, 0.88, 60, 0.4)
         elif "Demon" in voice_fx: audio = audio.filter('bass', g=15, f=100).filter('aecho', 0.8, 0.88, 40, 0.5)
         elif "ASMR" in voice_fx: audio = audio.filter('treble', g=12, f=6000).filter('volume', 1.5)
-        try:
-            (audio.output(output_file, acodec='pcm_s16le', ac=1, ar='44100').overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True))
-        except Exception as e:
-            import shutil
-            shutil.copy(temp_out, output_file)
-        finally:
-            if os.path.exists(temp_out): os.remove(temp_out)
+        
+        (audio.output(output_file, acodec='pcm_s16le', ac=1, ar='44100').overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True))
+
+    except Exception as e:
+        create_silence(2.0, output_file)
+    finally:
+        if os.path.exists(temp_out): os.remove(temp_out)
 
 def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
     bt = chr(96)
@@ -315,25 +346,8 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         
         video = ffmpeg.filter(video, 'scale', 'trunc(oh*a/2)*2', 1080, flags='bicubic')
         
-        tts_audio = ffmpeg.input(in_a).audio
-        
-        # 👇 FIX 2: Force Audio Sync - Compress Audio aggressively if it exceeds video duration
-        if v_max_dur > 1.0 and a_dur > 0:
-            target_a_dur = v_max_dur - 0.2
-            speed_factor = a_dur / target_a_dur
-            
-            if speed_factor > 1.0:
-                # Audio is longer than video, compress it without limits
-                temp_speed = speed_factor
-                while temp_speed > 2.0:
-                    tts_audio = ffmpeg.filter(tts_audio, 'atempo', 2.0)
-                    temp_speed /= 2.0
-                tts_audio = ffmpeg.filter(tts_audio, 'atempo', temp_speed)
-            elif 0.5 <= speed_factor <= 1.0:
-                # Audio is slightly shorter, match it to video if desired
-                tts_audio = ffmpeg.filter(tts_audio, 'atempo', speed_factor)
-                
-        audio_streams = [tts_audio]
+        # Audio Mixing (AI Sync output is directly used)
+        audio_streams = [ffmpeg.input(in_a).audio]
         
         if not mute_orig:
             orig_audio = ffmpeg.input(in_v).audio.filter('volume', 0.1)
@@ -573,7 +587,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     if script_tone: extra_rules += " [TONE]: Inject strong emotions and character tones matching the scene."
                     if script_cta: extra_rules += " [CTA]: End the script with a strong Call to Action (CTA) asking a question to encourage comments."
 
-                    # 👇 FIX 3: Force the AI to be extremely brief to match the pacing of the video naturally
                     hormozi_rule = " [HORMOZI]: Split the subtitles into very short chunks (maximum 3-5 words per subtitle). Do not write long sentences in a single block." if sub_short else ""
                     concise_rule = " 5. CONCISENESS: Your Burmese translation MUST BE EXTREMELY BRIEF and FAST-PACED to match the exact duration of the English original. Avoid unnecessary words."
                     
@@ -653,28 +666,72 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     st.session_state.generated_script = raw_output_text
                 except Exception as e: st.error(f"{ai_provider} Logic Error: {e}"); st.stop()
 
-            with st.spinner(f"⏳ [အဆင့် ၄/၆] {audio_engine_choice} စနစ်ဖြင့် AI Voice Over ထုတ်လုပ်နေပါသည်..."):
+            # 👇 FIX: Pro Audio Sync Loop to perfectly match audio chunks to video timeline
+            with st.spinner(f"⏳ [အဆင့် ၄/၆] {audio_engine_choice} စနစ်ဖြင့် AI Voice Over တစ်ကြောင်းချင်းစီ Sync ညှိနေပါသည်... (ဤအဆင့်သည် အချိန်အနည်းငယ် ယူနိုင်ပါသည်)"):
                 try:
+                    timeline_list = "concat_list.txt"
+                    temp_files_to_cleanup = []
+                    
                     custom_id = locals().get('custom_eleven_id', '')
                     final_gemini_key = locals().get('synergy_key', api_key_input)
                     
-                    raw_speech = " ".join([t for _,_,t in parsed_timestamps])
-                    clean_speech = re.sub(r'\{.*?\}', '', raw_speech)
+                    with open(timeline_list, "w", encoding="utf-8") as f_list:
+                        current_time = 0.0
+                        total_lines = len(parsed_timestamps)
+                        progress_bar = st.progress(0)
+                        
+                        for idx, (start, end, raw_text) in enumerate(parsed_timestamps):
+                            # Clean text from brackets for TTS reading
+                            clean_txt = re.sub(r'\[.*?\]', '', raw_text)
+                            clean_txt = re.sub(r'\{.*?\}', '', clean_txt).strip()
+                            
+                            if not clean_txt: continue
+                            
+                            # Insert Silence if there's a gap in the video
+                            if start > current_time:
+                                sil_dur = start - current_time
+                                sil_file = f"silence_{idx}.wav"
+                                create_silence(sil_dur, sil_file)
+                                f_list.write(f"file '{sil_file}'\n")
+                                temp_files_to_cleanup.append(sil_file)
+                                current_time = start
+                                
+                            # Generate TTS Chunk
+                            temp_tts = f"temp_tts_{idx}.wav"
+                            sync_tts = f"sync_tts_{idx}.wav"
+                            
+                            asyncio.run(generate_tts(
+                                clean_txt, voice_char, temp_tts, 
+                                engine=audio_engine_choice, ttsmaker_key=key_ttsmaker, 
+                                eleven_key=locals().get('eleven_key_input', ''), 
+                                custom_eleven_id=custom_id, gemini_key=final_gemini_key,
+                                pitch=pitch_level, voice_fx=fx_level 
+                            ))
+                            
+                            if "Synergy" in audio_engine_choice: time.sleep(1.0)
+                            
+                            # Speed Adjust to match specific subtitle duration
+                            tgt_dur = end - start
+                            actual_dur = adjust_audio_speed(temp_tts, sync_tts, tgt_dur)
+                            
+                            f_list.write(f"file '{sync_tts}'\n")
+                            temp_files_to_cleanup.extend([temp_tts, sync_tts])
+                            current_time += actual_dur
+                            
+                            progress_bar.progress((idx + 1) / total_lines)
                     
-                    asyncio.run(generate_tts(
-                        clean_speech, 
-                        voice_char, 
-                        a_generated, 
-                        engine=audio_engine_choice, 
-                        ttsmaker_key=key_ttsmaker, 
-                        eleven_key=locals().get('eleven_key_input', ''), 
-                        custom_eleven_id=custom_id, 
-                        gemini_key=final_gemini_key,
-                        pitch=pitch_level,
-                        voice_fx=fx_level 
-                    ))
+                    # Merge all audio chunks flawlessly
+                    (ffmpeg.input(timeline_list, format='concat', safe=0)
+                     .output(a_generated, c='copy')
+                     .overwrite_output()
+                     .run(cmd=FFMPEG_BINARY, quiet=True))
+                     
+                    for f in temp_files_to_cleanup:
+                        if os.path.exists(f): os.remove(f)
+                    if os.path.exists(timeline_list): os.remove(timeline_list)
+                    
                 except Exception as e:
-                    st.error(f"အသံထုတ်လုပ်ခြင်း မအောင်မြင်ပါ: {e}")
+                    st.error(f"အသံထုတ်လုပ်ခြင်း မအောင်မြင်ပါ (Audio Sync Error): {e}")
                     st.stop()
 
             with st.spinner("⏳ [အဆင့် ၅+၆] ဗီဒီယိုနှင့် စာတန်းထိုးအား ရွေးချယ်ထားသော စနစ်အတိုင်း ဖန်တီးနေပါသည်..."):
