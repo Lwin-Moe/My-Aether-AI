@@ -147,7 +147,7 @@ st.markdown('''
         color: #f8fafc !important;
     }
     
-    /* Subtitle Styling Box */
+    /* Subtitle & Storytelling Box */
     .sub-box {
         background-color: #1a2235;
         border: 1px solid rgba(129, 140, 248, 0.3);
@@ -180,7 +180,6 @@ def get_file_duration(file_path):
 def download_video_from_url(url, output_path="input_temp.mp4"):
     if os.path.exists(output_path): os.remove(output_path)
     
-    # 👇 FIX: Aggressive 403 Bypass configuration for yt-dlp
     ydl_opts = {
         'outtmpl': output_path, 
         'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best', 
@@ -188,8 +187,8 @@ def download_video_from_url(url, output_path="input_temp.mp4"):
         'no_warnings': True,
         'nocheckcertificate': True,
         'ffmpeg_location': FFMPEG_BINARY,
-        'source_address': '0.0.0.0',  # Bypass IPv6 blocks
-        'extractor_args': {'youtube': {'player_client': ['tv', 'ios', 'web']}}, # Use TV/iOS clients
+        'source_address': '0.0.0.0', 
+        'extractor_args': {'youtube': {'player_client': ['tv', 'ios', 'web']}}, 
         'http_headers': {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
             'Accept-Language': 'en-US,en;q=0.9',
@@ -211,7 +210,6 @@ def extract_audio_fast(video_in, audio_out="temp_extracted.mp3"):
         if os.path.exists(audio_out): return audio_out
     except: pass
     try:
-        # 👇 FIX: Aggressive 403 Bypass for audio extraction fallback
         ydl_opts = {
             'format': 'bestaudio/best', 
             'outtmpl': 'temp_extracted', 
@@ -530,6 +528,17 @@ if app_mode == "🎙️ Movie Dubbing Studio":
     with col_in1:
         video_url = st.text_input("🔗 Paste Short Drama URL Link", placeholder="https://...")
         uploaded_file = st.file_uploader("📥 OR Upload Video File (MP4)", type=["mp4"])
+        
+        # 👇 NEW: Storytelling & Script Pro Settings added to the empty space
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("<div class='sub-box'>", unsafe_allow_html=True)
+        st.markdown("<p style='margin-bottom: 10px; font-weight: bold; color: #38bdf8 !important; font-size: 16px;'>✍️ AI Storytelling & Script Rules</p>", unsafe_allow_html=True)
+        script_hook = st.checkbox("🪝 3-Second Viral Hook (အစချီ ဆွဲဆောင်မည်)", value=True)
+        script_slang = st.checkbox("🇲🇲 Myanmar Slang (လူငယ်သုံး စကားလုံးများ)", value=True)
+        script_curiosity = st.checkbox("🤯 Curiosity Gaps (စိတ်ဝင်စားမှု အရှိန်တင်မည်)", value=True)
+        script_tone = st.checkbox("🎭 Emotion & Tone (ဇာတ်ကောင်စရိုက် သွင်းမည်)", value=True)
+        script_cta = st.checkbox("💬 Call to Action (Comment ခေါ်မည်)", value=False)
+        st.markdown("</div>", unsafe_allow_html=True)
 
     with col_in2:
         if "Synergy" in audio_engine_choice:
@@ -626,8 +635,17 @@ if app_mode == "🎙️ Movie Dubbing Studio":
 
             with st.spinner(f"⏳ [အဆင့် ၂/၆] {ai_provider} ကိုအသုံးပြု၍ Audio Tags များပါဝင်သော ဇာတ်ညွှန်း ရေးသားနေပါသည်..."):
                 try:
-                    hormozi_rule = " 5. SHORT & PUNCHY (ALEX HORMOZI STYLE): Split the subtitles into very short chunks (maximum 3-5 words per subtitle). Do not write long sentences in a single block. Keep them extremely fast-paced and punchy." if sub_short else ""
-                    base_prompt = f"You are an expert Myanmar (Burmese) TikTok movie recap narrator. I am providing you with an English SRT file translated from the original audio. Translate and adapt the text into highly engaging, natural spoken Burmese (မြန်မာစကားပြောဟန်). STRICT RULES: 1. SYNERGY AUDIO TAGS: You MUST include inline audio tags to direct the TTS voice. Use tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers], [reluctantly] at the beginning of relevant sentences to add emotion and dramatic pacing. 2. NO ENGLISH TRANSLITERATION: Translate meanings naturally. 3. FORMAT: Keep the EXACT original SRT timecodes and indices. 4. Output ONLY the raw SRT format.{hormozi_rule}"
+                    # 👇 NEW: Injecting the Storytelling Prompts based on User Toggles
+                    extra_rules = ""
+                    if script_hook: extra_rules += " [HOOK]: Start with an extremely engaging 3-second viral hook."
+                    if script_slang: extra_rules += " [SLANG]: Use modern Myanmar internet slang and Gen-Z conversational tone instead of formal translation."
+                    if script_curiosity: extra_rules += " [CURIOSITY]: Insert curiosity gaps in the middle to retain audience attention (e.g., 'But the real plot twist happens now...')."
+                    if script_tone: extra_rules += " [TONE]: Inject strong emotions and character tones matching the scene."
+                    if script_cta: extra_rules += " [CTA]: End the script with a strong Call to Action (CTA) asking a question to encourage comments."
+
+                    hormozi_rule = " [HORMOZI]: Split the subtitles into very short chunks (maximum 3-5 words per subtitle). Do not write long sentences in a single block. Keep them extremely fast-paced and punchy." if sub_short else ""
+                    
+                    base_prompt = f"You are an expert Myanmar (Burmese) TikTok movie recap narrator. I am providing you with an English SRT file translated from the original audio. Translate and adapt the text into highly engaging, natural spoken Burmese (မြန်မာစကားပြောဟန်). STRICT RULES: 1. SYNERGY AUDIO TAGS: You MUST include inline audio tags to direct the TTS voice. Use tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers], [reluctantly] at the beginning of relevant sentences to add emotion and dramatic pacing. 2. NO ENGLISH TRANSLITERATION: Translate meanings naturally. 3. FORMAT: Keep the EXACT original SRT timecodes and indices. 4. Output ONLY the raw SRT format.{extra_rules}{hormozi_rule}"
 
                     if "Gemini" in ai_provider:
                         keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
@@ -647,7 +665,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                                     else:
                                         break
                                 
-                                gemini_prompt = f"Listen to the ENTIRE audio file from the absolute beginning to the very last second. Do NOT truncate, skip, or summarize the ending. You MUST generate a complete SRT subtitle file in natural spoken Burmese (မြန်မာစကားပြောဟန်) covering the WHOLE video duration until the very end. 🛑 STRICT RULES: 1. Include Synergy Audio Tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers] to guide the voice naturally. 2. NO ENGLISH TRANSLITERATION. 3. Output ONLY valid SRT format.{hormozi_rule}"
+                                gemini_prompt = f"Listen to the ENTIRE audio file from the absolute beginning to the very last second. Do NOT truncate, skip, or summarize the ending. You MUST generate a complete SRT subtitle file in natural spoken Burmese (မြန်မာစကားပြောဟန်) covering the WHOLE video duration until the very end. 🛑 STRICT RULES: 1. Include Synergy Audio Tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers] to guide the voice naturally. 2. NO ENGLISH TRANSLITERATION. 3. Output ONLY valid SRT format.{extra_rules}{hormozi_rule}"
                                 
                                 response = client.models.generate_content(
                                     model="gemini-2.5-flash",
@@ -869,7 +887,6 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                     project_id = "project_" + str(int(time.time()))
                     
                     st.info("⬇️ ဗီဒီယိုမှ အသံလမ်းကြောင်းကို ရယူနေပါသည်...")
-                    # 👇 FIX: Added Extractor Args for Translation Hub as well
                     ydl_opts = {
                         'format': 'bestaudio/best',
                         'outtmpl': f'{project_id}.%(ext)s',
@@ -1018,7 +1035,6 @@ elif app_mode == "📥 Video Downloader Hub":
                 try:
                     dl_project_id = "dl_" + str(int(time.time()))
                     
-                    # 👇 FIX: Extractor Args for Video Downloader Hub
                     ydl_hub_opts = {
                         'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
                         'outtmpl': f'{dl_project_id}.%(ext)s',
