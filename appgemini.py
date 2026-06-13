@@ -45,7 +45,7 @@ st.set_page_config(page_title="AETHER STUDIO V52", layout="wide", page_icon="�
 st.markdown('''
     <style>
     /* Import Premium Fonts */
-    @import url('[https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Montserrat:wght@500;700;800;900&display=swap](https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Montserrat:wght@500;700;800;900&display=swap)');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Montserrat:wght@500;700;800;900&display=swap');
 
     /* Base App Styling */
     .stApp { 
@@ -227,7 +227,7 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
         
         last_err = ""
         for idx, current_key in enumerate(keys_list):
-            url = f"[https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key=){current_key}"
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key={current_key}"
             try:
                 res = requests.post(url, json=payload)
                 if res.status_code == 200:
@@ -259,7 +259,7 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
     elif "ElevenLabs" in engine:
         if not eleven_key: raise Exception("ElevenLabs API Key လိုအပ်ပါသည်။")
         voice_id = custom_eleven_id.strip() if custom_eleven_id else ("21m00Tcm4TlvDq8ikWAM" if "Male" in voice_model else "AZnzlk1XvdvUeBnXmlld")
-        url = f"[https://api.elevenlabs.io/v1/text-to-speech/](https://api.elevenlabs.io/v1/text-to-speech/){voice_id}"
+        url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
         headers = { "Accept": "audio/mpeg", "Content-Type": "application/json", "xi-api-key": eleven_key }
         payload = { "text": text, "model_id": "eleven_multilingual_v2", "voice_settings": { "stability": 0.45, "similarity_boost": 0.75 } }
         res = requests.post(url, json=payload, headers=headers)
@@ -270,7 +270,7 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
     elif "TTSMaker" in engine:
         if not ttsmaker_key: raise Exception("TTSMaker API Key လိုအပ်ပါသည်။")
         voice_id = 781 if "Female" in voice_model else 780
-        url = "[https://api.ttsmaker.com/v1/create-tts-order](https://api.ttsmaker.com/v1/create-tts-order)"
+        url = "https://api.ttsmaker.com/v1/create-tts-order"
         payload = { "tts_api_key": ttsmaker_key, "tts_text": text, "voice_id": voice_id, "audio_format": "mp3" }
         res = requests.post(url, json=payload).json()
         if res.get("status") == "success":
@@ -317,7 +317,6 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
             if os.path.exists(temp_out): os.remove(temp_out)
 
 def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
-    # 👇 FIX: Changed double quotes to single quotes to prevent SyntaxError
     clean_srt = raw_srt_text.replace('```srt', '').replace('```', '').strip()
     
     with open(output_file, "w", encoding="utf-8-sig") as f: 
@@ -628,8 +627,9 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                                 
                                 gemini_prompt = f"Listen to the ENTIRE audio file from the absolute beginning to the very last second. Do NOT truncate, skip, or summarize the ending. You MUST generate a complete SRT subtitle file in natural spoken Burmese (မြန်မာစကားပြောဟန်) covering the WHOLE video duration until the very end. 🛑 STRICT RULES: 1. Include Synergy Audio Tags like [pause=0.5], [pause=1.0], [excited], [neutral], [whispers] to guide the voice naturally. 2. NO ENGLISH TRANSLITERATION. 3. Output ONLY valid SRT format.{hormozi_rule}"
                                 
+                                # 👇 ပြင်ဆင်ပြီး - Gemini 2.5 Flash အသစ်
                                 response = client.models.generate_content(
-                                    model="gemini-1.5-flash",
+                                    model="gemini-2.5-flash",
                                     contents=[f_info, gemini_prompt]
                                 )
                                 raw_output_text = response.text.strip()
@@ -764,7 +764,7 @@ elif app_mode == "🎥 Veo Video Studio":
                     keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
                     success = False
                     for key in keys_list:
-                        url = f"[https://generativelanguage.googleapis.com/v1beta/models/veo-2.0-generate-001:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/veo-2.0-generate-001:generateContent?key=){key}"
+                        url = f"https://generativelanguage.googleapis.com/v1beta/models/veo-2.0-generate-001:generateContent?key={key}"
                         payload = {"contents": [{"parts": [{"text": video_prompt}]}], "generationConfig": {"responseModalities": ["VIDEO"]}}
                         res = requests.post(url, json=payload)
                         if res.status_code == 200:
@@ -795,7 +795,7 @@ elif app_mode == "🎵 Lyria Music Studio":
                     keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
                     success = False
                     for key in keys_list:
-                        url = f"[https://generativelanguage.googleapis.com/v1beta/models/lyria-3-pro-preview:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/lyria-3-pro-preview:generateContent?key=){key}"
+                        url = f"https://generativelanguage.googleapis.com/v1beta/models/lyria-3-pro-preview:generateContent?key={key}"
                         payload = {"contents": [{"parts": [{"text": music_prompt}]}], "generationConfig": {"responseModalities": ["AUDIO"]}}
                         res = requests.post(url, json=payload)
                         if res.status_code == 200:
@@ -904,12 +904,12 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                             st.toast(f"🔑 Key ({index + 1}/{len(api_keys)}) ဖြင့် ကြိုးစားနေပါသည်...", icon="⏳")
                             client = genai.Client(api_key=current_key)
                             
+                            # 👇 ပြင်ဆင်ပြီး - Gemini 2.5 Flash အသစ်
                             response = client.models.generate_content(
-                                model='gemini-1.5-flash',
+                                model='gemini-2.5-flash',
                                 contents=prompt
                             )
                             
-                            # 👇 FIX: Changed double quotes to single quotes to prevent SyntaxError
                             raw_text = response.text.strip().replace('```json', '').replace('```', '')
                             response_json = json.loads(raw_text)
                             break 
