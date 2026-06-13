@@ -177,13 +177,26 @@ def get_file_duration(file_path):
         pass
     return 600.0 
 
+# 👇 FIX: YouTube Downloader Header and Error Exposure added
 def download_video_from_url(url, output_path="input_temp.mp4"):
     if os.path.exists(output_path): os.remove(output_path)
-    ydl_opts = {'outtmpl': output_path, 'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best', 'quiet': True}
+    
+    ydl_opts = {
+        'outtmpl': output_path, 
+        'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best', 
+        'quiet': True,
+        'no_warnings': True,
+        'ffmpeg_location': FFMPEG_BINARY,
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        }
+    }
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl: ydl.download([url])
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl: 
+            ydl.download([url])
         return output_path
-    except Exception: raise Exception("ဗီဒီယိုအား ဒေါင်းလုဒ်ဆွဲ၍ မရပါ။")
+    except Exception as e: 
+        raise Exception(f"ဗီဒီယိုအား ဒေါင်းလုဒ်ဆွဲ၍ မရပါ။ (Error: {str(e)})")
 
 def extract_audio_fast(video_in, audio_out="temp_extracted.mp3"):
     if os.path.exists(audio_out): os.remove(audio_out)
@@ -285,31 +298,18 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
 
     if needs_ffmpeg:
         audio = ffmpeg.input(temp_out)
-        
         if pitch != 0:
             factor = 1.0 + (pitch / 100.0) 
             new_sr = int(44100 * factor)
             atempo_val = 1.0 / factor
             audio = audio.filter('asetrate', new_sr).filter('atempo', atempo_val)
-        
-        if "Epic" in voice_fx:
-            audio = audio.filter('bass', g=12, f=120)
-        elif "Walkie-Talkie" in voice_fx:
-            audio = audio.filter('highpass', f=400).filter('lowpass', f=3000).filter('volume', 1.5)
-        elif "Reverb" in voice_fx:
-            audio = audio.filter('aecho', 0.8, 0.88, 60, 0.4)
-        elif "Demon" in voice_fx:
-            audio = audio.filter('bass', g=15, f=100).filter('aecho', 0.8, 0.88, 40, 0.5)
-        elif "ASMR" in voice_fx:
-            audio = audio.filter('treble', g=12, f=6000).filter('volume', 1.5)
-
+        if "Epic" in voice_fx: audio = audio.filter('bass', g=12, f=120)
+        elif "Walkie-Talkie" in voice_fx: audio = audio.filter('highpass', f=400).filter('lowpass', f=3000).filter('volume', 1.5)
+        elif "Reverb" in voice_fx: audio = audio.filter('aecho', 0.8, 0.88, 60, 0.4)
+        elif "Demon" in voice_fx: audio = audio.filter('bass', g=15, f=100).filter('aecho', 0.8, 0.88, 40, 0.5)
+        elif "ASMR" in voice_fx: audio = audio.filter('treble', g=12, f=6000).filter('volume', 1.5)
         try:
-            (
-                audio
-                .output(output_file, acodec='pcm_s16le', ac=1, ar='44100')
-                .overwrite_output()
-                .run(cmd=FFMPEG_BINARY, quiet=True)
-            )
+            (audio.output(output_file, acodec='pcm_s16le', ac=1, ar='44100').overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True))
         except Exception as e:
             import shutil
             shutil.copy(temp_out, output_file)
@@ -632,7 +632,8 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                                     model="gemini-2.5-flash",
                                     contents=[f_info, gemini_prompt]
                                 )
-                                raw_output_text = response.text.strip()
+                                marker = chr(96) * 3
+                                raw_output_text = response.text.strip().replace(f"{marker}srt", "").replace(marker, "")
                                 client.files.delete(name=f_info.name)
                                 success_gemini = True
                                 break 
