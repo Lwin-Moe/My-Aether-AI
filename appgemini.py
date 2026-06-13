@@ -177,16 +177,18 @@ def get_file_duration(file_path):
         pass
     return 600.0 
 
-# 👇 FIX: YouTube Downloader Header and Error Exposure added
 def download_video_from_url(url, output_path="input_temp.mp4"):
     if os.path.exists(output_path): os.remove(output_path)
     
+    # 👇 FIX: Added Extractor Args to bypass YouTube Bot Blocks (Android/Web Client spoofing)
     ydl_opts = {
         'outtmpl': output_path, 
         'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best', 
         'quiet': True,
         'no_warnings': True,
+        'nocheckcertificate': True,
         'ffmpeg_location': FFMPEG_BINARY,
+        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
         'http_headers': {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         }
@@ -196,7 +198,7 @@ def download_video_from_url(url, output_path="input_temp.mp4"):
             ydl.download([url])
         return output_path
     except Exception as e: 
-        raise Exception(f"ဗီဒီယိုအား ဒေါင်းလုဒ်ဆွဲ၍ မရပါ။ (Error: {str(e)})")
+        raise Exception(f"YouTube Download Error: ဗီဒီယိုကို ဆွဲယူ၍မရပါ။ Server IP Block ခံရခြင်း (သို့) Private Video ဖြစ်နိုင်ပါသည်။ ({str(e)})")
 
 def extract_audio_fast(video_in, audio_out="temp_extracted.mp3"):
     if os.path.exists(audio_out): os.remove(audio_out)
@@ -206,8 +208,18 @@ def extract_audio_fast(video_in, audio_out="temp_extracted.mp3"):
         if os.path.exists(audio_out): return audio_out
     except: pass
     try:
-        ydl_opts = {'format': 'bestaudio/best', 'outtmpl': 'temp_extracted', 'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'}], 'quiet': True, 'ffmpeg_location': FFMPEG_BINARY}
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl: ydl.extract_info(video_in, download=True)
+        # 👇 FIX: Consistent YouTube bypass for audio extraction
+        ydl_opts = {
+            'format': 'bestaudio/best', 
+            'outtmpl': 'temp_extracted', 
+            'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'}], 
+            'quiet': True, 
+            'nocheckcertificate': True,
+            'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
+            'ffmpeg_location': FFMPEG_BINARY
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl: 
+            ydl.extract_info(video_in, download=True)
         return audio_out
     except: return None
 
@@ -594,9 +606,15 @@ if app_mode == "🎙️ Movie Dubbing Studio":
             v_input, a_extracted, a_generated, v_final, srt_final = "input_temp.mp4", "temp_extracted.mp3", "voice_temp.wav", "AETHER_RECAP_FINAL.mp4", "subtitles.srt"
 
             with st.spinner("⏳ [အဆင့် ၁/၆] ဗီဒီယို ဖိုင်အား စနစ်ထဲသို့ ဆွဲသွင်းနေပါသည်..."):
-                if uploaded_file:
-                    with open(v_input, "wb") as f: f.write(uploaded_file.read())
-                else: download_video_from_url(video_url, v_input)
+                # 👇 FIX: Added try-except so Streamlit catches the YouTube DL Error gracefully
+                try:
+                    if uploaded_file:
+                        with open(v_input, "wb") as f: f.write(uploaded_file.read())
+                    else: 
+                        download_video_from_url(video_url, v_input)
+                except Exception as dl_err:
+                    st.error(str(dl_err))
+                    st.stop()
                 
                 extracted_res = extract_audio_fast(v_input, a_extracted)
                 if not extracted_res or not os.path.exists(a_extracted):
@@ -848,11 +866,14 @@ elif app_mode == "⚡ Translation/Transcript Studio":
                     project_id = "project_" + str(int(time.time()))
                     
                     st.info("⬇️ ဗီဒီယိုမှ အသံလမ်းကြောင်းကို ရယူနေပါသည်...")
+                    # 👇 FIX: Consistent bypass for Whisper Downloader
                     ydl_opts = {
                         'format': 'bestaudio/best',
                         'outtmpl': f'{project_id}.%(ext)s',
                         'quiet': True,
                         'no_warnings': True,
+                        'nocheckcertificate': True,
+                        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
                         'http_headers': {
                             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                         }
@@ -993,11 +1014,14 @@ elif app_mode == "📥 Video Downloader Hub":
                 try:
                     dl_project_id = "dl_" + str(int(time.time()))
                     
+                    # 👇 FIX: Consistent bypass for Video Downloader Hub
                     ydl_hub_opts = {
                         'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
                         'outtmpl': f'{dl_project_id}.%(ext)s',
                         'quiet': True,
                         'no_warnings': True,
+                        'nocheckcertificate': True,
+                        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
                         'http_headers': {
                             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                         }
