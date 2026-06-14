@@ -40,7 +40,7 @@ OPENAI_KEY_FILE = "saved_openai_key.txt"
 ELEVEN_VOICE_ID_FILE = "saved_eleven_voice_id.txt"
 PEXELS_KEY_FILE = "saved_pexels_key.txt"
 
-# 👇 Dedicated fonts directory setup
+# Dedicated fonts directory setup
 FONT_DIR = "font"
 if not os.path.exists(FONT_DIR): os.makedirs(FONT_DIR)
 
@@ -604,6 +604,9 @@ elif app_mode == "🎙️ Faceless Channel Studio":
     st.markdown('<div class="setting-panel"><h3>👻 Fully-Automated Faceless Channel Studio</h3>', unsafe_allow_html=True)
     st.markdown("TikTok, FB Reels များအတွက် Reddit Stories, Horror ပုံပြင်များကို AI ဖြင့် အလိုအလျောက် ဗီဒီယိုဖန်တီးပါ။")
 
+    local_fonts = [f for f in os.listdir(FONT_DIR) if f.endswith((".ttf", ".otf"))]
+    default_fonts = local_fonts if local_fonts else ["Pyidaungsu.ttf"]
+
     with st.sidebar:
         st.markdown("---")
         st.markdown("<b>🎙️ Voice & Audio Settings</b>", unsafe_allow_html=True)
@@ -725,23 +728,36 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                         
                 except Exception as e: st.error(f"Visual Error: {e}"); st.stop()
 
-            # STEP 4: SRT Sync (Gemini Audio to SRT)
+            # 👇 FIX: Added Loop and Auto-Retry Mechanism for API calls in Step 4
             with st.spinner("⏳ [အဆင့် ၄/၅] စာတန်းထိုးများကို Alex Hormozi ပုံစံ ချိန်ညှိနေပါသည်..."):
                 pbar.progress(70, text="📝 Timeline ချိန်ညှိနေပါသည်...")
-                try:
-                    audio_upload = client.files.upload(file="fc_audio.wav")
-                    while "PROCESSING" in str(client.files.get(name=audio_upload.name).state): time.sleep(2)
-                    
-                    srt_prompt = "Listen to the audio. Output ONLY a valid SRT file in Burmese. CRITICAL RULE: Each subtitle block MUST contain ONLY 1 to 4 words maximum. The timestamps MUST strictly follow this exact format: HH:MM:SS,mmm --> HH:MM:SS,mmm (Example: 00:00:04,000 --> 00:00:05,500). DO NOT format timestamps like 00:04:848. Always include the hours. No markdown."
-                    srt_res = client.models.generate_content(model="gemini-2.5-flash", contents=[audio_upload, srt_prompt])
-                    
-                    # 👇 FIX: Added marker formatting back to safely strip backticks without triggering string literal syntax error
-                    marker = chr(96) * 3
-                    fc_srt_text = srt_res.text.strip().replace(f"{marker}srt", "").replace(marker, "")
-                    
-                    fc_parsed, _ = parse_and_save_real_srt(fc_srt_text, "subtitles.srt")
-                    client.files.delete(name=audio_upload.name)
-                except Exception as e: st.error(f"SRT Error: {e}"); st.stop()
+                
+                srt_success = False
+                last_srt_err = ""
+                
+                for current_key in keys_list:
+                    try:
+                        temp_client = genai.Client(api_key=current_key)
+                        audio_upload = temp_client.files.upload(file="fc_audio.wav")
+                        while "PROCESSING" in str(temp_client.files.get(name=audio_upload.name).state): time.sleep(2)
+                        
+                        srt_prompt = "Listen to the audio. Output ONLY a valid SRT file in Burmese. CRITICAL RULE: Each subtitle block MUST contain ONLY 1 to 4 words maximum. The timestamps MUST strictly follow this exact format: HH:MM:SS,mmm --> HH:MM:SS,mmm (Example: 00:00:04,000 --> 00:00:05,500). DO NOT format timestamps like 00:04:848. Always include the hours. No markdown."
+                        srt_res = temp_client.models.generate_content(model="gemini-2.5-flash", contents=[audio_upload, srt_prompt])
+                        
+                        marker = chr(96) * 3
+                        fc_srt_text = srt_res.text.strip().replace(f"{marker}srt", "").replace(marker, "")
+                        
+                        fc_parsed, _ = parse_and_save_real_srt(fc_srt_text, "subtitles.srt")
+                        temp_client.files.delete(name=audio_upload.name)
+                        srt_success = True
+                        break # Exit the loop if generation is successful
+                    except Exception as e:
+                        last_srt_err = str(e)
+                        continue # If 503 or 429 error occurs, jump to the next API key in the list
+                
+                if not srt_success:
+                    st.error(f"SRT Error: Google API ဆာဗာ အလုပ်များနေပါသည်။ ခဏစောင့်ပြီး ပြန်လုပ်ကြည့်ပါ။ အသေးစိတ်: {last_srt_err}")
+                    st.stop()
 
             # STEP 5: Final Master Rendering
             with st.spinner("⏳ [အဆင့် ၅/၅] အားလုံးကိုပေါင်းစပ်ပြီး Master Video ထုတ်လုပ်နေပါသည်..."):
