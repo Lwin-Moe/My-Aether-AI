@@ -647,387 +647,309 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     fc_audio_dur = get_file_duration("fc_audio.wav")
                 except Exception as e: st.error(f"Audio Error: {e}"); st.stop()
 
-           # STEP 3: Fallback Image/Video Generation (Optimized Version)
+             # STEP 3: Fallback Image/Video Generation
+            with st.spinner("⏳ [အဆင့် ၃/၅] Pexels ဖြင့် ဇာတ်လမ်းနှင့် ကိုက်ညီသော ဗီဒီယိုများ ရယူနေပါသည်..."):
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import random
-import requests
-import re
-import time
-import os
-import subprocess
+                pbar.progress(50, text="🎥 Visuals Generation စတင်နေပါသည်...")
 
-with st.spinner("⏳ [အဆင့် ၃/၅] Pexels ဖြင့် ဇာတ်လမ်းနှင့် ကိုက်ညီသော ဗီဒီယိုများ ရယူနေပါသည်..."):
+                try:
 
-    pbar.progress(
-        50,
-        text="🎥 Visuals Generation စတင်နေပါသည်..."
-    )
+                    search_keywords = []
+                    last_err = ""
 
-    try:
+                    # Generate Keywords
+                    for key in keys_list:
+                        try:
+                            client = genai.Client(api_key=key)
 
-        search_keywords = []
-        last_err = ""
-
-        # ===================================================
-        # Generate Keywords From Gemini
-        # ===================================================
-
-        for key in keys_list:
-
-            try:
-
-                client = genai.Client(api_key=key)
-
-                prompt_req = client.models.generate_content(
-                    model="gemini-2.5-flash",
-                    contents=f"""
-Based on this story, give me exactly THREE short,
-distinct English search keywords.
-
-Rules:
-- max 3 words each
-- scenery only
-- no violence
-- no gore
-- no scary words
-
+                            prompt_req = client.models.generate_content(
+                                model="gemini-2.5-flash",
+                                contents=f"""
+Based on this story, give exactly 3 short English search keywords.
 Format:
 keyword1|keyword2|keyword3
 
 Story:
 {fc_story_text[:200]}
 """
-                )
+                            )
 
-                search_keywords = [
-                    k.strip()
-                    for k in prompt_req.text.split("|")
-                    if k.strip()
-                ][:3]
+                            search_keywords = [
+                                k.strip()
+                                for k in prompt_req.text.split("|")
+                                if k.strip()
+                            ][:3]
 
-                break
+                            break
 
-            except Exception as e:
-                last_err = str(e)
-                continue
+                        except Exception as e:
+                            last_err = str(e)
+                            continue
 
-        if not search_keywords:
+                    if not search_keywords:
+                        st.error(f"Keyword Error: {last_err}")
+                        st.stop()
 
-            st.error(
-                f"Keyword Error: Key အားလုံး Limit ပြည့်နေပါသည်။\n{last_err}"
-            )
+                    generated_clips = []
 
-            st.stop()
+                    pexels_api_key = locals().get(
+                        "pexels_key_input",
+                        ""
+                    ).strip()
 
-        generated_clips = []
-
-        pexels_api_key = (
-            locals()
-            .get("pexels_key_input", "")
-            .strip()
-        )
-
-        orientation = (
-            "portrait"
-            if "9:16" in fc_ratio
-            else "landscape"
-        )
-
-        step3_start_time = time.time()
-
-        # ===================================================
-        # Download Function
-        # ===================================================
-
-        def fetch_clip(index, keyword):
-
-            try:
-
-                clean_kw = keyword.replace(" ", "+")
-
-                # ==========================================
-                # PEXELS API MODE
-                # ==========================================
-
-                if pexels_api_key:
-
-                    headers = {
-                        "Authorization": pexels_api_key
-                    }
-
-                    pexels_url = (
-                        f"https://api.pexels.com/videos/search"
-                        f"?query={clean_kw}"
-                        f"&orientation={orientation}"
-                        f"&per_page=3"
+                    orientation = (
+                        "portrait"
+                        if "9:16" in fc_ratio
+                        else "landscape"
                     )
 
-                    res = requests.get(
-                        pexels_url,
-                        headers=headers,
-                        timeout=15
+                    step3_start_time = time.time()
+
+                    # -------------------------------
+                    # Download Function
+                    # -------------------------------
+                    def fetch_clip(index, keyword):
+
+                        try:
+
+                            clean_kw = keyword.replace(
+                                " ",
+                                "+"
+                            )
+
+                            # API MODE
+                            if pexels_api_key:
+
+                                headers = {
+                                    "Authorization": pexels_api_key
+                                }
+
+                                url = (
+                                    f"https://api.pexels.com/videos/search"
+                                    f"?query={clean_kw}"
+                                    f"&orientation={orientation}"
+                                    f"&per_page=3"
+                                )
+
+                                res = requests.get(
+                                    url,
+                                    headers=headers,
+                                    timeout=15
+                                )
+
+                                if res.status_code != 200:
+                                    return None
+
+                                videos = res.json().get(
+                                    "videos",
+                                    []
+                                )
+
+                                if not videos:
+                                    return None
+
+                                selected_video = random.choice(
+                                    videos
+                                )
+
+                                video_files = selected_video.get(
+                                    "video_files",
+                                    []
+                                )
+
+                                if not video_files:
+                                    return None
+
+                                video_files.sort(
+                                    key=lambda x: x.get(
+                                        "width",
+                                        99999
+                                    )
+                                )
+
+                                best_link = video_files[0]["link"]
+
+                            # HTML FALLBACK
+                            else:
+
+                                search_url = (
+                                    f"https://www.pexels.com/search/videos/"
+                                    f"{clean_kw}/"
+                                    f"?orientation={orientation}"
+                                )
+
+                                html_res = requests.get(
+                                    search_url,
+                                    headers={
+                                        "User-Agent":
+                                        "Mozilla/5.0"
+                                    },
+                                    timeout=20
+                                )
+
+                                match = re.search(
+                                    r'https://player\.vimeo\.com/external/[^\s"\']+',
+                                    html_res.text
+                                )
+
+                                if not match:
+                                    return None
+
+                                best_link = match.group(0)
+
+                            clip_path = f"fc_clip_{index}.mp4"
+
+                            video_res = requests.get(
+                                best_link,
+                                stream=True,
+                                timeout=60
+                            )
+
+                            if video_res.status_code != 200:
+                                return None
+
+                            with open(
+                                clip_path,
+                                "wb"
+                            ) as f:
+
+                                for chunk in video_res.iter_content(
+                                    chunk_size=1024 * 1024
+                                ):
+                                    if chunk:
+                                        f.write(chunk)
+
+                            return clip_path
+
+                        except Exception:
+                            return None
+
+                    # -------------------------------
+                    # Parallel Download
+                    # -------------------------------
+
+                    futures = []
+
+                    with ThreadPoolExecutor(
+                        max_workers=3
+                    ) as executor:
+
+                        for idx, kw in enumerate(
+                            search_keywords
+                        ):
+                            futures.append(
+                                executor.submit(
+                                    fetch_clip,
+                                    idx,
+                                    kw
+                                )
+                            )
+
+                        completed = 0
+
+                        for future in as_completed(
+                            futures
+                        ):
+
+                            result = future.result()
+
+                            if result:
+                                generated_clips.append(
+                                    result
+                                )
+
+                            completed += 1
+
+                            elapsed = int(
+                                time.time()
+                                - step3_start_time
+                            )
+
+                            progress = (
+                                50
+                                + int(
+                                    completed
+                                    / len(search_keywords)
+                                    * 15
+                                )
+                            )
+
+                            pbar.progress(
+                                progress,
+                                text=f"🎥 Downloading ({completed}/{len(search_keywords)}) [{elapsed}s]"
+                            )
+
+                    if not generated_clips:
+                        st.error(
+                            "❌ Pexels မှ Video ရှာမတွေ့ပါ။"
+                        )
+                        st.stop()
+
+                    generated_clips.sort()
+
+                    pbar.progress(
+                        65,
+                        text="🎞️ ဗီဒီယိုများ ပေါင်းစပ်နေပါသည်..."
                     )
 
-                    if res.status_code != 200:
-                        return None
+                    with open(
+                        "fc_concat.txt",
+                        "w",
+                        encoding="utf-8"
+                    ) as f:
 
-                    videos = (
-                        res.json()
-                        .get("videos", [])
+                        for clip in generated_clips:
+
+                            abs_path = os.path.abspath(
+                                clip
+                            )
+
+                            f.write(
+                                f"file '{abs_path}'\n"
+                            )
+
+                    subprocess.run(
+                        [
+                            FFMPEG_BINARY,
+                            "-y",
+                            "-f",
+                            "concat",
+                            "-safe",
+                            "0",
+                            "-i",
+                            "fc_concat.txt",
+                            "-t",
+                            str(fc_audio_dur),
+                            "-c:v",
+                            "libx264",
+                            "-preset",
+                            "ultrafast",
+                            "-crf",
+                            "28",
+                            "-pix_fmt",
+                            "yuv420p",
+                            "fc_video_loop.mp4"
+                        ],
+                        capture_output=True,
+                        text=True
                     )
 
-                    if not videos:
-                        return None
-
-                    selected_video = random.choice(videos)
-
-                    video_files = selected_video.get(
-                        "video_files",
-                        []
+                    pbar.progress(
+                        70,
+                        text="✅ Visual Generation Complete"
                     )
 
-                    if not video_files:
-                        return None
+                except Exception as e:
 
-                    # Smallest resolution for speed
-                    video_files.sort(
-                        key=lambda x:
-                        x.get("width", 99999)
+                    st.error(
+                        f"Visual Error: {str(e)}"
                     )
 
-                    best_link = video_files[0]["link"]
-
-                # ==========================================
-                # HTML FALLBACK MODE
-                # ==========================================
-
-                else:
-
-                    search_url = (
-                        f"https://www.pexels.com/search/videos/"
-                        f"{clean_kw}/"
-                        f"?orientation={orientation}"
-                    )
-
-                    headers = {
-                        "User-Agent":
-                        "Mozilla/5.0"
-                    }
-
-                    html_res = requests.get(
-                        search_url,
-                        headers=headers,
-                        timeout=20
-                    )
-
-                    match = re.search(
-                        r'https://player\.vimeo\.com/external/[^\s"\']+',
-                        html_res.text
-                    )
-
-                    if not match:
-                        return None
-
-                    best_link = match.group(0)
-
-                # ==========================================
-                # Download Video
-                # ==========================================
-
-                clip_path = f"fc_clip_{index}.mp4"
-
-                video_res = requests.get(
-                    best_link,
-                    stream=True,
-                    timeout=60
-                )
-
-                if video_res.status_code != 200:
-                    return None
-
-                with open(
-                    clip_path,
-                    "wb"
-                ) as f:
-
-                    for chunk in video_res.iter_content(
-                        chunk_size=1024 * 1024
-                    ):
-                        if chunk:
-                            f.write(chunk)
-
-                return clip_path
-
-            except Exception as e:
-
-                print(
-                    f"Clip Error ({keyword}): {e}"
-                )
-
-                return None
-
-        # ===================================================
-        # PARALLEL DOWNLOAD
-        # ===================================================
-
-        futures = []
-
-        with ThreadPoolExecutor(
-            max_workers=3
-        ) as executor:
-
-            for idx, kw in enumerate(
-                search_keywords
-            ):
-                futures.append(
-                    executor.submit(
-                        fetch_clip,
-                        idx,
-                        kw
-                    )
-                )
-
-            completed = 0
-
-            for future in as_completed(
-                futures
-            ):
-
-                result = future.result()
-
-                if result:
-                    generated_clips.append(
-                        result
-                    )
-
-                completed += 1
-
-                elapsed = int(
-                    time.time()
-                    - step3_start_time
-                )
-
-                progress = (
-                    50
-                    + int(
-                        completed
-                        / len(search_keywords)
-                        * 15
-                    )
-                )
-
-                pbar.progress(
-                    progress,
-                    text=(
-                        f"🎥 Video Download "
-                        f"({completed}/{len(search_keywords)}) "
-                        f"[{elapsed} sec]"
-                    )
-                )
-
-        # ===================================================
-        # CHECK
-        # ===================================================
-
-        if not generated_clips:
-
-            st.error(
-                "❌ Visual Generation Failed.\n"
-                "Pexels မှ Video ရှာမတွေ့ပါ။"
-            )
-
-            st.stop()
-
-        # ===================================================
-        # CREATE CONCAT LIST
-        # ===================================================
-
-        pbar.progress(
-            65,
-            text="🎞️ ဗီဒီယိုများ ပေါင်းစပ်နေပါသည်..."
-        )
-
-        generated_clips.sort()
-
-        concat_file = "fc_concat.txt"
-
-        with open(
-            concat_file,
-            "w",
-            encoding="utf-8"
-        ) as f:
-
-            for clip in generated_clips:
-
-                abs_path = os.path.abspath(
-                    clip
-                )
-
-                f.write(
-                    f"file '{abs_path}'\n"
-                )
-
-        # ===================================================
-        # FFMPEG CONCAT
-        # ===================================================
-
-        ffmpeg_cmd = [
-
-            FFMPEG_BINARY,
-
-            "-y",
-
-            "-f",
-            "concat",
-
-            "-safe",
-            "0",
-
-            "-i",
-            concat_file,
-
-            "-t",
-            str(fc_audio_dur),
-
-            "-c:v",
-            "libx264",
-
-            "-preset",
-            "ultrafast",
-
-            "-crf",
-            "28",
-
-            "-pix_fmt",
-            "yuv420p",
-
-            "fc_video_loop.mp4"
-
-        ]
-
-        subprocess.run(
-            ffmpeg_cmd,
-            capture_output=True,
-            text=True
-        )
-
-        pbar.progress(
-            70,
-            text="✅ Visual Generation Complete"
-        )
-
-    except Exception as e:
-
-        st.error(
-            f"Visual Error:\n{str(e)}"
-        )
-
-        st.stop()
+                    st.stop()
         
 
             # STEP 4: SRT Sync
-    with st.spinner("⏳ [အဆင့် ၄/၅] စာတန်းထိုးများကို Alex Hormozi ပုံစံ ချိန်ညှိနေပါသည်..."):
+            with st.spinner("⏳ [အဆင့် ၄/၅] စာတန်းထိုးများကို Alex Hormozi ပုံစံ ချိန်ညှိနေပါသည်..."):
                 pbar.progress(70, text="📝 Timeline ချိန်ညှိနေပါသည်...")
                 fc_parsed = None
                 last_err = ""
@@ -1055,7 +977,7 @@ Story:
                     st.stop()
 
             # STEP 5: Final Master Rendering
-    with st.spinner("⏳ [အဆင့် ၅/၅] အားလုံးကိုပေါင်းစပ်ပြီး Master Video ထုတ်လုပ်နေပါသည်..."):
+            with st.spinner("⏳ [အဆင့် ၅/၅] အားလုံးကိုပေါင်းစပ်ပြီး Master Video ထုတ်လုပ်နေပါသည်..."):
                 pbar.progress(85, text="🎬 Master Rendering အလုပ်လုပ်နေပါသည်...")
                 try:
                     dyn_fc_style = f"FontName=Pyidaungsu,FontSize=22,PrimaryColour=&H0000FFFF,BackColour=&H90000000,BorderStyle=3,Outline=0,Shadow=1,Alignment=5,MarginV=80"
