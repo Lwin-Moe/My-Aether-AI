@@ -268,7 +268,7 @@ st.markdown('<div class="sub-title">AI Studio V52 ⚡ Premium Edition</div>', un
 
 with st.sidebar:
     st.markdown("### 🧭 Navigation Menu")
-    app_mode = st.radio("Select Studio Mode:", ["🎙️ Movie Dubbing Studio", "🎙️ Faceless Channel Studio", "🎥 Veo Video Studio", "🎵 Lyria Music Studio","⚡ Translation/Transcript Studio","📥 Video Downloader Hub"])
+    app_mode = st.radio("Select Studio Mode:", ["🎙️ Movie Dubbing Studio", "🎙️ Faceless Channel Studio", "🎥 Veo Video Studio", "🎵 Lyria Music Studio","⚡ Translation/Transcript Studio","📥 Video Downloader Hub",])
     st.markdown("---")
     ai_provider = st.selectbox("Choose AI Provider", ["Google Gemini (Flash - Recommended)", "OpenAI (GPT-5.5 Pro)", "Groq API (Fast & Free)"])
     saved_gemini = load_key(API_KEY_FILE)
@@ -481,15 +481,12 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                         
                         try:
                             stream = ffmpeg.input(v_input, ss=thumb_time)
-                            
                             if cb_thumb_text:
                                 wrapped_title = textwrap.fill(st.session_state.viral_title, width=25)
                                 with open("thumb_text.txt", "w", encoding="utf-8") as tf:
                                     tf.write(wrapped_title)
-                                    
                                 if os.path.exists(font_path):
                                     stream = ffmpeg.filter(stream.video, 'drawtext', textfile='thumb_text.txt', fontfile=font_path, fontcolor='white', fontsize=65, x='(w-text_w)/2', y='h-text_h-100', box=1, boxcolor='red@0.9', boxborderw=20, borderw=3, bordercolor='black', line_spacing=15)
-                                    
                             ffmpeg.output(stream, "auto_thumb.jpg", vframes=1).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
                         except:
                             ffmpeg.input(v_input, ss=thumb_time).output("auto_thumb.jpg", vframes=1).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
@@ -636,13 +633,15 @@ elif app_mode == "🎙️ Faceless Channel Studio":
             with st.spinner("⏳ [အဆင့် ၃/၅] Veo ဖြင့် ဇာတ်လမ်းနှင့် ကိုက်ညီသော ဗီဒီယိုများ ဆွဲနေပါသည်..."):
                 pbar.progress(50, text="🎥 Veo Video Generation အလုပ်လုပ်နေပါသည် (အချိန်အနည်းငယ်ကြာမည်)...")
                 try:
-                    # 👇 FIX: Changed Veo endpoint to veo-3.0-generate-001 based on user's API key capabilities
                     veo_aspect = "vertical 9:16 format" if "9:16" in fc_ratio else ("horizontal 16:9 format" if "16:9" in fc_ratio else "high quality cinematic format")
                     
-                    prompt_req = client.models.generate_content(model="gemini-2.5-flash", contents=f"Based on this story, give me exactly TWO short, distinct English video generation prompts (max 15 words each) describing the creepy/dramatic vibe. MUST append '{veo_aspect}' to each prompt. Format strictly separated by a pipe '|'. Story: {fc_story_text[:200]}")
+                    # 👇 FIX: Changed the prompt heavily to bypass Google Safety Filter Block
+                    prompt_req = client.models.generate_content(model="gemini-2.5-flash", contents=f"Based on this story, give me exactly TWO short, distinct English video generation prompts (max 15 words each) describing the scenery. Avoid any violent, gory, or explicitly scary words to bypass safety filters. MUST append '{veo_aspect}' to each prompt. Format strictly separated by a pipe '|'. Story: {fc_story_text[:200]}")
                     veo_prompts = prompt_req.text.split('|')[:2]
                     
                     generated_clips = []
+                    last_veo_error = "Unknown API Error"
+                    
                     for i, v_prompt in enumerate(veo_prompts):
                         for key in keys_list:
                             try:
@@ -653,10 +652,16 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                                     with open(clip_path, "wb") as f: f.write(base64.b64decode(res.json()["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]))
                                     generated_clips.append(clip_path)
                                     break
-                            except: continue
+                                else:
+                                    # 👇 FIX: Capture exact error text returned from Google Server
+                                    last_veo_error = res.text
+                            except Exception as req_e: 
+                                last_veo_error = str(req_e)
+                                continue
                     
                     if not generated_clips:
-                        st.error("❌ Veo Generation Failed. သင့် Key များ Limit ပြည့်သွားပါပြီ။")
+                        # 👇 FIX: Output the real error to the Streamlit UI
+                        st.error(f"❌ Veo Generation Failed. အကြောင်းရင်း: {last_veo_error}")
                         st.stop()
                     
                     with open("fc_concat.txt", "w") as f:
