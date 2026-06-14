@@ -268,7 +268,7 @@ st.markdown('<div class="sub-title">AI Studio V52 ⚡ Premium Edition</div>', un
 
 with st.sidebar:
     st.markdown("### 🧭 Navigation Menu")
-    app_mode = st.radio("Select Studio Mode:", ["🎙️ Movie Dubbing Studio", "🎙️ Faceless Channel Studio", "🎥 Veo Video Studio", "🎵 Lyria Music Studio","⚡ Translation/Transcript Studio","📥 Video Downloader Hub",])
+    app_mode = st.radio("Select Studio Mode:", ["🎙️ Movie Dubbing Studio", "🎙️ Faceless Channel Studio", "🎥 Veo Video Studio", "🎵 Lyria Music Studio","⚡ Translation/Transcript Studio","📥 Video Downloader Hub"])
     st.markdown("---")
     ai_provider = st.selectbox("Choose AI Provider", ["Google Gemini (Flash - Recommended)", "OpenAI (GPT-5.5 Pro)", "Groq API (Fast & Free)"])
     saved_gemini = load_key(API_KEY_FILE)
@@ -481,12 +481,15 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                         
                         try:
                             stream = ffmpeg.input(v_input, ss=thumb_time)
+                            
                             if cb_thumb_text:
                                 wrapped_title = textwrap.fill(st.session_state.viral_title, width=25)
                                 with open("thumb_text.txt", "w", encoding="utf-8") as tf:
                                     tf.write(wrapped_title)
+                                    
                                 if os.path.exists(font_path):
                                     stream = ffmpeg.filter(stream.video, 'drawtext', textfile='thumb_text.txt', fontfile=font_path, fontcolor='white', fontsize=65, x='(w-text_w)/2', y='h-text_h-100', box=1, boxcolor='red@0.9', boxborderw=20, borderw=3, bordercolor='black', line_spacing=15)
+                                    
                             ffmpeg.output(stream, "auto_thumb.jpg", vframes=1).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
                         except:
                             ffmpeg.input(v_input, ss=thumb_time).output("auto_thumb.jpg", vframes=1).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
@@ -577,7 +580,6 @@ elif app_mode == "🎙️ Faceless Channel Studio":
     st.markdown('<div class="setting-panel"><h3>👻 Fully-Automated Faceless Channel Studio</h3>', unsafe_allow_html=True)
     st.markdown("TikTok, FB Reels များအတွက် Reddit Stories, Horror ပုံပြင်များကို AI ဖြင့် အလိုအလျောက် ဗီဒီယိုဖန်တီးပါ။")
 
-    # 👇 NEW: Auto Font Fetcher Logic
     local_fonts = [f for f in os.listdir(".") if f.endswith((".ttf", ".otf"))]
     default_fonts = local_fonts if local_fonts else ["Pyidaungsu.ttf"]
 
@@ -592,10 +594,7 @@ elif app_mode == "🎙️ Faceless Channel Studio":
         st.markdown("---")
         st.markdown("<b>🎨 Visual & Niche Settings</b>", unsafe_allow_html=True)
         fc_niche = st.selectbox("Select Niche", ["👻 Horror / Creepypasta", "💔 Reddit Relationship Drama", "🧠 Dark Psychology", "💡 Fun Facts / Trivia"])
-        
-        # 👇 NEW: Added Video Ratio Selector for Faceless Studio
         fc_ratio = st.selectbox("Video Ratio", ["9:16 (TikTok/Shorts)", "16:9 (YouTube)", "Original"], key="fc_ratio")
-        
         fc_font = st.selectbox("🅰️ Auto-Detected Font", default_fonts, key="fc_font")
         st.caption("💡 Subtitles များသည် Viral ဖြစ်စေရန် (Alex Hormozi Style) အလယ်တည့်တည့်တွင် အကြီးကြီး အော်တိုချိန်ညှိပေးထားပါသည်။")
 
@@ -637,7 +636,7 @@ elif app_mode == "🎙️ Faceless Channel Studio":
             with st.spinner("⏳ [အဆင့် ၃/၅] Veo ဖြင့် ဇာတ်လမ်းနှင့် ကိုက်ညီသော ဗီဒီယိုများ ဆွဲနေပါသည်..."):
                 pbar.progress(50, text="🎥 Veo Video Generation အလုပ်လုပ်နေပါသည် (အချိန်အနည်းငယ်ကြာမည်)...")
                 try:
-                    # 👇 NEW: Modifying Prompt to Instruct Veo API on the Aspect Ratio
+                    # 👇 FIX: Changed Veo endpoint to veo-3.0-generate-001 based on user's API key capabilities
                     veo_aspect = "vertical 9:16 format" if "9:16" in fc_ratio else ("horizontal 16:9 format" if "16:9" in fc_ratio else "high quality cinematic format")
                     
                     prompt_req = client.models.generate_content(model="gemini-2.5-flash", contents=f"Based on this story, give me exactly TWO short, distinct English video generation prompts (max 15 words each) describing the creepy/dramatic vibe. MUST append '{veo_aspect}' to each prompt. Format strictly separated by a pipe '|'. Story: {fc_story_text[:200]}")
@@ -647,7 +646,7 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     for i, v_prompt in enumerate(veo_prompts):
                         for key in keys_list:
                             try:
-                                url = f"https://generativelanguage.googleapis.com/v1beta/models/veo-2.0-generate-001:generateContent?key={key}"
+                                url = f"https://generativelanguage.googleapis.com/v1beta/models/veo-3.0-generate-001:generateContent?key={key}"
                                 res = requests.post(url, json={"contents": [{"parts": [{"text": v_prompt.strip()}]}], "generationConfig": {"responseModalities": ["VIDEO"]}}, timeout=120)
                                 if res.status_code == 200:
                                     clip_path = f"veo_clip_{i}.mp4"
@@ -687,7 +686,6 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                 try:
                     dyn_fc_style = f"FontName={fc_font.replace('.ttf', '').replace('.otf', '')},FontSize=35,PrimaryColour=&H0000FFFF,BackColour=&H90000000,BorderStyle=3,Outline=0,Shadow=1,Alignment=5,MarginV=150"
                     
-                    # 👇 NEW: Passed fc_ratio exactly into the render function to enforce the aspect ratio on the final output
                     success, err_msg = render_premium_saas_video("fc_video_loop.mp4", "fc_audio.wav", fc_parsed, "FACELESS_FINAL.mp4", fc_ratio, use_bypass=True, sub_style_str=dyn_fc_style)
                     
                     if success and fc_bgm not in ["None (BGM မထည့်ပါ)"]:
@@ -719,7 +717,7 @@ elif app_mode == "🎙️ Faceless Channel Studio":
 # 📌 MODE 2 - VEO VIDEO STUDIO
 # =====================================================================
 elif app_mode == "🎥 Veo Video Studio":
-    st.markdown('<div class="setting-panel"><h3>🎥 Veo 2.0 Cinematic Video Generator</h3>', unsafe_allow_html=True)
+    st.markdown('<div class="setting-panel"><h3>🎥 Veo 3.0 Cinematic Video Generator</h3>', unsafe_allow_html=True)
     video_prompt = st.text_area("🎬 Enter Video Prompt", placeholder="A cinematic slow-motion drone shot...")
     if st.button("🚀 Generate Veo Video"): pass
 
