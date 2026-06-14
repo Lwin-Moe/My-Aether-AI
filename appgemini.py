@@ -23,7 +23,7 @@ import json
 import datetime
 import random
 import shutil
-import textwrap # 👇 NEW: Imported for Thumbnail Text Wrapping
+import textwrap 
 
 # 👇 FIX: Prioritize system FFmpeg (which supports Burmese Text Shaping) over imageio_ffmpeg
 if shutil.which("ffmpeg"):
@@ -306,6 +306,8 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         
         st.markdown("<b>🎬 Visual & Subs</b>", unsafe_allow_html=True)
         cb_blur = st.checkbox("👁️ Cinematic Black Mask", value=True)
+        # 👇 NEW: Checkbox to toggle thumbnail text rendering
+        cb_thumb_text = st.checkbox("🖼️ Add Viral Title to Thumbnail", value=True)
         watermark_text = st.text_input("Text Watermark", "")
         subtitle_mode = st.radio("Subtitle Output", ["Both (Burn + SRT)", "Export SRT File Only", "Burn into Video"])
 
@@ -462,23 +464,22 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     parsed_timestamps, speech_text = parse_and_save_real_srt(clean_raw_srt, srt_final, use_fade=sub_fade)
                     st.session_state.generated_script = clean_raw_srt
                     
-                    # 👇 FIX: Auto-Text Wrap & Red Background for Thumbnail + Pyidaungsu Font
+                    # 👇 FIX: Option to toggle Thumbnail Text with Pyidaungsu
                     try:
                         thumb_time = min(get_file_duration(v_input)/3, 15)
                         font_path = "Pyidaungsu.ttf"
                         
-                        # Use textwrap to format string with newlines so it fits in the screen
-                        wrapped_title = textwrap.fill(st.session_state.viral_title, width=25)
-                        
-                        # Write wrapped text to a temporary text file to handle line breaks correctly in FFmpeg
-                        with open("thumb_text.txt", "w", encoding="utf-8") as tf:
-                            tf.write(wrapped_title)
-                        
                         try:
                             stream = ffmpeg.input(v_input, ss=thumb_time)
-                            if os.path.exists(font_path):
-                                # Render with red background box, white text, and auto-wrapped lines
-                                stream = ffmpeg.filter(stream.video, 'drawtext', textfile='thumb_text.txt', fontfile=font_path, fontcolor='white', fontsize=65, x='(w-text_w)/2', y='h-text_h-100', box=1, boxcolor='red@0.9', boxborderw=20, borderw=3, bordercolor='black', line_spacing=15)
+                            
+                            if cb_thumb_text:
+                                wrapped_title = textwrap.fill(st.session_state.viral_title, width=25)
+                                with open("thumb_text.txt", "w", encoding="utf-8") as tf:
+                                    tf.write(wrapped_title)
+                                    
+                                if os.path.exists(font_path):
+                                    stream = ffmpeg.filter(stream.video, 'drawtext', textfile='thumb_text.txt', fontfile=font_path, fontcolor='white', fontsize=65, x='(w-text_w)/2', y='h-text_h-100', box=1, boxcolor='red@0.9', boxborderw=20, borderw=3, bordercolor='black', line_spacing=15)
+                                    
                             ffmpeg.output(stream, "auto_thumb.jpg", vframes=1).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
                         except:
                             ffmpeg.input(v_input, ss=thumb_time).output("auto_thumb.jpg", vframes=1).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
