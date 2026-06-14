@@ -23,6 +23,7 @@ import json
 import datetime
 import random
 import shutil
+import textwrap # 👇 NEW: Imported for Thumbnail Text Wrapping
 
 # 👇 FIX: Prioritize system FFmpeg (which supports Burmese Text Shaping) over imageio_ffmpeg
 if shutil.which("ffmpeg"):
@@ -218,7 +219,6 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         safe_srt_path = os.path.abspath("subtitles.srt").replace('\\', '/')
         safe_srt_path_escaped = safe_srt_path.replace(':', '\\:')
         
-        # 👇 FIX: Added Regex to strip [tags] and {tags} from screen subtitles
         with open("subtitles.srt", "w", encoding="utf-8-sig") as f:
             for i, (start, end, text) in enumerate(parsed_timestamps, start=1):
                 if start >= v_max_dur: continue
@@ -348,7 +348,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         if subtitle_mode in ["Both (Burn + SRT)", "Burn into Video"]:
             sub_position = st.selectbox("📍 Position", ["Bottom", "Center", "Top"])
             sub_color = st.selectbox("🎨 Color", ["Yellow Text + Black Outline", "White Text + Black Outline", "Neon Green Text + Black Outline"])
-            # 👇 CHANGED: Swapped back to Pyidaungsu as requested
             sub_font = st.selectbox("🅰️ Font Family", ["Pyidaungsu", "NotoSans-Bold", "Myanmar3_2018", "Padauk"])
             sub_size = st.slider("🔠 Font Size", 16, 40, 22)
             sub_thickness = st.slider("✒️ Outline Thickness", 1.0, 5.0, 2.5)
@@ -463,16 +462,23 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     parsed_timestamps, speech_text = parse_and_save_real_srt(clean_raw_srt, srt_final, use_fade=sub_fade)
                     st.session_state.generated_script = clean_raw_srt
                     
-                    # 👇 FIX: Changed font_path to Pyidaungsu.ttf
+                    # 👇 FIX: Auto-Text Wrap & Red Background for Thumbnail + Pyidaungsu Font
                     try:
                         thumb_time = min(get_file_duration(v_input)/3, 15)
-                        safe_title = st.session_state.viral_title.replace(":", "\\:").replace("'", "").replace('"', "")
                         font_path = "Pyidaungsu.ttf"
+                        
+                        # Use textwrap to format string with newlines so it fits in the screen
+                        wrapped_title = textwrap.fill(st.session_state.viral_title, width=25)
+                        
+                        # Write wrapped text to a temporary text file to handle line breaks correctly in FFmpeg
+                        with open("thumb_text.txt", "w", encoding="utf-8") as tf:
+                            tf.write(wrapped_title)
                         
                         try:
                             stream = ffmpeg.input(v_input, ss=thumb_time)
                             if os.path.exists(font_path):
-                                stream = ffmpeg.filter(stream.video, 'drawtext', text=safe_title, fontfile=font_path, fontcolor='yellow', fontsize=60, x='(w-text_w)/2', y='h-150', box=1, boxcolor='black@0.7', boxborderw=15, borderw=2, bordercolor='black')
+                                # Render with red background box, white text, and auto-wrapped lines
+                                stream = ffmpeg.filter(stream.video, 'drawtext', textfile='thumb_text.txt', fontfile=font_path, fontcolor='white', fontsize=65, x='(w-text_w)/2', y='h-text_h-100', box=1, boxcolor='red@0.9', boxborderw=20, borderw=3, bordercolor='black', line_spacing=15)
                             ffmpeg.output(stream, "auto_thumb.jpg", vframes=1).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
                         except:
                             ffmpeg.input(v_input, ss=thumb_time).output("auto_thumb.jpg", vframes=1).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
