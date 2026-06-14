@@ -24,6 +24,7 @@ import datetime
 import random
 import shutil
 import textwrap 
+import urllib.parse 
 
 # 👇 FIX: Prioritize system FFmpeg (which supports Burmese Text Shaping) over imageio_ffmpeg
 if shutil.which("ffmpeg"):
@@ -523,7 +524,9 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     with open(logo_file_path, "wb") as f: f.write(uploaded_logo.read())
 
                 success, err_msg = render_premium_saas_video(v_input, a_generated, parsed_timestamps, v_final, video_ratio, cb_bypass, cb_blur, watermark_text, subtitle_mode, cb_mirror, cb_color, cb_grain, cb_fps, dyn_style, cb_freeze, logo_file_path)
-                if not success: st.error(f"Sync Failure: {err_msg}")
+                if not success:
+                    st.error(f"Sync Failure: {err_msg}")
+                    st.stop() # 👇 FIX: Stop execution if rendering fails
 
             if success and selected_bgm not in ["None (BGM မထည့်ပါ)"]:
                 with st.spinner("⏳ [အဆင့် ၆/၆] Auto-Ducking ဖြင့် BGM ထပ်မံပေါင်းစပ်နေပါသည်..."):
@@ -689,11 +692,23 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                         st.error("❌ Visual Generation Failed. Pexels မှ ဗီဒီယို ရှာမတွေ့ပါ။ ကျေးဇူးပြု၍ Sidebar တွင် Pexels API Key ထည့်ပေးပါ။ (https://www.pexels.com/api/)")
                         st.stop()
                     
-                    with open("fc_concat.txt", "w") as f:
-                        for c in generated_clips: f.write(f"file '{c}'\n")
+                    # 👇 FIX: Scale and crop all downloaded videos to the EXACT target resolution to prevent FFmpeg concat errors
+                    width, height = (1080, 1920) if "9:16" in fc_ratio else (1920, 1080)
+                    streams = []
+                    for c in generated_clips:
+                        v = ffmpeg.input(c).video
+                        v = ffmpeg.filter(v, 'scale', width, height, force_original_aspect_ratio='increase')
+                        v = ffmpeg.filter(v, 'crop', width, height)
+                        v = ffmpeg.filter(v, 'fps', fps=30, round='near')
+                        v = ffmpeg.filter(v, 'setsar', '1')
+                        streams.append(v)
                     
-                    # 👇 FIX: Changed quiet=True to capture_output=True
-                    subprocess.run([FFMPEG_BINARY, "-stream_loop", "-1", "-f", "concat", "-safe", "0", "-i", "fc_concat.txt", "-t", str(fc_audio_dur), "-c", "copy", "fc_video_loop.mp4"], capture_output=True)
+                    if streams:
+                        joined = ffmpeg.concat(*streams, v=1, a=0)
+                        ffmpeg.output(joined, "fc_combined.mp4", vcodec='libx264', pix_fmt='yuv420p', r=30).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
+                        
+                        subprocess.run([FFMPEG_BINARY, "-y", "-stream_loop", "-1", "-i", "fc_combined.mp4", "-t", str(fc_audio_dur), "-c", "copy", "fc_video_loop.mp4"], capture_output=True)
+                        
                 except Exception as e: st.error(f"Visual Error: {e}"); st.stop()
 
             # STEP 4: SRT Sync (Gemini Audio to SRT)
@@ -718,6 +733,10 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     dyn_fc_style = f"FontName={fc_font.replace('.ttf', '').replace('.otf', '')},FontSize=35,PrimaryColour=&H0000FFFF,BackColour=&H90000000,BorderStyle=3,Outline=0,Shadow=1,Alignment=5,MarginV=150"
                     
                     success, err_msg = render_premium_saas_video("fc_video_loop.mp4", "fc_audio.wav", fc_parsed, "FACELESS_FINAL.mp4", fc_ratio, use_bypass=True, sub_style_str=dyn_fc_style)
+                    
+                    if not success:
+                        st.error(f"Render Error: {err_msg}")
+                        st.stop() # 👇 FIX: Prevent app from trying to load a missing file
                     
                     if success and fc_bgm not in ["None (BGM မထည့်ပါ)"]:
                         bgm_path = os.path.join("bgm_tracks", random.choice(bgm_files) if "Auto" in fc_bgm else fc_bgm)
