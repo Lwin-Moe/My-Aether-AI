@@ -38,11 +38,7 @@ ELEVEN_KEY_FILE = "saved_eleven_key.txt"
 GROQ_KEY_FILE = "saved_groq_key.txt"
 OPENAI_KEY_FILE = "saved_openai_key.txt"
 ELEVEN_VOICE_ID_FILE = "saved_eleven_voice_id.txt"
-PEXELS_KEY_FILE = "saved_pexels_key.txt"
-
-# Dedicated fonts directory setup
-FONT_DIR = "font"
-if not os.path.exists(FONT_DIR): os.makedirs(FONT_DIR)
+PEXELS_KEY_FILE = "saved_pexels_key.txt" 
 
 def load_key(file_path):
     if os.path.exists(file_path):
@@ -51,6 +47,13 @@ def load_key(file_path):
 
 def save_key(file_path, key):
     with open(file_path, "w", encoding="utf-8") as f: f.write(key)
+
+# 👇 NEW: Helper function to generate a download link that DOES NOT refresh the Streamlit page
+def get_download_link(file_path, file_name, link_text):
+    if not os.path.exists(file_path): return ""
+    with open(file_path, "rb") as f:
+        b64 = base64.b64encode(f.read()).decode()
+    return f'<a href="data:application/octet-stream;base64,{b64}" download="{file_name}" style="display:block; text-align:center; margin-top:10px; padding:12px 20px; background:linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color:white; text-decoration:none; border-radius:8px; font-weight:bold;">📥 {link_text}</a>'
 
 # --- 1. THEME & STYLING (PREMIUM PRO UI) ---
 st.set_page_config(page_title="AETHER STUDIO V52", layout="wide", page_icon="🎬")
@@ -187,9 +190,7 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
     with open(output_file, "w", encoding="utf-8-sig") as f: f.write(clean_srt)
     parsed_lines = []
     full_speech = []
-    
-    # 👇 FIX: Forgiving Regex to catch malformed Gemini arrows like `- >`, `->`, etc.
-    matches = list(re.finditer(r'(\d{1,2}:\d{1,2}(?::\d{1,2})?[,.]\d{1,3})\s*[-=]+\s*>?\s*(\d{1,2}:\d{1,2}(?::\d{1,2})?[,.]\d{1,3})', clean_srt))
+    matches = list(re.finditer(r'(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})', clean_srt))
     for i in range(len(matches)):
         start_str = matches[i].group(1).replace('.', ',')
         end_str = matches[i].group(2).replace('.', ',')
@@ -203,10 +204,7 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
         if block:
             try:
                 def to_sec(t):
-                    parts = t.split(':')
-                    if len(parts) == 3: h, m, s_ms = parts
-                    else: h, m, s_ms = 0, parts[0], parts[1]
-                    s, ms = s_ms.split(',')
+                    h, m, s_ms = t.split(':'); s, ms = s_ms.split(',')
                     return int(h)*3600 + int(m)*60 + int(s) + int(ms.ljust(3, '0'))/1000.0
                 text_content = block.strip()
                 if use_fade: text_content = "{\\fad(250,250)}" + text_content
@@ -230,9 +228,6 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         safe_srt_path = os.path.abspath("subtitles.srt").replace('\\', '/')
         safe_srt_path_escaped = safe_srt_path.replace(':', '\\:')
         
-        # 👇 FIX: Absolute Font Path for FFmpeg safety on cloud
-        abs_font_dir = os.path.abspath(FONT_DIR).replace('\\', '/')
-        
         with open("subtitles.srt", "w", encoding="utf-8-sig") as f:
             for i, (start, end, text) in enumerate(parsed_timestamps, start=1):
                 if start >= v_max_dur: continue
@@ -240,8 +235,6 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
                 def fmt_t(s): return f"{int(s//3600):02d}:{int((s%3600)//60):02d}:{int(s%60):02d},{int((s-int(s))*1000):03d}"
                 clean_text = re.sub(r'\[.*?\]', '', text)
                 clean_text = re.sub(r'\{.*?\}', '', clean_text).strip()
-                # 👇 FIX: Clean newlines to prevent SRT formatting crash in FFmpeg
-                clean_text = clean_text.replace('\n', ' ') 
                 f.write(f"{i}\n{fmt_t(start)} --> {fmt_t(safe_end)}\n{clean_text}\n\n")
         
         video = ffmpeg.input(in_v).video
@@ -271,8 +264,7 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
             video = ffmpeg.overlay(video, logo, x='W-w-20', y=20)
 
         if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"] and os.path.exists("subtitles.srt"):
-            # 👇 FIX: Switched to Absolute Path for fontsdir
-            video = ffmpeg.filter(video, 'subtitles', safe_srt_path_escaped, charenc='UTF-8', fontsdir=abs_font_dir, force_style=sub_style_str)
+            video = ffmpeg.filter(video, 'subtitles', safe_srt_path_escaped, charenc='UTF-8', fontsdir='.', force_style=sub_style_str)
 
         out = ffmpeg.output(video, audio, out_v, vcodec='libx264', acodec='aac', preset='fast', crf=21, t=v_max_dur)
         out.run(cmd=FFMPEG_BINARY, overwrite_output=True, capture_stdout=True, capture_stderr=True)
@@ -282,9 +274,6 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
 # --- 3. UI INTERFACE & NAVIGATION ---
 st.markdown('<div class="main-title">AETHER FILMWORKS</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">AI Studio V52 ⚡ Premium Edition</div>', unsafe_allow_html=True)
-
-local_fonts = [f for f in os.listdir(FONT_DIR) if f.endswith((".ttf", ".otf"))]
-default_fonts = local_fonts if local_fonts else ["Pyidaungsu.ttf"]
 
 with st.sidebar:
     st.markdown("### 🧭 Navigation Menu")
@@ -388,9 +377,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         if subtitle_mode in ["Both (Burn + SRT)", "Burn into Video"]:
             sub_position = st.selectbox("📍 Position", ["Bottom", "Center", "Top"])
             sub_color = st.selectbox("🎨 Color", ["Yellow Text + Black Outline", "White Text + Black Outline", "Neon Green Text + Black Outline"])
-            
-            sub_font = st.selectbox("🅰️ Font Family", default_fonts)
-            
+            sub_font = st.selectbox("🅰️ Font Family", ["Pyidaungsu", "NotoSans-Bold", "Myanmar3_2018", "Padauk"])
             sub_size = st.slider("🔠 Font Size", 16, 40, 22)
             sub_thickness = st.slider("✒️ Outline Thickness", 1.0, 5.0, 2.5)
             col_s1, col_s2 = st.columns(2)
@@ -443,8 +430,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     if script_cta: extra_rules += " [CTA]: End the script with a strong Call to Action asking a question."
 
                     extra_rules += "\nAt the absolute end of the response, you MUST include these two lines on separate lines:\n[TITLE: (Provide a viral Burmese title here)]\n[TAGS: #tag1 #tag2]"
-                    
-                    hormozi_rule = " [HORMOZI]: Split the subtitles into chunks of 3-5 words max. Ensure timestamps are strictly in standard HH:MM:SS,mmm format (e.g., 00:00:04,000 --> 00:00:05,500). Do not skip hours." if sub_short else "Ensure timestamps are strictly in standard HH:MM:SS,mmm format (e.g., 00:00:04,000 --> 00:00:05,500)."
+                    hormozi_rule = " [HORMOZI]: Split the subtitles into chunks of 3-5 words max." if sub_short else ""
 
                     if "Gemini" in ai_provider:
                         keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
@@ -507,7 +493,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     
                     try:
                         thumb_time = min(get_file_duration(v_input)/3, 15)
-                        font_path = os.path.join(FONT_DIR, sub_font)
+                        font_path = "Pyidaungsu.ttf"
                         
                         try:
                             stream = ffmpeg.input(v_input, ss=thumb_time)
@@ -537,9 +523,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                 pbar.progress(80, text="🎬 [အဆင့် ၅/၆] ဗီဒီယိုနှင့် စာတန်းထိုး ပေါင်းစပ်နေပါသည်...")
                 align_val = 2 if "Bottom" in sub_position else (5 if "Center" in sub_position else 8)
                 prim_c = "&H0000FFFF" if "Yellow" in sub_color else ("&H00FFFFFF" if "White" in sub_color else "&H0000FF00")
-                
-                font_name_only = sub_font.replace('.ttf', '').replace('.otf', '')
-                dyn_style = f"FontName={font_name_only},FontSize={sub_size},PrimaryColour={prim_c},BackColour={'&H80000000' if sub_bg else '&H00000000'},BorderStyle={3 if sub_bg else 1},Outline={0 if sub_bg else sub_thickness},Alignment={align_val},MarginV=60"
+                dyn_style = f"FontName={sub_font.split()[0]},FontSize={sub_size},PrimaryColour={prim_c},BackColour={'&H80000000' if sub_bg else '&H00000000'},BorderStyle={3 if sub_bg else 1},Outline={0 if sub_bg else sub_thickness},Alignment={align_val},MarginV=60"
                 
                 logo_file_path = None
                 if uploaded_logo and not use_text_watermark:
@@ -547,9 +531,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     with open(logo_file_path, "wb") as f: f.write(uploaded_logo.read())
 
                 success, err_msg = render_premium_saas_video(v_input, a_generated, parsed_timestamps, v_final, video_ratio, cb_bypass, cb_blur, watermark_text, subtitle_mode, cb_mirror, cb_color, cb_grain, cb_fps, dyn_style, cb_freeze, logo_file_path)
-                if not success:
-                    st.error(f"Sync Failure: {err_msg}")
-                    st.stop() 
+                if not success: st.error(f"Sync Failure: {err_msg}")
 
             if success and selected_bgm not in ["None (BGM မထည့်ပါ)"]:
                 with st.spinner("⏳ [အဆင့် ၆/၆] Auto-Ducking ဖြင့် BGM ထပ်မံပေါင်းစပ်နေပါသည်..."):
@@ -585,19 +567,17 @@ if app_mode == "🎙️ Movie Dubbing Studio":
             if os.path.exists("AETHER_RECAP_FINAL.mp4"): 
                 st.video("AETHER_RECAP_FINAL.mp4")
                 st.markdown('<div class="setting-panel"><h4>📥 Download Dashboard</h4>', unsafe_allow_html=True)
-                with open("AETHER_RECAP_FINAL.mp4", "rb") as vf: 
-                    st.download_button("📥 Download Recap Video (MP4)", vf, "Aether_Recap.mp4", key="final_v")
+                # 👇 FIX: Replaced Streamlit buttons with HTML links to prevent page reload
+                st.markdown(get_download_link("AETHER_RECAP_FINAL.mp4", "Aether_Recap.mp4", "Download Recap Video (MP4)"), unsafe_allow_html=True)
                 if os.path.exists("subtitles.srt"):
-                    with open("subtitles.srt", "rb") as sf: 
-                        st.download_button("📥 Download Subtitles (.SRT)", sf, "Aether_Subs.srt", key="final_s")
+                    st.markdown(get_download_link("subtitles.srt", "Aether_Subs.srt", "Download Subtitles (.SRT)"), unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
                 
         with col_out2:
             st.markdown('<div class="setting-panel"><h3>📝 Scripts & Assets</h3>', unsafe_allow_html=True)
             if st.session_state.thumb_path and os.path.exists(st.session_state.thumb_path):
                 st.image(st.session_state.thumb_path, caption="Auto-Generated Thumbnail", use_column_width=True)
-                with open(st.session_state.thumb_path, "rb") as f:
-                    st.download_button("🖼️ Download Thumbnail", f, "Thumb.jpg")
+                st.markdown(get_download_link(st.session_state.thumb_path, "Thumb.jpg", "Download Thumbnail"), unsafe_allow_html=True)
             with st.expander("👁️ Original Transcript", expanded=False):
                 st.text_area("မူရင်းစာသား:", value=st.session_state.original_transcript, height=150, disabled=True)
             with st.expander("🇲🇲 AI Generated Script", expanded=True):
@@ -611,7 +591,7 @@ elif app_mode == "🎙️ Faceless Channel Studio":
     st.markdown('<div class="setting-panel"><h3>👻 Fully-Automated Faceless Channel Studio</h3>', unsafe_allow_html=True)
     st.markdown("TikTok, FB Reels များအတွက် Reddit Stories, Horror ပုံပြင်များကို AI ဖြင့် အလိုအလျောက် ဗီဒီယိုဖန်တီးပါ။")
 
-    local_fonts = [f for f in os.listdir(FONT_DIR) if f.endswith((".ttf", ".otf"))]
+    local_fonts = [f for f in os.listdir(".") if f.endswith((".ttf", ".otf"))]
     default_fonts = local_fonts if local_fonts else ["Pyidaungsu.ttf"]
 
     with st.sidebar:
@@ -626,9 +606,7 @@ elif app_mode == "🎙️ Faceless Channel Studio":
         st.markdown("<b>🎨 Visual & Niche Settings</b>", unsafe_allow_html=True)
         fc_niche = st.selectbox("Select Niche", ["👻 Horror / Creepypasta", "💔 Reddit Relationship Drama", "🧠 Dark Psychology", "💡 Fun Facts / Trivia"])
         fc_ratio = st.selectbox("Video Ratio", ["9:16 (TikTok/Shorts)", "16:9 (YouTube)", "Original"], key="fc_ratio")
-        
         fc_font = st.selectbox("🅰️ Auto-Detected Font", default_fonts, key="fc_font")
-        
         st.caption("💡 Subtitles များသည် Viral ဖြစ်စေရန် (Alex Hormozi Style) အလယ်တည့်တည့်တွင် အကြီးကြီး အော်တိုချိန်ညှိပေးထားပါသည်။")
 
         bgm_options = ["None (BGM မထည့်ပါ)"]
@@ -649,22 +627,12 @@ elif app_mode == "🎙️ Faceless Channel Studio":
             # STEP 1: Generate Story
             with st.spinner("⏳ [အဆင့် ၁/၅] Gemini ဖြင့် ၃ မိနစ်စာ ဇာတ်လမ်း ရေးသားနေပါသည်..."):
                 pbar.progress(10, text="📝 ဇာတ်လမ်း ရေးသားနေပါသည်...")
-                story_success = False
-                last_story_err = ""
-                for current_key in keys_list:
-                    try:
-                        story_prompt = f"Write an engaging 3-minute highly viral script for a {fc_niche} TikTok video in natural spoken Burmese. The story should be around 400-450 words. Start with an extreme hook. Do not use english transliteration. Include Synergy audio tags like [pause=1.0]."
-                        temp_client = genai.Client(api_key=current_key)
-                        response = temp_client.models.generate_content(model="gemini-2.5-flash", contents=story_prompt)
-                        fc_story_text = response.text.strip()
-                        story_success = True
-                        break
-                    except Exception as e:
-                        last_story_err = str(e)
-                        continue
-                if not story_success:
-                    st.error(f"Story Error: Google API ဆာဗာ အလုပ်များနေပါသည် သို့မဟုတ် Limit ပြည့်သွားပါသည်။ နောက်ထပ် Key တစ်ခုထည့်ကြည့်ပါ။ အသေးစိတ်: {last_story_err}")
-                    st.stop()
+                try:
+                    story_prompt = f"Write an engaging 3-minute highly viral script for a {fc_niche} TikTok video in natural spoken Burmese. The story should be around 400-450 words. Start with an extreme hook. Do not use english transliteration. Include Synergy audio tags like [pause=1.0]."
+                    client = genai.Client(api_key=keys_list[0])
+                    response = client.models.generate_content(model="gemini-2.5-flash", contents=story_prompt)
+                    fc_story_text = response.text.strip()
+                except Exception as e: st.error(f"Story Error: {e}"); st.stop()
 
             # STEP 2: Generate Audio
             with st.spinner("⏳ [အဆင့် ၂/၅] AI သရုပ်ဆောင်ဖြင့် အသံဖန်တီးနေပါသည်..."):
@@ -679,22 +647,8 @@ elif app_mode == "🎙️ Faceless Channel Studio":
             with st.spinner("⏳ [အဆင့် ၃/၅] Pexels ဖြင့် ဇာတ်လမ်းနှင့် ကိုက်ညီသော ဗီဒီယိုများ ရယူနေပါသည်..."):
                 pbar.progress(50, text="🎥 Visuals Generation အလုပ်လုပ်နေပါသည် (အချိန်အနည်းငယ်ကြာမည်)...")
                 try:
-                    kw_success = False
-                    last_kw_err = ""
-                    for current_key in keys_list:
-                        try:
-                            temp_client = genai.Client(api_key=current_key)
-                            prompt_req = temp_client.models.generate_content(model="gemini-2.5-flash", contents=f"Based on this story, give me exactly THREE short, distinct English search keywords (max 3 words each) describing the scenery. Avoid any violent, gory, or explicitly scary words. Format strictly separated by a pipe '|'. Story: {fc_story_text[:200]}")
-                            search_keywords = prompt_req.text.split('|')[:3]
-                            kw_success = True
-                            break
-                        except Exception as e:
-                            last_kw_err = str(e)
-                            continue
-                            
-                    if not kw_success:
-                        st.error(f"Keyword Generation Error: Google API ဆာဗာ အလုပ်များနေပါသည် သို့မဟုတ် Limit ပြည့်သွားပါသည်။ နောက်ထပ် Key တစ်ခုထည့်ကြည့်ပါ။ အသေးစိတ်: {last_kw_err}")
-                        st.stop()
+                    prompt_req = client.models.generate_content(model="gemini-2.5-flash", contents=f"Based on this story, give me exactly THREE short, distinct English search keywords (max 3 words each) describing the scenery. Avoid any violent, gory, or explicitly scary words. Format strictly separated by a pipe '|'. Story: {fc_story_text[:200]}")
+                    search_keywords = prompt_req.text.split('|')[:3]
                     
                     generated_clips = []
                     pexels_api_key = locals().get('pexels_key_input', '').strip()
@@ -713,7 +667,7 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                                     hd_links = [vf['link'] for vf in video_files if vf['quality'] == 'hd']
                                     best_link = hd_links[0] if hd_links else video_files[0]['link']
                                 else:
-                                    continue
+                                    continue 
                             else:
                                 search_url = f"https://www.pexels.com/search/videos/{clean_kw}/?orientation={orientation}"
                                 headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
@@ -725,7 +679,6 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                                     continue
                             
                             clip_path = f"fc_clip_{i}.mp4"
-                            
                             vid_res = requests.get(best_link, stream=True, timeout=60)
                             if vid_res.status_code == 200:
                                 with open(clip_path, "wb") as f:
@@ -741,67 +694,35 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                         st.error("❌ Visual Generation Failed. Pexels မှ ဗီဒီယို ရှာမတွေ့ပါ။ ကျေးဇူးပြု၍ Sidebar တွင် Pexels API Key ထည့်ပေးပါ။ (https://www.pexels.com/api/)")
                         st.stop()
                     
-                    width, height = (1080, 1920) if "9:16" in fc_ratio else (1920, 1080)
-                    streams = []
-                    for c in generated_clips:
-                        v = ffmpeg.input(c).video
-                        v = ffmpeg.filter(v, 'scale', width, height, force_original_aspect_ratio='increase')
-                        v = ffmpeg.filter(v, 'crop', width, height)
-                        v = ffmpeg.filter(v, 'fps', fps=30, round='near')
-                        v = ffmpeg.filter(v, 'setsar', '1')
-                        streams.append(v)
+                    with open("fc_concat.txt", "w") as f:
+                        for c in generated_clips: f.write(f"file '{c}'\n")
                     
-                    if streams:
-                        joined = ffmpeg.concat(*streams, v=1, a=0)
-                        ffmpeg.output(joined, "fc_combined.mp4", vcodec='libx264', pix_fmt='yuv420p', r=30).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
-                        
-                        subprocess.run([FFMPEG_BINARY, "-y", "-stream_loop", "-1", "-i", "fc_combined.mp4", "-t", str(fc_audio_dur), "-c", "copy", "fc_video_loop.mp4"], capture_output=True)
-                        
+                    subprocess.run([FFMPEG_BINARY, "-stream_loop", "-1", "-f", "concat", "-safe", "0", "-i", "fc_concat.txt", "-t", str(fc_audio_dur), "-c", "copy", "fc_video_loop.mp4"], quiet=True)
                 except Exception as e: st.error(f"Visual Error: {e}"); st.stop()
 
             # STEP 4: SRT Sync (Gemini Audio to SRT)
             with st.spinner("⏳ [အဆင့် ၄/၅] စာတန်းထိုးများကို Alex Hormozi ပုံစံ ချိန်ညှိနေပါသည်..."):
                 pbar.progress(70, text="📝 Timeline ချိန်ညှိနေပါသည်...")
-                
-                srt_success = False
-                last_srt_err = ""
-                
-                for current_key in keys_list:
-                    try:
-                        temp_client = genai.Client(api_key=current_key)
-                        audio_upload = temp_client.files.upload(file="fc_audio.wav")
-                        while "PROCESSING" in str(temp_client.files.get(name=audio_upload.name).state): time.sleep(2)
-                        
-                        # 👇 FIX: Ultra-strict prompt to force perfectly formatted SRT without markdown wrapping
-                        srt_prompt = "Listen to the audio. Output ONLY a valid SRT format file in Burmese. CRITICAL RULES: 1. Each subtitle block MUST contain ONLY 1 to 4 words. 2. The timestamps MUST strictly follow this exact format: HH:MM:SS,mmm --> HH:MM:SS,mmm (Example: 00:00:04,000 --> 00:00:05,500). DO NOT use '- >' or '->', use exactly '-->'. DO NOT skip the hours. No markdown block."
-                        srt_res = temp_client.models.generate_content(model="gemini-2.5-flash", contents=[audio_upload, srt_prompt])
-                        
-                        marker = chr(96) * 3
-                        fc_srt_text = srt_res.text.strip().replace(f"{marker}srt", "").replace(marker, "")
-                        
-                        fc_parsed, _ = parse_and_save_real_srt(fc_srt_text, "subtitles.srt")
-                        temp_client.files.delete(name=audio_upload.name)
-                        srt_success = True
-                        break 
-                    except Exception as e:
-                        last_srt_err = str(e)
-                        continue 
-                
-                if not srt_success:
-                    st.error(f"SRT Error: Google API ဆာဗာ အလုပ်များနေပါသည် သို့မဟုတ် Limit ပြည့်သွားပါသည်။ နောက်ထပ် Key တစ်ခုထည့်ကြည့်ပါ။ အသေးစိတ်: {last_srt_err}")
-                    st.stop()
+                try:
+                    audio_upload = client.files.upload(file="fc_audio.wav")
+                    while "PROCESSING" in str(client.files.get(name=audio_upload.name).state): time.sleep(2)
+                    
+                    srt_prompt = "Listen to the audio. Output ONLY a valid SRT file in Burmese. CRITICAL RULE: Each subtitle block MUST contain ONLY 1 to 4 words maximum (fast-paced TikTok style). Ensure timestamps are precise. No markdown."
+                    srt_res = client.models.generate_content(model="gemini-2.5-flash", contents=[audio_upload, srt_prompt])
+                    fc_srt_text = srt_res.text.strip().replace("```srt", "").replace("```", "")
+                    
+                    fc_parsed, _ = parse_and_save_real_srt(fc_srt_text, "subtitles.srt")
+                    client.files.delete(name=audio_upload.name)
+                except Exception as e: st.error(f"SRT Error: {e}"); st.stop()
 
             # STEP 5: Final Master Rendering
             with st.spinner("⏳ [အဆင့် ၅/၅] အားလုံးကိုပေါင်းစပ်ပြီး Master Video ထုတ်လုပ်နေပါသည်..."):
                 pbar.progress(85, text="🎬 Master Rendering အလုပ်လုပ်နေပါသည်...")
                 try:
-                    dyn_fc_style = f"FontName={fc_font.replace('.ttf', '').replace('.otf', '')},FontSize=35,PrimaryColour=&H0000FFFF,BackColour=&H90000000,BorderStyle=3,Outline=0,Shadow=1,Alignment=5,MarginV=150"
+                    # 👇 FIX: Changed FontSize from 35 to 22, MarginV to 80, and hardcoded FontName to Pyidaungsu to prevent boxes.
+                    dyn_fc_style = f"FontName=Pyidaungsu,FontSize=22,PrimaryColour=&H0000FFFF,BackColour=&H90000000,BorderStyle=3,Outline=0,Shadow=1,Alignment=5,MarginV=80"
                     
                     success, err_msg = render_premium_saas_video("fc_video_loop.mp4", "fc_audio.wav", fc_parsed, "FACELESS_FINAL.mp4", fc_ratio, use_bypass=True, sub_style_str=dyn_fc_style)
-                    
-                    if not success:
-                        st.error(f"Render Error: {err_msg}")
-                        st.stop()
                     
                     if success and fc_bgm not in ["None (BGM မထည့်ပါ)"]:
                         bgm_path = os.path.join("bgm_tracks", random.choice(bgm_files) if "Auto" in fc_bgm else fc_bgm)
@@ -820,8 +741,8 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     col_f1, col_f2 = st.columns(2)
                     with col_f1:
                         st.video("FACELESS_FINAL.mp4")
-                        with open("FACELESS_FINAL.mp4", "rb") as f:
-                            st.download_button("📥 Download Final Video", f, "Viral_Faceless.mp4")
+                        # 👇 FIX: Replaced Streamlit download button with HTML anchor tag to prevent refresh
+                        st.markdown(get_download_link("FACELESS_FINAL.mp4", "Viral_Faceless.mp4", "Download Final Video (No Refresh)"), unsafe_allow_html=True)
                     with col_f2:
                         st.markdown("### 📝 Generated Story")
                         st.text_area("ဇာတ်လမ်း:", value=fc_story_text, height=300, disabled=True)
