@@ -674,7 +674,8 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     
                     step3_start_time = time.time()
                     total_clips = len(search_keywords)
-                    
+                    generated_clips = []
+                    tasks = []
                   # Async download task generator
                     async def download_task(url, path, i, total):
                         async with aiohttp.ClientSession() as session:
@@ -711,7 +712,7 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     with open("fc_concat.txt", "w") as f:
                         for c in generated_clips: f.write(f"file '{c}'\n")
                     
-                    subprocess.run([FFMPEG_BINARY, "-stream_loop", "-1", "-f", "concat", "-safe", "0", "-i", "fc_concat.txt", "-t", str(fc_audio_dur), "-c", "copy", "fc_video_loop.mp4"], capture_output=True)
+                   subprocess.run([FFMPEG_BINARY, "-stream_loop", "-1", "-f", "concat", "-safe", "0", "-i", "fc_concat.txt", "-t", str(fc_audio_dur), "-c", "copy", "fc_video_loop.mp4"], capture_output=True)
 
 
             # STEP 4: SRT Sync
