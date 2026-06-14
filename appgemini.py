@@ -22,8 +22,13 @@ import subprocess
 import json
 import datetime
 import random
+import shutil
 
-FFMPEG_BINARY = imageio_ffmpeg.get_ffmpeg_exe()
+# 👇 FIX: Prioritize system FFmpeg (which supports Burmese Text Shaping) over imageio_ffmpeg
+if shutil.which("ffmpeg"):
+    FFMPEG_BINARY = "ffmpeg"
+else:
+    FFMPEG_BINARY = imageio_ffmpeg.get_ffmpeg_exe()
 
 # --- Key Save Files ---
 API_KEY_FILE = "saved_api_key.txt"
@@ -212,12 +217,16 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         v_max_dur = get_file_duration(in_v)
         safe_srt_path = os.path.abspath("subtitles.srt").replace('\\', '/')
         safe_srt_path_escaped = safe_srt_path.replace(':', '\\:')
+        
+        # 👇 FIX: Added Regex to strip [tags] and {tags} from screen subtitles
         with open("subtitles.srt", "w", encoding="utf-8-sig") as f:
             for i, (start, end, text) in enumerate(parsed_timestamps, start=1):
                 if start >= v_max_dur: continue
                 safe_end = min(end, v_max_dur)
                 def fmt_t(s): return f"{int(s//3600):02d}:{int((s%3600)//60):02d}:{int(s%60):02d},{int((s-int(s))*1000):03d}"
-                f.write(f"{i}\n{fmt_t(start)} --> {fmt_t(safe_end)}\n{text}\n\n")
+                clean_text = re.sub(r'\[.*?\]', '', text)
+                clean_text = re.sub(r'\{.*?\}', '', clean_text).strip()
+                f.write(f"{i}\n{fmt_t(start)} --> {fmt_t(safe_end)}\n{clean_text}\n\n")
         
         video = ffmpeg.input(in_v).video
         if use_bypass: video = ffmpeg.filter(video, 'scale', '2*trunc(iw*1.08/2)', '2*trunc(ih*1.08/2)').filter('crop', 'iw/1.08', 'ih/1.08')
@@ -339,8 +348,8 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         if subtitle_mode in ["Both (Burn + SRT)", "Burn into Video"]:
             sub_position = st.selectbox("📍 Position", ["Bottom", "Center", "Top"])
             sub_color = st.selectbox("🎨 Color", ["Yellow Text + Black Outline", "White Text + Black Outline", "Neon Green Text + Black Outline"])
-            # 👇 CHANGED: Default font updated to specifically match the available NotoSans-Bold.ttf
-            sub_font = st.selectbox("🅰️ Font Family", ["NotoSans-Bold", "Pyidaungsu", "Myanmar3_2018", "Padauk"])
+            # 👇 CHANGED: Swapped back to Pyidaungsu as requested
+            sub_font = st.selectbox("🅰️ Font Family", ["Pyidaungsu", "NotoSans-Bold", "Myanmar3_2018", "Padauk"])
             sub_size = st.slider("🔠 Font Size", 16, 40, 22)
             sub_thickness = st.slider("✒️ Outline Thickness", 1.0, 5.0, 2.5)
             col_s1, col_s2 = st.columns(2)
@@ -454,13 +463,16 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     parsed_timestamps, speech_text = parse_and_save_real_srt(clean_raw_srt, srt_final, use_fade=sub_fade)
                     st.session_state.generated_script = clean_raw_srt
                     
-                    # 👇 CHANGED: Explicitly defined 'NotoSans-Bold.ttf' for Thumbnail drawtext
+                    # 👇 FIX: Changed font_path to Pyidaungsu.ttf
                     try:
                         thumb_time = min(get_file_duration(v_input)/3, 15)
                         safe_title = st.session_state.viral_title.replace(":", "\\:").replace("'", "").replace('"', "")
+                        font_path = "Pyidaungsu.ttf"
+                        
                         try:
                             stream = ffmpeg.input(v_input, ss=thumb_time)
-                            stream = ffmpeg.filter(stream.video, 'drawtext', text=safe_title, fontfile='NotoSans-Bold.ttf', fontcolor='yellow', fontsize=60, x='(w-text_w)/2', y='h-150', box=1, boxcolor='black@0.7', boxborderw=15, borderw=2, bordercolor='black')
+                            if os.path.exists(font_path):
+                                stream = ffmpeg.filter(stream.video, 'drawtext', text=safe_title, fontfile=font_path, fontcolor='yellow', fontsize=60, x='(w-text_w)/2', y='h-150', box=1, boxcolor='black@0.7', boxborderw=15, borderw=2, bordercolor='black')
                             ffmpeg.output(stream, "auto_thumb.jpg", vframes=1).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
                         except:
                             ffmpeg.input(v_input, ss=thumb_time).output("auto_thumb.jpg", vframes=1).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
