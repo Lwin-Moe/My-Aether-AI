@@ -25,7 +25,7 @@ import random
 import shutil
 import textwrap 
 import urllib.parse 
-import concurrent.futures # 👇 FIX: Added Threading for safe & fast parallel downloads
+import concurrent.futures 
 
 # 👇 FIX: Prioritize system FFmpeg (which supports Burmese Text Shaping) over imageio_ffmpeg
 if shutil.which("ffmpeg"):
@@ -603,7 +603,6 @@ elif app_mode == "🎙️ Faceless Channel Studio":
         fc_niche = st.selectbox("Select Niche", ["👻 Horror / Creepypasta", "💔 Reddit Relationship Drama", "🧠 Dark Psychology", "💡 Fun Facts / Trivia"])
         fc_ratio = st.selectbox("Video Ratio", ["9:16 (TikTok/Shorts)", "16:9 (YouTube)", "Original"], key="fc_ratio")
         
-        # 👇 FIX: Added slider for story duration (1 to 10 mins)
         fc_duration = st.slider("⏱️ Story Duration (Minutes)", 1, 10, 3)
         st.caption("💡 Subtitles များသည် Viral ဖြစ်စေရန် (Alex Hormozi Style) အလယ်တည့်တည့်တွင် အကြီးကြီး အော်တိုချိန်ညှိပေးထားပါသည်။")
 
@@ -626,7 +625,6 @@ elif app_mode == "🎙️ Faceless Channel Studio":
             with st.spinner(f"⏳ [အဆင့် ၁/၅] Gemini ဖြင့် {fc_duration} မိနစ်စာ ဇာတ်လမ်း ရေးသားနေပါသည်..."):
                 pbar.progress(10, text="📝 ဇာတ်လမ်း ရေးသားနေပါသည်...")
                 
-                # 👇 FIX: Dynamic word count based on selected duration
                 target_words = fc_duration * 140
                 story_prompt = f"Write an engaging {fc_duration}-minute highly viral script for a {fc_niche} TikTok video in natural spoken Burmese. The story should be around {target_words} words. Start with an extreme hook. Do not use english transliteration. Include Synergy audio tags like [pause=1.0]."
                 
@@ -654,7 +652,7 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     fc_audio_dur = get_file_duration("fc_audio.wav")
                 except Exception as e: st.error(f"Audio Error: {e}"); st.stop()
 
-            # STEP 3: Fallback Image/Video Generation (Parallel Downloading with SD format)
+            # STEP 3: Fallback Image/Video Generation (Parallel Downloading + Normalization)
             with st.spinner("⏳ [အဆင့် ၃/၅] Pexels ဖြင့် ဇာတ်လမ်းနှင့် ကိုက်ညီသော ဗီဒီယိုများ ရယူနေပါသည်..."):
                 pbar.progress(50, text="🎥 Visuals Generation စတင်နေပါသည်...")
                 try:
@@ -680,7 +678,7 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     step3_start_time = time.time()
                     total_clips = len(search_keywords)
                     
-                    # 👇 FIX: Parallel downloading using concurrent.futures and SD resolution
+                    # 👇 FIX: Parallel downloading & normalization to completely remove FFmpeg bottlenecks
                     def fetch_pexels_clip(kw, idx):
                         try:
                             clean_kw = kw.strip().replace(" ", "+")
@@ -693,7 +691,6 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                                 res = requests.get(pexels_url, headers=headers, timeout=30)
                                 if res.status_code == 200 and res.json().get('videos'):
                                     video_files = res.json()['videos'][0]['video_files']
-                                    # 👇 FIX: Specifically target 'sd' for much faster download speed
                                     sd_links = [vf['link'] for vf in video_files if vf['quality'] == 'sd']
                                     best_link = sd_links[0] if sd_links else video_files[0]['link']
                             else:
@@ -705,12 +702,19 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                                     best_link = match.group(0)
                             
                             if best_link:
-                                clip_path = f"fc_clip_{idx}.mp4"
+                                raw_path = f"raw_fc_clip_{idx}.mp4"
                                 vid_res = requests.get(best_link, stream=True, timeout=60)
                                 if vid_res.status_code == 200:
-                                    with open(clip_path, "wb") as f:
+                                    with open(raw_path, "wb") as f:
                                         for chunk in vid_res.iter_content(chunk_size=1024 * 1024): 
                                             if chunk: f.write(chunk)
+                                    
+                                    # Normalize video immediately (Forces all clips to have same fps, size, and codec for safe concat)
+                                    clip_path = f"fc_clip_{idx}.mp4"
+                                    scale_filter = "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280" if "9:16" in fc_ratio else ("scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720" if "16:9" in fc_ratio else "scale=720:-2")
+                                    subprocess.run([FFMPEG_BINARY, "-y", "-i", raw_path, "-vf", f"{scale_filter},fps=25,format=yuv420p", "-c:v", "libx264", "-preset", "superfast", "-crf", "26", "-an", clip_path], capture_output=True)
+                                    
+                                    if os.path.exists(raw_path): os.remove(raw_path) # cleanup
                                     return clip_path
                         except: pass
                         return None
@@ -733,7 +737,7 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     with open("fc_concat.txt", "w") as f:
                         for c in generated_clips: f.write(f"file '{c}'\n")
                     
-                    subprocess.run([FFMPEG_BINARY, "-stream_loop", "-1", "-f", "concat", "-safe", "0", "-i", "fc_concat.txt", "-t", str(fc_audio_dur), "-c", "copy", "fc_video_loop.mp4"], capture_output=True)
+                    subprocess.run([FFMPEG_BINARY, "-y", "-stream_loop", "-1", "-f", "concat", "-safe", "0", "-i", "fc_concat.txt", "-t", str(fc_audio_dur), "-c", "copy", "fc_video_loop.mp4"], capture_output=True)
                 except Exception as e: st.error(f"Visual Error: {e}"); st.stop()
 
             # STEP 4: SRT Sync
