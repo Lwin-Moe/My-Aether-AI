@@ -642,12 +642,23 @@ elif app_mode == "🎙️ Faceless Channel Studio":
             # STEP 1: Generate Story
             with st.spinner("⏳ [အဆင့် ၁/၅] Gemini ဖြင့် ၃ မိနစ်စာ ဇာတ်လမ်း ရေးသားနေပါသည်..."):
                 pbar.progress(10, text="📝 ဇာတ်လမ်း ရေးသားနေပါသည်...")
-                try:
-                    story_prompt = f"Write an engaging 3-minute highly viral script for a {fc_niche} TikTok video in natural spoken Burmese. The story should be around 400-450 words. Start with an extreme hook. Do not use english transliteration. Include Synergy audio tags like [pause=1.0]."
-                    client = genai.Client(api_key=keys_list[0])
-                    response = client.models.generate_content(model="gemini-2.5-flash", contents=story_prompt)
-                    fc_story_text = response.text.strip()
-                except Exception as e: st.error(f"Story Error: {e}"); st.stop()
+                # 👇 FIX: Added Key Rotation & Auto-Retry for Step 1
+                story_success = False
+                last_story_err = ""
+                for current_key in keys_list:
+                    try:
+                        story_prompt = f"Write an engaging 3-minute highly viral script for a {fc_niche} TikTok video in natural spoken Burmese. The story should be around 400-450 words. Start with an extreme hook. Do not use english transliteration. Include Synergy audio tags like [pause=1.0]."
+                        temp_client = genai.Client(api_key=current_key)
+                        response = temp_client.models.generate_content(model="gemini-2.5-flash", contents=story_prompt)
+                        fc_story_text = response.text.strip()
+                        story_success = True
+                        break
+                    except Exception as e:
+                        last_story_err = str(e)
+                        continue
+                if not story_success:
+                    st.error(f"Story Error: Google API ဆာဗာ အလုပ်များနေပါသည် သို့မဟုတ် Limit ပြည့်သွားပါသည်။ နောက်ထပ် Key တစ်ခုထည့်ကြည့်ပါ။ အသေးစိတ်: {last_story_err}")
+                    st.stop()
 
             # STEP 2: Generate Audio
             with st.spinner("⏳ [အဆင့် ၂/၅] AI သရုပ်ဆောင်ဖြင့် အသံဖန်တီးနေပါသည်..."):
@@ -662,8 +673,23 @@ elif app_mode == "🎙️ Faceless Channel Studio":
             with st.spinner("⏳ [အဆင့် ၃/၅] Pexels ဖြင့် ဇာတ်လမ်းနှင့် ကိုက်ညီသော ဗီဒီယိုများ ရယူနေပါသည်..."):
                 pbar.progress(50, text="🎥 Visuals Generation အလုပ်လုပ်နေပါသည် (အချိန်အနည်းငယ်ကြာမည်)...")
                 try:
-                    prompt_req = client.models.generate_content(model="gemini-2.5-flash", contents=f"Based on this story, give me exactly THREE short, distinct English search keywords (max 3 words each) describing the scenery. Avoid any violent, gory, or explicitly scary words. Format strictly separated by a pipe '|'. Story: {fc_story_text[:200]}")
-                    search_keywords = prompt_req.text.split('|')[:3]
+                    # 👇 FIX: Added Key Rotation & Auto-Retry for Step 3
+                    kw_success = False
+                    last_kw_err = ""
+                    for current_key in keys_list:
+                        try:
+                            temp_client = genai.Client(api_key=current_key)
+                            prompt_req = temp_client.models.generate_content(model="gemini-2.5-flash", contents=f"Based on this story, give me exactly THREE short, distinct English search keywords (max 3 words each) describing the scenery. Avoid any violent, gory, or explicitly scary words. Format strictly separated by a pipe '|'. Story: {fc_story_text[:200]}")
+                            search_keywords = prompt_req.text.split('|')[:3]
+                            kw_success = True
+                            break
+                        except Exception as e:
+                            last_kw_err = str(e)
+                            continue
+                            
+                    if not kw_success:
+                        st.error(f"Keyword Generation Error: Google API ဆာဗာ အလုပ်များနေပါသည် သို့မဟုတ် Limit ပြည့်သွားပါသည်။ နောက်ထပ် Key တစ်ခုထည့်ကြည့်ပါ။ အသေးစိတ်: {last_kw_err}")
+                        st.stop()
                     
                     generated_clips = []
                     pexels_api_key = locals().get('pexels_key_input', '').strip()
@@ -728,7 +754,7 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                         
                 except Exception as e: st.error(f"Visual Error: {e}"); st.stop()
 
-            # 👇 FIX: Added Loop and Auto-Retry Mechanism for API calls in Step 4
+            # STEP 4: SRT Sync (Gemini Audio to SRT)
             with st.spinner("⏳ [အဆင့် ၄/၅] စာတန်းထိုးများကို Alex Hormozi ပုံစံ ချိန်ညှိနေပါသည်..."):
                 pbar.progress(70, text="📝 Timeline ချိန်ညှိနေပါသည်...")
                 
@@ -750,13 +776,13 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                         fc_parsed, _ = parse_and_save_real_srt(fc_srt_text, "subtitles.srt")
                         temp_client.files.delete(name=audio_upload.name)
                         srt_success = True
-                        break # Exit the loop if generation is successful
+                        break 
                     except Exception as e:
                         last_srt_err = str(e)
-                        continue # If 503 or 429 error occurs, jump to the next API key in the list
+                        continue 
                 
                 if not srt_success:
-                    st.error(f"SRT Error: Google API ဆာဗာ အလုပ်များနေပါသည်။ ခဏစောင့်ပြီး ပြန်လုပ်ကြည့်ပါ။ အသေးစိတ်: {last_srt_err}")
+                    st.error(f"SRT Error: Google API ဆာဗာ အလုပ်များနေပါသည် သို့မဟုတ် Limit ပြည့်သွားပါသည်။ နောက်ထပ် Key တစ်ခုထည့်ကြည့်ပါ။ အသေးစိတ်: {last_srt_err}")
                     st.stop()
 
             # STEP 5: Final Master Rendering
