@@ -37,7 +37,7 @@ ELEVEN_KEY_FILE = "saved_eleven_key.txt"
 GROQ_KEY_FILE = "saved_groq_key.txt"
 OPENAI_KEY_FILE = "saved_openai_key.txt"
 ELEVEN_VOICE_ID_FILE = "saved_eleven_voice_id.txt"
-PEXELS_KEY_FILE = "saved_pexels_key.txt" # 👇 NEW: Save file for Pexels API Key
+PEXELS_KEY_FILE = "saved_pexels_key.txt"
 
 def load_key(file_path):
     if os.path.exists(file_path):
@@ -285,7 +285,6 @@ with st.sidebar:
         api_key_input = st.text_input("OpenAI API Key", type="password", value=saved_openai)
         if api_key_input and api_key_input != saved_openai: save_key(OPENAI_KEY_FILE, api_key_input)
     
-    # 👇 NEW: Added Pexels API Key input for Faceless Studio
     if app_mode == "🎙️ Faceless Channel Studio":
         st.markdown("---")
         st.markdown("### 🔑 Pexels API Key (Optional)")
@@ -642,7 +641,6 @@ elif app_mode == "🎙️ Faceless Channel Studio":
             with st.spinner("⏳ [အဆင့် ၃/၅] Pexels ဖြင့် ဇာတ်လမ်းနှင့် ကိုက်ညီသော ဗီဒီယိုများ ရယူနေပါသည်..."):
                 pbar.progress(50, text="🎥 Visuals Generation အလုပ်လုပ်နေပါသည် (အချိန်အနည်းငယ်ကြာမည်)...")
                 try:
-                    # 👇 FIX: Integrated Pexels Free Video Scraping (No API Key Required for basic fetching, but uses key if provided)
                     prompt_req = client.models.generate_content(model="gemini-2.5-flash", contents=f"Based on this story, give me exactly THREE short, distinct English search keywords (max 3 words each) describing the scenery. Avoid any violent, gory, or explicitly scary words. Format strictly separated by a pipe '|'. Story: {fc_story_text[:200]}")
                     search_keywords = prompt_req.text.split('|')[:3]
                     
@@ -654,20 +652,17 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                             clean_kw = keyword.strip().replace(" ", "+")
                             orientation = "portrait" if "9:16" in fc_ratio else "landscape"
                             
-                            # If user provided a Pexels API Key, use the official API for better quality
                             if pexels_api_key:
                                 headers = {"Authorization": pexels_api_key}
                                 pexels_url = f"https://api.pexels.com/videos/search?query={clean_kw}&orientation={orientation}&per_page=1"
                                 res = requests.get(pexels_url, headers=headers, timeout=30)
                                 if res.status_code == 200 and res.json().get('videos'):
                                     video_files = res.json()['videos'][0]['video_files']
-                                    # Pick the highest quality HD link
                                     hd_links = [vf['link'] for vf in video_files if vf['quality'] == 'hd']
                                     best_link = hd_links[0] if hd_links else video_files[0]['link']
                                 else:
-                                    continue # Skip if no video found
+                                    continue
                             else:
-                                # Fallback Web Scraping method (Might be blocked by Pexels, so API key is recommended)
                                 search_url = f"https://www.pexels.com/search/videos/{clean_kw}/?orientation={orientation}"
                                 headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
                                 html_res = requests.get(search_url, headers=headers, timeout=30)
@@ -679,7 +674,6 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                             
                             clip_path = f"fc_clip_{i}.mp4"
                             
-                            # Download the video clip
                             vid_res = requests.get(best_link, stream=True, timeout=60)
                             if vid_res.status_code == 200:
                                 with open(clip_path, "wb") as f:
@@ -698,7 +692,8 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     with open("fc_concat.txt", "w") as f:
                         for c in generated_clips: f.write(f"file '{c}'\n")
                     
-                    subprocess.run([FFMPEG_BINARY, "-stream_loop", "-1", "-f", "concat", "-safe", "0", "-i", "fc_concat.txt", "-t", str(fc_audio_dur), "-c", "copy", "fc_video_loop.mp4"], quiet=True)
+                    # 👇 FIX: Changed quiet=True to capture_output=True
+                    subprocess.run([FFMPEG_BINARY, "-stream_loop", "-1", "-f", "concat", "-safe", "0", "-i", "fc_concat.txt", "-t", str(fc_audio_dur), "-c", "copy", "fc_video_loop.mp4"], capture_output=True)
                 except Exception as e: st.error(f"Visual Error: {e}"); st.stop()
 
             # STEP 4: SRT Sync (Gemini Audio to SRT)
