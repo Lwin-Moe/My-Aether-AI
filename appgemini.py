@@ -268,8 +268,7 @@ st.markdown('<div class="sub-title">AI Studio V52 ⚡ Premium Edition</div>', un
 
 with st.sidebar:
     st.markdown("### 🧭 Navigation Menu")
-    # 👇 NEW: Added Faceless Channel Studio to the App Modes
-    app_mode = st.radio("Select Studio Mode:", ["🎙️ Movie Dubbing Studio", "🎙️ Faceless Channel Studio", "🎥 Veo Video Studio", "🎵 Lyria Music Studio","⚡ Translation/Transcript Studio","📥 Video Downloader Hub"])
+    app_mode = st.radio("Select Studio Mode:", ["🎙️ Movie Dubbing Studio", "🎙️ Faceless Channel Studio", "🎥 Veo Video Studio", "🎵 Lyria Music Studio","⚡ Translation/Transcript Studio","📥 Video Downloader Hub",])
     st.markdown("---")
     ai_provider = st.selectbox("Choose AI Provider", ["Google Gemini (Flash - Recommended)", "OpenAI (GPT-5.5 Pro)", "Groq API (Fast & Free)"])
     saved_gemini = load_key(API_KEY_FILE)
@@ -594,7 +593,9 @@ elif app_mode == "🎙️ Faceless Channel Studio":
         st.markdown("<b>🎨 Visual & Niche Settings</b>", unsafe_allow_html=True)
         fc_niche = st.selectbox("Select Niche", ["👻 Horror / Creepypasta", "💔 Reddit Relationship Drama", "🧠 Dark Psychology", "💡 Fun Facts / Trivia"])
         
-        # 👇 NEW: Niche-Specific Subtitles Setup & Auto Font Dropdown
+        # 👇 NEW: Added Video Ratio Selector for Faceless Studio
+        fc_ratio = st.selectbox("Video Ratio", ["9:16 (TikTok/Shorts)", "16:9 (YouTube)", "Original"], key="fc_ratio")
+        
         fc_font = st.selectbox("🅰️ Auto-Detected Font", default_fonts, key="fc_font")
         st.caption("💡 Subtitles များသည် Viral ဖြစ်စေရန် (Alex Hormozi Style) အလယ်တည့်တည့်တွင် အကြီးကြီး အော်တိုချိန်ညှိပေးထားပါသည်။")
 
@@ -632,11 +633,14 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     fc_audio_dur = get_file_duration("fc_audio.wav")
                 except Exception as e: st.error(f"Audio Error: {e}"); st.stop()
 
-            # STEP 3: Veo Generation (Generate 2 clips to loop)
+            # STEP 3: Veo Generation
             with st.spinner("⏳ [အဆင့် ၃/၅] Veo ဖြင့် ဇာတ်လမ်းနှင့် ကိုက်ညီသော ဗီဒီယိုများ ဆွဲနေပါသည်..."):
                 pbar.progress(50, text="🎥 Veo Video Generation အလုပ်လုပ်နေပါသည် (အချိန်အနည်းငယ်ကြာမည်)...")
                 try:
-                    prompt_req = client.models.generate_content(model="gemini-2.5-flash", contents=f"Based on this story, give me exactly TWO short, distinct English image/video generation prompts (max 10 words each) describing the creepy/dramatic vibe. Format them strictly separated by a pipe '|'. Story: {fc_story_text[:200]}")
+                    # 👇 NEW: Modifying Prompt to Instruct Veo API on the Aspect Ratio
+                    veo_aspect = "vertical 9:16 format" if "9:16" in fc_ratio else ("horizontal 16:9 format" if "16:9" in fc_ratio else "high quality cinematic format")
+                    
+                    prompt_req = client.models.generate_content(model="gemini-2.5-flash", contents=f"Based on this story, give me exactly TWO short, distinct English video generation prompts (max 15 words each) describing the creepy/dramatic vibe. MUST append '{veo_aspect}' to each prompt. Format strictly separated by a pipe '|'. Story: {fc_story_text[:200]}")
                     veo_prompts = prompt_req.text.split('|')[:2]
                     
                     generated_clips = []
@@ -656,7 +660,6 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                         st.error("❌ Veo Generation Failed. သင့် Key များ Limit ပြည့်သွားပါပြီ။")
                         st.stop()
                     
-                    # Concat and loop the clips to match audio duration
                     with open("fc_concat.txt", "w") as f:
                         for c in generated_clips: f.write(f"file '{c}'\n")
                     
@@ -682,11 +685,10 @@ elif app_mode == "🎙️ Faceless Channel Studio":
             with st.spinner("⏳ [အဆင့် ၅/၅] အားလုံးကိုပေါင်းစပ်ပြီး Master Video ထုတ်လုပ်နေပါသည်..."):
                 pbar.progress(85, text="🎬 Master Rendering အလုပ်လုပ်နေပါသည်...")
                 try:
-                    # 👇 NEW: Subtitle Style locked for Faceless TikTok Niche
-                    # Alignment=5 (Center of screen), MarginV=150 (perfect height), Big Yellow Text + Black Background Box
                     dyn_fc_style = f"FontName={fc_font.replace('.ttf', '').replace('.otf', '')},FontSize=35,PrimaryColour=&H0000FFFF,BackColour=&H90000000,BorderStyle=3,Outline=0,Shadow=1,Alignment=5,MarginV=150"
                     
-                    success, err_msg = render_premium_saas_video("fc_video_loop.mp4", "fc_audio.wav", fc_parsed, "FACELESS_FINAL.mp4", "9:16 (TikTok/Shorts)", use_bypass=True, sub_style_str=dyn_fc_style)
+                    # 👇 NEW: Passed fc_ratio exactly into the render function to enforce the aspect ratio on the final output
+                    success, err_msg = render_premium_saas_video("fc_video_loop.mp4", "fc_audio.wav", fc_parsed, "FACELESS_FINAL.mp4", fc_ratio, use_bypass=True, sub_style_str=dyn_fc_style)
                     
                     if success and fc_bgm not in ["None (BGM မထည့်ပါ)"]:
                         bgm_path = os.path.join("bgm_tracks", random.choice(bgm_files) if "Auto" in fc_bgm else fc_bgm)
