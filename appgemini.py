@@ -40,7 +40,7 @@ OPENAI_KEY_FILE = "saved_openai_key.txt"
 ELEVEN_VOICE_ID_FILE = "saved_eleven_voice_id.txt"
 PEXELS_KEY_FILE = "saved_pexels_key.txt"
 
-# 👇 FIX: Dedicated fonts directory setup (Changed to 'font' to match user's GitHub repo)
+# 👇 Dedicated fonts directory setup
 FONT_DIR = "font"
 if not os.path.exists(FONT_DIR): os.makedirs(FONT_DIR)
 
@@ -276,7 +276,6 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
 st.markdown('<div class="main-title">AETHER FILMWORKS</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">AI Studio V52 ⚡ Premium Edition</div>', unsafe_allow_html=True)
 
-# 👇 FIX: Fetch fonts dynamically from the dedicated 'font' directory
 local_fonts = [f for f in os.listdir(FONT_DIR) if f.endswith((".ttf", ".otf"))]
 default_fonts = local_fonts if local_fonts else ["Pyidaungsu.ttf"]
 
@@ -733,11 +732,12 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     audio_upload = client.files.upload(file="fc_audio.wav")
                     while "PROCESSING" in str(client.files.get(name=audio_upload.name).state): time.sleep(2)
                     
-                    # 👇 FIX: Even stricter prompt to ensure standard SRT format without missing hours
                     srt_prompt = "Listen to the audio. Output ONLY a valid SRT file in Burmese. CRITICAL RULE: Each subtitle block MUST contain ONLY 1 to 4 words maximum. The timestamps MUST strictly follow this exact format: HH:MM:SS,mmm --> HH:MM:SS,mmm (Example: 00:00:04,000 --> 00:00:05,500). DO NOT format timestamps like 00:04:848. Always include the hours. No markdown."
                     srt_res = client.models.generate_content(model="gemini-2.5-flash", contents=[audio_upload, srt_prompt])
-                    fc_srt_text = srt_res.text.strip().replace("```srt", "").replace("
-```", "")
+                    
+                    # 👇 FIX: Added marker formatting back to safely strip backticks without triggering string literal syntax error
+                    marker = chr(96) * 3
+                    fc_srt_text = srt_res.text.strip().replace(f"{marker}srt", "").replace(marker, "")
                     
                     fc_parsed, _ = parse_and_save_real_srt(fc_srt_text, "subtitles.srt")
                     client.files.delete(name=audio_upload.name)
