@@ -1024,7 +1024,7 @@ Story:
         )
 
         st.stop()
-        )
+        
 
             # STEP 4: SRT Sync
             with st.spinner("⏳ [အဆင့် ၄/၅] စာတန်းထိုးများကို Alex Hormozi ပုံစံ ချိန်ညှိနေပါသည်..."):
