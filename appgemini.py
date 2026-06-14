@@ -225,7 +225,6 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         if use_color: video = ffmpeg.filter(video, 'eq', brightness=0.02, contrast=1.05, saturation=1.1)
         if use_grain: video = ffmpeg.filter(video, 'noise', alls=2, allf='t+u')
         if use_fps: video = ffmpeg.filter(video, 'fps', fps=24, round='near')
-        # 👇 NEW: Freeze Frame Protection (Stop-Motion Effect)
         if use_freeze: video = ffmpeg.filter(video, 'minterpolate', fps=12, mi_mode='dup')
         
         video = ffmpeg.filter(video, 'scale', 'trunc(oh*a/2)*2', 1080, flags='bicubic')
@@ -294,7 +293,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         cb_color = st.checkbox("🎨 Color Tweaks", value=False)
         cb_grain = st.checkbox("🎞️ Subtle Film Grain", value=False)
         cb_fps = st.checkbox("🎬 Cinematic 24 FPS", value=False)
-        # 👇 NEW: Visual Protection Freeze Frame
         cb_freeze = st.checkbox("❄️ Freeze Frame (Stop-Motion Bypass)", value=False)
         
         st.markdown("<b>🎬 Visual & Subs</b>", unsafe_allow_html=True)
@@ -309,7 +307,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         video_url = st.text_input("🔗 Paste Short Drama URL Link", placeholder="https://...")
         uploaded_file = st.file_uploader("📥 OR Upload Video File (MP4)", type=["mp4"])
         
-        # 👇 NEW: Storytelling Dual Mode & Script Styles
         st.markdown("<br><div class='sub-box'>", unsafe_allow_html=True)
         st.markdown("<p style='font-weight: bold; color: #38bdf8; font-size: 16px;'>✍️ AI Storytelling & Script Rules</p>", unsafe_allow_html=True)
         recap_mode = st.radio("🎬 Recap Mode", ["Translate Original Video (မူရင်းကို ဘာသာပြန်မည်)", "Create Original AI Story (ကိုယ်ပိုင် ဇာတ်လမ်းဖန်တီးမည်)"])
@@ -366,7 +363,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
             st.session_state.generated_script = ""
             v_input, a_extracted, a_generated, v_final, srt_final = "input_temp.mp4", "temp_extracted.mp3", "voice_temp.wav", "AETHER_RECAP_FINAL.mp4", "subtitles.srt"
 
-            # 👇 NEW: Real-time Progress Bar
             pbar = st.progress(0, text="🚀 အလုပ်စတင်နေပါပြီ...")
 
             with st.spinner("⏳ [အဆင့် ၁/၆] ဗီဒီယို ဖိုင်အား စနစ်ထဲသို့ ဆွဲသွင်းနေပါသည်..."):
@@ -386,7 +382,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
             with st.spinner(f"⏳ [အဆင့် ၂/၆] {ai_provider} ဖြင့် ဇာတ်ညွှန်း၊ Title နှင့် Thumbnail ထုတ်လုပ်နေပါသည်..."):
                 pbar.progress(30, text=f"🤖 [အဆင့် ၂/၆] ဇာတ်ညွှန်း၊ Title နှင့် Hashtags ဖန်တီးနေပါသည်...")
                 try:
-                    # 👇 NEW: Injecting the Custom Script Styles & Dual Mode Rules
                     extra_rules = ""
                     if script_hook: extra_rules += " [HOOK]: Start with an extremely engaging 3-second viral hook."
                     if "Slang" in script_style: extra_rules += " [SLANG]: Use modern Myanmar internet slang and Gen-Z conversational tone."
@@ -396,7 +391,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     if script_tone: extra_rules += " [TONE]: Inject strong emotions and character tones matching the scene."
                     if script_cta: extra_rules += " [CTA]: End the script with a strong Call to Action asking a question."
 
-                    # Auto Title & Tags Prompt Injection
                     extra_rules += "\nAt the absolute end of the response, you MUST include these two lines on separate lines:\n[TITLE: (Provide a viral Burmese title here)]\n[TAGS: #tag1 #tag2]"
                     hormozi_rule = " [HORMOZI]: Split the subtitles into chunks of 3-5 words max." if sub_short else ""
 
@@ -409,7 +403,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                             try:
                                 client = genai.Client(api_key=current_key)
                                 
-                                # 👇 NEW: Dual Mode Upload Handling
                                 target_file = v_input if "Original" in recap_mode else a_extracted
                                 media_file = client.files.upload(file=target_file)
                                 
@@ -449,7 +442,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                         comp = client.chat.completions.create(model="llama-3.3-70b-versatile" if "Groq" in ai_provider else ("gpt-5.5-pro" if "5.5" in ai_provider else "gpt-4o"), messages=[{"role": "user", "content": f"{base_prompt} --- SRT --- {tsrt}"}])
                         raw_output_text = comp.choices[0].message.content
 
-                    # 👇 NEW: Auto Title & Tag Parser
                     title_match = re.search(r'\[TITLE:\s*(.*?)\]', raw_output_text)
                     tags_match = re.search(r'\[TAGS:\s*(.*?)\]', raw_output_text)
                     st.session_state.viral_title = title_match.group(1).strip() if title_match else "Viral Movie Recap"
@@ -461,10 +453,18 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     parsed_timestamps, speech_text = parse_and_save_real_srt(clean_raw_srt, srt_final, use_fade=sub_fade)
                     st.session_state.generated_script = clean_raw_srt
                     
-                    # 👇 NEW: Thumbnail Generator
+                    # 👇 NEW: Thumbnail Generator with Auto-Title Overlay
                     try:
                         thumb_time = min(get_file_duration(v_input)/3, 15)
-                        ffmpeg.input(v_input, ss=thumb_time).output("auto_thumb.jpg", vframes=1).overwrite_output().run(quiet=True)
+                        safe_title = st.session_state.viral_title.replace(":", "\\:").replace("'", "").replace('"', "")
+                        try:
+                            stream = ffmpeg.input(v_input, ss=thumb_time)
+                            # Draw text in the middle/bottom of the frame with a black background box for readability
+                            stream = ffmpeg.filter(stream.video, 'drawtext', text=safe_title, fontcolor='yellow', fontsize=60, x='(w-text_w)/2', y='h-150', box=1, boxcolor='black@0.7', boxborderw=15, borderw=2, bordercolor='black')
+                            ffmpeg.output(stream, "auto_thumb.jpg", vframes=1).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
+                        except:
+                            # Fallback if text rendering fails (e.g., missing fonts)
+                            ffmpeg.input(v_input, ss=thumb_time).output("auto_thumb.jpg", vframes=1).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
                         st.session_state.thumb_path = "auto_thumb.jpg"
                     except: pass
 
@@ -493,7 +493,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     selected_bgm_path = os.path.join("bgm_tracks", random.choice(bgm_files) if "Auto" in selected_bgm else selected_bgm)
                     if os.path.exists(selected_bgm_path):
                         try:
-                            # 👇 NEW: Professional FFmpeg Auto-Ducking System (sidechaincompress)
                             temp_final = "temp_with_bgm.mp4"
                             v_dur = get_file_duration(v_final)
                             in_video = ffmpeg.input(v_final)
@@ -514,7 +513,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
     if st.session_state.render_success:
         st.balloons(); st.success(f"🎉 One-Click ဗီဒီယို အောင်မြင်စွာ ထွက်လာပါပြီ!")
         
-        # 👇 NEW: Display Title, Tags, and Thumbnail
         st.markdown(f"<h2 style='color:#38bdf8; text-align:center;'>🔥 {st.session_state.viral_title}</h2>", unsafe_allow_html=True)
         st.markdown(f"<p style='text-align:center; color:#94a3b8;'>{st.session_state.viral_tags}</p>", unsafe_allow_html=True)
         
