@@ -590,7 +590,8 @@ elif app_mode == "🎙️ Faceless Channel Studio":
     st.markdown('<div class="setting-panel"><h3>👻 Fully-Automated Faceless Channel Studio</h3>', unsafe_allow_html=True)
     st.markdown("TikTok, FB Reels များအတွက် Reddit Stories, Horror ပုံပြင်များကို AI ဖြင့် အလိုအလျောက် ဗီဒီယိုဖန်တီးပါ။")
 
-    # 👇 FIX: Hide auto font selector since we hardcode Pyidaungsu to prevent empty boxes
+    local_fonts = [f for f in os.listdir(".") if f.endswith((".ttf", ".otf"))]
+    default_fonts = local_fonts if local_fonts else ["Pyidaungsu.ttf"]
 
     with st.sidebar:
         st.markdown("---")
@@ -732,8 +733,10 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                         
                         srt_prompt = "Listen to the audio. Output ONLY a valid SRT file in Burmese. CRITICAL RULE: Each subtitle block MUST contain ONLY 1 to 4 words maximum (fast-paced TikTok style). Ensure timestamps are precise. No markdown."
                         srt_res = client.models.generate_content(model="gemini-2.5-flash", contents=[audio_upload, srt_prompt])
-                        fc_srt_text = srt_res.text.strip().replace("```srt", "").replace("
-```", "")
+                        
+                        # 👇 FIX: Prevent syntax error when replacing triple backticks
+                        marker = chr(96) * 3
+                        fc_srt_text = srt_res.text.strip().replace(f"{marker}srt", "").replace(marker, "")
                         
                         fc_parsed, _ = parse_and_save_real_srt(fc_srt_text, "subtitles.srt")
                         client.files.delete(name=audio_upload.name)
@@ -750,7 +753,6 @@ elif app_mode == "🎙️ Faceless Channel Studio":
             with st.spinner("⏳ [အဆင့် ၅/၅] အားလုံးကိုပေါင်းစပ်ပြီး Master Video ထုတ်လုပ်နေပါသည်..."):
                 pbar.progress(85, text="🎬 Master Rendering အလုပ်လုပ်နေပါသည်...")
                 try:
-                    # 👇 FIX: Changed FontSize to 22 and hardcoded FontName to Pyidaungsu to completely prevent boxes.
                     dyn_fc_style = f"FontName=Pyidaungsu,FontSize=22,PrimaryColour=&H0000FFFF,BackColour=&H90000000,BorderStyle=3,Outline=0,Shadow=1,Alignment=5,MarginV=80"
                     
                     success, err_msg = render_premium_saas_video("fc_video_loop.mp4", "fc_audio.wav", fc_parsed, "FACELESS_FINAL.mp4", fc_ratio, use_bypass=True, sub_style_str=dyn_fc_style)
@@ -772,7 +774,6 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     col_f1, col_f2 = st.columns(2)
                     with col_f1:
                         st.video("FACELESS_FINAL.mp4")
-                        # 👇 FIX: Used new HTML link generator to prevent Streamlit app refresh on download
                         st.markdown(get_download_link("FACELESS_FINAL.mp4", "Viral_Faceless.mp4", "Download Final Video (No Refresh)"), unsafe_allow_html=True)
                     with col_f2:
                         st.markdown("### 📝 Generated Story")
