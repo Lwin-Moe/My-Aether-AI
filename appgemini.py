@@ -60,7 +60,7 @@ st.set_page_config(page_title="AETHER STUDIO V52", layout="wide", page_icon="�
 
 st.markdown('''
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Montserrat:wght@500;700;800;900&display=swap');
+    @import url('[https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Montserrat:wght@500;700;800;900&display=swap](https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Montserrat:wght@500;700;800;900&display=swap)');
     .stApp { background-color: #0b0f19 !important; background-image: radial-gradient(circle at top, #161b2e 0%, #0b0f19 60%) !important; color: #cbd5e1 !important; font-family: 'Inter', sans-serif; }
     section[data-testid="stSidebar"] { background-color: #0d111c !important; border-right: 1px solid rgba(255, 255, 255, 0.05) !important; }
     h1, h2, h3, h4 { font-family: 'Montserrat', sans-serif !important; color: #f8fafc !important; font-weight: 700 !important; }
@@ -136,7 +136,7 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
         
         last_err = ""
         for idx, current_key in enumerate(keys_list):
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key={current_key}"
+            url = f"[https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key=){current_key}"
             try:
                 res = requests.post(url, json=payload, timeout=300)
                 if res.status_code == 200:
@@ -157,12 +157,12 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
         if not os.path.exists(temp_out): raise Exception(f"Keys Exhausted. {last_err}")
     elif "ElevenLabs" in engine:
         voice_id = custom_eleven_id.strip() if custom_eleven_id else ("21m00Tcm4TlvDq8ikWAM" if "Male" in voice_model else "AZnzlk1XvdvUeBnXmlld")
-        res = requests.post(f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}", json={"text": text, "model_id": "eleven_multilingual_v2"}, headers={"xi-api-key": eleven_key}, timeout=300)
+        res = requests.post(f"[https://api.elevenlabs.io/v1/text-to-speech/](https://api.elevenlabs.io/v1/text-to-speech/){voice_id}", json={"text": text, "model_id": "eleven_multilingual_v2"}, headers={"xi-api-key": eleven_key}, timeout=300)
         if res.status_code == 200:
             with open(temp_out, "wb") as f: f.write(res.content)
     elif "TTSMaker" in engine:
         voice_id = 781 if "Female" in voice_model else 780
-        res = requests.post("https://api.ttsmaker.com/v1/create-tts-order", json={"tts_api_key": ttsmaker_key, "tts_text": text, "voice_id": voice_id, "audio_format": "mp3"}, timeout=300).json()
+        res = requests.post("[https://api.ttsmaker.com/v1/create-tts-order](https://api.ttsmaker.com/v1/create-tts-order)", json={"tts_api_key": ttsmaker_key, "tts_text": text, "voice_id": voice_id, "audio_format": "mp3"}, timeout=300).json()
         if res.get("status") == "success":
             with open(temp_out, "wb") as f: f.write(requests.get(res["audio_file_url"]).content)
     else:
@@ -648,7 +648,6 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                 except Exception as e: st.error(f"Audio Error: {e}"); st.stop()
 
             # STEP 3: Fallback Image/Video Generation (Pexels Free Video API + Fast Download)
-            # 👇 FIX: Added Live Timer and progress updates for large downloads to prevent freezing illusion
             with st.spinner("⏳ [အဆင့် ၃/၅] Pexels ဖြင့် ဇာတ်လမ်းနှင့် ကိုက်ညီသော ဗီဒီယိုများ ရယူနေပါသည်..."):
                 pbar.progress(50, text="🎥 Visuals Generation စတင်နေပါသည်...")
                 try:
@@ -681,7 +680,7 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                             
                             if pexels_api_key:
                                 headers = {"Authorization": pexels_api_key}
-                                pexels_url = f"https://api.pexels.com/videos/search?query={clean_kw}&orientation={orientation}&per_page=1"
+                                pexels_url = f"[https://api.pexels.com/videos/search?query=](https://api.pexels.com/videos/search?query=){clean_kw}&orientation={orientation}&per_page=1"
                                 res = requests.get(pexels_url, headers=headers, timeout=30)
                                 if res.status_code == 200 and res.json().get('videos'):
                                     video_files = res.json()['videos'][0]['video_files']
@@ -690,10 +689,10 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                                 else:
                                     continue 
                             else:
-                                search_url = f"https://www.pexels.com/search/videos/{clean_kw}/?orientation={orientation}"
+                                search_url = f"[https://www.pexels.com/search/videos/](https://www.pexels.com/search/videos/){clean_kw}/?orientation={orientation}"
                                 headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
                                 html_res = requests.get(search_url, headers=headers, timeout=30)
-                                match = re.search(r'https://player.vimeo.com/external/[^\s"\'<>]+', html_res.text)
+                                match = re.search(r'[https://player.vimeo.com/external/](https://player.vimeo.com/external/)[^\s"\'<>]+', html_res.text)
                                 if match:
                                     best_link = match.group(0)
                                 else:
@@ -703,7 +702,6 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                             vid_res = requests.get(best_link, stream=True, timeout=60)
                             if vid_res.status_code == 200:
                                 with open(clip_path, "wb") as f:
-                                    # Chunk size set to 512KB for smooth UI updates during HD video download
                                     for chunk in vid_res.iter_content(chunk_size=1024 * 512):
                                         if chunk: 
                                             f.write(chunk)
@@ -716,7 +714,7 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                             continue
                             
                     if not generated_clips:
-                        st.error("❌ Visual Generation Failed. Pexels မှ ဗီဒီယို ရှာမတွေ့ပါ။ ကျေးဇူးပြု၍ Sidebar တွင် Pexels API Key ထည့်ပေးပါ။ (https://www.pexels.com/api/)")
+                        st.error("❌ Visual Generation Failed. Pexels မှ ဗီဒီယို ရှာမတွေ့ပါ။ ကျေးဇူးပြု၍ Sidebar တွင် Pexels API Key ထည့်ပေးပါ။ ([https://www.pexels.com/api/](https://www.pexels.com/api/))")
                         st.stop()
                     
                     pbar.progress(65, text="🎞️ ဗီဒီယိုများကို ပေါင်းစပ်နေပါသည်...")
