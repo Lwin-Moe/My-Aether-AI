@@ -647,52 +647,40 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     fc_audio_dur = get_file_duration("fc_audio.wav")
                 except Exception as e: st.error(f"Audio Error: {e}"); st.stop()
 
-            # STEP 3: Fallback Image/Video Generation (Pexels Free Video API + Fast Download)
+         # STEP 3: Fallback Image/Video Generation (Pexels Free Video API + Fast Download)
             with st.spinner("⏳ [အဆင့် ၃/၅] Pexels ဖြင့် ဇာတ်လမ်းနှင့် ကိုက်ညီသော ဗီဒီယိုများ ရယူနေပါသည်..."):
-                pbar.progress(50, text="🎥 Visuals Generation စတင်နေပါသည်...")
+                pbar.progress(50, text="🎥 Visuals Generation အလုပ်လုပ်နေပါသည် (အချိန်အနည်းငယ်ကြာမည်)...")
                 try:
-                    search_keywords = []
-                    last_err = ""
-                    for key in keys_list:
-                        try:
-                            client = genai.Client(api_key=key)
-                            prompt_req = client.models.generate_content(model="gemini-2.5-flash", contents=f"Based on this story, give me exactly THREE short, distinct English search keywords (max 3 words each) describing the scenery. Avoid any violent, gory, or explicitly scary words. Format strictly separated by a pipe '|'. Story: {fc_story_text[:200]}")
-                            search_keywords = prompt_req.text.split('|')[:3]
-                            break
-                        except Exception as e:
-                            last_err = str(e)
-                            continue
-                            
-                    if not search_keywords:
-                        st.error(f"Keyword Error: Key အားလုံး Limit ပြည့်နေပါသည်။ {last_err}")
-                        st.stop()
+                    # 👇 FIX: Integrated Pexels Free Video Scraping (No API Key Required for basic fetching, but uses key if provided)
+                    prompt_req = client.models.generate_content(model="gemini-2.5-flash", contents=f"Based on this story, give me exactly THREE short, distinct English search keywords (max 3 words each) describing the scenery. Avoid any violent, gory, or explicitly scary words. Format strictly separated by a pipe '|'. Story: {fc_story_text[:200]}")
+                    search_keywords = prompt_req.text.split('|')[:3]
                     
                     generated_clips = []
                     pexels_api_key = locals().get('pexels_key_input', '').strip()
-                    
-                    step3_start_time = time.time()
-                    total_clips = len(search_keywords)
                     
                     for i, keyword in enumerate(search_keywords):
                         try:
                             clean_kw = keyword.strip().replace(" ", "+")
                             orientation = "portrait" if "9:16" in fc_ratio else "landscape"
                             
+                            # If user provided a Pexels API Key, use the official API for better quality
                             if pexels_api_key:
                                 headers = {"Authorization": pexels_api_key}
-                                pexels_url = f"[https://api.pexels.com/videos/search?query=](https://api.pexels.com/videos/search?query=){clean_kw}&orientation={orientation}&per_page=1"
+                                pexels_url = f"https://api.pexels.com/videos/search?query={clean_kw}&orientation={orientation}&per_page=1"
                                 res = requests.get(pexels_url, headers=headers, timeout=30)
                                 if res.status_code == 200 and res.json().get('videos'):
                                     video_files = res.json()['videos'][0]['video_files']
+                                    # Pick the highest quality HD link
                                     hd_links = [vf['link'] for vf in video_files if vf['quality'] == 'hd']
                                     best_link = hd_links[0] if hd_links else video_files[0]['link']
                                 else:
-                                    continue 
+                                    continue # Skip if no video found
                             else:
-                                search_url = f"[https://www.pexels.com/search/videos/](https://www.pexels.com/search/videos/){clean_kw}/?orientation={orientation}"
+                                # Fallback Web Scraping method (Might be blocked by Pexels, so API key is recommended)
+                                search_url = f"https://www.pexels.com/search/videos/{clean_kw}/?orientation={orientation}"
                                 headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
                                 html_res = requests.get(search_url, headers=headers, timeout=30)
-                                match = re.search(r'[https://player.vimeo.com/external/](https://player.vimeo.com/external/)[^\s"\'<>]+', html_res.text)
+                                match = re.search(r'https://player.vimeo.com/external/[^\s"\'<>]+', html_res.text)
                                 if match:
                                     best_link = match.group(0)
                                 else:
