@@ -188,7 +188,8 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
     parsed_lines = []
     full_speech = []
     
-    matches = list(re.finditer(r'(\d{1,2}:\d{1,2}(?::\d{1,2})?[,.]\d{1,3})\s*-->\s*(\d{1,2}:\d{1,2}(?::\d{1,2})?[,.]\d{1,3})', clean_srt))
+    # 👇 FIX: Forgiving Regex to catch malformed Gemini arrows like `- >`, `->`, etc.
+    matches = list(re.finditer(r'(\d{1,2}:\d{1,2}(?::\d{1,2})?[,.]\d{1,3})\s*[-=]+\s*>?\s*(\d{1,2}:\d{1,2}(?::\d{1,2})?[,.]\d{1,3})', clean_srt))
     for i in range(len(matches)):
         start_str = matches[i].group(1).replace('.', ',')
         end_str = matches[i].group(2).replace('.', ',')
@@ -229,6 +230,9 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         safe_srt_path = os.path.abspath("subtitles.srt").replace('\\', '/')
         safe_srt_path_escaped = safe_srt_path.replace(':', '\\:')
         
+        # 👇 FIX: Absolute Font Path for FFmpeg safety on cloud
+        abs_font_dir = os.path.abspath(FONT_DIR).replace('\\', '/')
+        
         with open("subtitles.srt", "w", encoding="utf-8-sig") as f:
             for i, (start, end, text) in enumerate(parsed_timestamps, start=1):
                 if start >= v_max_dur: continue
@@ -236,6 +240,8 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
                 def fmt_t(s): return f"{int(s//3600):02d}:{int((s%3600)//60):02d}:{int(s%60):02d},{int((s-int(s))*1000):03d}"
                 clean_text = re.sub(r'\[.*?\]', '', text)
                 clean_text = re.sub(r'\{.*?\}', '', clean_text).strip()
+                # 👇 FIX: Clean newlines to prevent SRT formatting crash in FFmpeg
+                clean_text = clean_text.replace('\n', ' ') 
                 f.write(f"{i}\n{fmt_t(start)} --> {fmt_t(safe_end)}\n{clean_text}\n\n")
         
         video = ffmpeg.input(in_v).video
@@ -265,7 +271,8 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
             video = ffmpeg.overlay(video, logo, x='W-w-20', y=20)
 
         if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"] and os.path.exists("subtitles.srt"):
-            video = ffmpeg.filter(video, 'subtitles', safe_srt_path_escaped, charenc='UTF-8', fontsdir=FONT_DIR, force_style=sub_style_str)
+            # 👇 FIX: Switched to Absolute Path for fontsdir
+            video = ffmpeg.filter(video, 'subtitles', safe_srt_path_escaped, charenc='UTF-8', fontsdir=abs_font_dir, force_style=sub_style_str)
 
         out = ffmpeg.output(video, audio, out_v, vcodec='libx264', acodec='aac', preset='fast', crf=21, t=v_max_dur)
         out.run(cmd=FFMPEG_BINARY, overwrite_output=True, capture_stdout=True, capture_stderr=True)
@@ -642,7 +649,6 @@ elif app_mode == "🎙️ Faceless Channel Studio":
             # STEP 1: Generate Story
             with st.spinner("⏳ [အဆင့် ၁/၅] Gemini ဖြင့် ၃ မိနစ်စာ ဇာတ်လမ်း ရေးသားနေပါသည်..."):
                 pbar.progress(10, text="📝 ဇာတ်လမ်း ရေးသားနေပါသည်...")
-                # 👇 FIX: Added Key Rotation & Auto-Retry for Step 1
                 story_success = False
                 last_story_err = ""
                 for current_key in keys_list:
@@ -673,7 +679,6 @@ elif app_mode == "🎙️ Faceless Channel Studio":
             with st.spinner("⏳ [အဆင့် ၃/၅] Pexels ဖြင့် ဇာတ်လမ်းနှင့် ကိုက်ညီသော ဗီဒီယိုများ ရယူနေပါသည်..."):
                 pbar.progress(50, text="🎥 Visuals Generation အလုပ်လုပ်နေပါသည် (အချိန်အနည်းငယ်ကြာမည်)...")
                 try:
-                    # 👇 FIX: Added Key Rotation & Auto-Retry for Step 3
                     kw_success = False
                     last_kw_err = ""
                     for current_key in keys_list:
@@ -767,7 +772,8 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                         audio_upload = temp_client.files.upload(file="fc_audio.wav")
                         while "PROCESSING" in str(temp_client.files.get(name=audio_upload.name).state): time.sleep(2)
                         
-                        srt_prompt = "Listen to the audio. Output ONLY a valid SRT file in Burmese. CRITICAL RULE: Each subtitle block MUST contain ONLY 1 to 4 words maximum. The timestamps MUST strictly follow this exact format: HH:MM:SS,mmm --> HH:MM:SS,mmm (Example: 00:00:04,000 --> 00:00:05,500). DO NOT format timestamps like 00:04:848. Always include the hours. No markdown."
+                        # 👇 FIX: Ultra-strict prompt to force perfectly formatted SRT without markdown wrapping
+                        srt_prompt = "Listen to the audio. Output ONLY a valid SRT format file in Burmese. CRITICAL RULES: 1. Each subtitle block MUST contain ONLY 1 to 4 words. 2. The timestamps MUST strictly follow this exact format: HH:MM:SS,mmm --> HH:MM:SS,mmm (Example: 00:00:04,000 --> 00:00:05,500). DO NOT use '- >' or '->', use exactly '-->'. DO NOT skip the hours. No markdown block."
                         srt_res = temp_client.models.generate_content(model="gemini-2.5-flash", contents=[audio_upload, srt_prompt])
                         
                         marker = chr(96) * 3
