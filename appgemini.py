@@ -656,8 +656,8 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     fc_audio_dur = get_file_duration("fc_audio.wav")
                 except Exception as e: st.error(f"Audio Error: {e}"); st.stop()
 
-            # STEP 3: Fallback Image/Video Generation (Image Generation + Cinematic Animation using FFmpeg Ken Burns)
-            with st.spinner("⏳ [အဆင့် ၃/၅] Gemini (Imagen 4) ဖြင့် ပုံများဖန်တီးပြီး Animation သွင်းနေပါသည်..."):
+            # STEP 3 (Image Generation + Cinematic Animation using FFmpeg Ken Burns)
+            with st.spinner("⏳ [အဆင့် ၃/၅] AI ဖြင့် ပုံများဖန်တီးပြီး Animation သွင်းနေပါသည်..."):
                 pbar.progress(50, text="🎨 AI ပုံရိပ်များ ဖန်တီးနေပါသည်...")
                 try:
                     search_keywords = []
@@ -665,7 +665,7 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     for key in keys_list:
                         try:
                             client = genai.Client(api_key=key)
-                            prompt_req = client.models.generate_content(model="gemini-2.5-flash", contents=f"Based on this story, give me exactly THREE detailed image generation prompts in English describing the core scenes. Do not include any violent or explicitly scary words. Format strictly separated by a pipe '|'. Story: {fc_story_text[:200]}")
+                            prompt_req = client.models.generate_content(model="gemini-2.5-flash", contents=f"Based on this story, give me exactly THREE detailed image generation prompts in English describing the core scenes. Make them cinematic, highly detailed, and dark/moody. Do not include any violent or explicitly scary words. Format strictly separated by a pipe '|'. Story: {fc_story_text[:200]}")
                             search_keywords = prompt_req.text.split('|')[:3]
                             break
                         except Exception as e:
@@ -679,41 +679,37 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     generated_clips = []
                     clip_dur = fc_audio_dur / len(search_keywords)
                     target_scale = "720x1280" if "9:16" in fc_ratio else "1280x720"
-                    aspect_val = "9:16" if "9:16" in fc_ratio else "16:9"
+                    
+                    # Target width and height for Pollinations AI
+                    img_w, img_h = (720, 1280) if "9:16" in fc_ratio else (1280, 720)
 
                     for i, img_prompt in enumerate(search_keywords):
                         clean_prompt = img_prompt.strip()
                         img_path = f"fc_img_{i}.jpg"
                         clip_path = f"fc_clip_{i}.mp4"
                         
-                        for key in keys_list:
-                            try:
-                                client = genai.Client(api_key=key)
-                                # 👇 FIX: Replaced unsupported Imagen 3 with Imagen 4 based on user's API capabilities
-                                result = client.models.generate_images(
-                                    model='imagen-4.0-generate-001',
-                                    prompt=clean_prompt,
-                                    config=dict(
-                                        number_of_images=1,
-                                        aspect_ratio=aspect_val,
-                                        output_mime_type="image/jpeg"
-                                    )
-                                )
+                        try:
+                            # 👇 FIX: Replaced paid Gemini Imagen with 100% Free Pollinations AI (No API Key needed)
+                            encoded_prompt = urllib.parse.quote(f"{clean_prompt}, cinematic, masterpiece, 8k resolution, highly detailed")
+                            pollinations_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={img_w}&height={img_h}&nologo=true"
+                            
+                            img_res = requests.get(pollinations_url, timeout=60)
+                            if img_res.status_code == 200:
                                 with open(img_path, "wb") as f:
-                                    f.write(result.generated_images[0].image.image_bytes)
-                                break
-                            except Exception as model_err: 
-                                last_err = str(model_err)
-                                continue
+                                    f.write(img_res.content)
+                        except Exception as img_err: 
+                            last_err = str(img_err)
+                            continue
 
                         if os.path.exists(img_path):
                             pbar.progress(50 + (i * 5), text=f"🎥 ပုံမှ ဗီဒီယိုသို့ ပြောင်းလဲနေပါသည် ({i+1}/{len(search_keywords)})...")
+                            # Apply Ken Burns Animation
                             subprocess.run([FFMPEG_BINARY, "-y", "-loop", "1", "-i", img_path, "-t", str(clip_dur), "-vf", f"scale=-2:2000,zoompan=z='min(zoom+0.001,1.15)':d={int(clip_dur*25)}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={target_scale},fps=25", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "superfast", clip_path], capture_output=True)
                             if os.path.exists(clip_path):
                                 generated_clips.append(clip_path)
 
                     if not generated_clips:
-                        st.error(f"❌ Image Generation Failed. Please ensure your Gemini API Key supports Imagen-4. Error: {last_err}")
+                        st.error(f"❌ Image Generation Failed. AI Image service might be busy. Error: {last_err}")
                         st.stop()
                     
                     pbar.progress(65, text="🎞️ ဗီဒီယိုများကို ပေါင်းစပ်နေပါသည်...")
