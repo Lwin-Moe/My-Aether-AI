@@ -648,8 +648,9 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                 except Exception as e: st.error(f"Audio Error: {e}"); st.stop()
 
             # STEP 3: Fallback Image/Video Generation (Pexels Free Video API + Fast Download)
+            # 👇 FIX: Added Live Timer and progress updates for large downloads to prevent freezing illusion
             with st.spinner("⏳ [အဆင့် ၃/၅] Pexels ဖြင့် ဇာတ်လမ်းနှင့် ကိုက်ညီသော ဗီဒီယိုများ ရယူနေပါသည်..."):
-                pbar.progress(50, text="🎥 Visuals Generation အလုပ်လုပ်နေပါသည် (အချိန်အနည်းငယ်ကြာမည်)...")
+                pbar.progress(50, text="🎥 Visuals Generation စတင်နေပါသည်...")
                 try:
                     search_keywords = []
                     last_err = ""
@@ -669,6 +670,9 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     
                     generated_clips = []
                     pexels_api_key = locals().get('pexels_key_input', '').strip()
+                    
+                    step3_start_time = time.time()
+                    total_clips = len(search_keywords)
                     
                     for i, keyword in enumerate(search_keywords):
                         try:
@@ -699,8 +703,12 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                             vid_res = requests.get(best_link, stream=True, timeout=60)
                             if vid_res.status_code == 200:
                                 with open(clip_path, "wb") as f:
-                                    for chunk in vid_res.iter_content(chunk_size=1024):
-                                        if chunk: f.write(chunk)
+                                    # Chunk size set to 512KB for smooth UI updates during HD video download
+                                    for chunk in vid_res.iter_content(chunk_size=1024 * 512):
+                                        if chunk: 
+                                            f.write(chunk)
+                                            elapsed_time = int(time.time() - step3_start_time)
+                                            pbar.progress(50 + (i*5), text=f"🎥 Pexels ဗီဒီယို ဆွဲယူနေပါသည် (Clip {i+1}/{total_clips}) ... [ကြာချိန်: {elapsed_time} စက္ကန့်]")
                                 generated_clips.append(clip_path)
                                 
                         except Exception as loop_e:
@@ -711,10 +719,10 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                         st.error("❌ Visual Generation Failed. Pexels မှ ဗီဒီယို ရှာမတွေ့ပါ။ ကျေးဇူးပြု၍ Sidebar တွင် Pexels API Key ထည့်ပေးပါ။ (https://www.pexels.com/api/)")
                         st.stop()
                     
+                    pbar.progress(65, text="🎞️ ဗီဒီယိုများကို ပေါင်းစပ်နေပါသည်...")
                     with open("fc_concat.txt", "w") as f:
                         for c in generated_clips: f.write(f"file '{c}'\n")
                     
-                    # 👇 FIX: Changed quiet=True to capture_output=True to prevent Popen.__init__() unexpected keyword argument 'quiet' error
                     subprocess.run([FFMPEG_BINARY, "-stream_loop", "-1", "-f", "concat", "-safe", "0", "-i", "fc_concat.txt", "-t", str(fc_audio_dur), "-c", "copy", "fc_video_loop.mp4"], capture_output=True)
                 except Exception as e: st.error(f"Visual Error: {e}"); st.stop()
 
