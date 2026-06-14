@@ -212,7 +212,8 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
              full_speech.append("[pause=1.0] စာတန်းထိုး အပြောင်းအလဲလုပ်နေပါသည်။")
     return parsed_lines, " ".join(full_speech)
 
-def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_bypass=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)", use_mirror=False, use_color=False, use_grain=False, use_fps=False, sub_style_str="", use_freeze=False):
+# 👇 FIX: Added logo_path to render function for Image Watermark support
+def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_bypass=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)", use_mirror=False, use_color=False, use_grain=False, use_fps=False, sub_style_str="", use_freeze=False, logo_path=None):
     try:
         a_dur = get_file_duration(in_a)
         v_max_dur = get_file_duration(in_v)
@@ -246,7 +247,15 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         if use_blur: video = ffmpeg.filter(video, 'drawbox', x=0, y='ih-90', w='iw', h=90, color='black@0.95', thickness='fill')
         if ratio == "9:16 (TikTok/Shorts)": video = ffmpeg.filter(video, 'crop', 'min(iw, ih*9/16)', 'ih')
         elif ratio == "16:9 (YouTube)": video = ffmpeg.filter(video, 'crop', 'iw', 'min(ih, iw*9/16)')
+        
         if watermark: video = ffmpeg.filter(video, 'drawtext', text=watermark, x='w-tw-15', y='15', fontsize=30, fontcolor='white@0.5')
+        
+        # 👇 NEW: Image Logo Watermark Overlay Logic (Auto-scaled to height=80, positioned Top-Right)
+        if logo_path and os.path.exists(logo_path):
+            logo = ffmpeg.input(logo_path)
+            logo = ffmpeg.filter(logo, 'scale', -1, 80) # Auto scale height to 80px while maintaining aspect ratio
+            video = ffmpeg.overlay(video, logo, x='W-w-20', y=20) # Top-Right corner with 20px padding
+
         if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"] and os.path.exists("subtitles.srt"):
             video = ffmpeg.filter(video, 'subtitles', safe_srt_path_escaped, charenc='UTF-8', fontsdir='.', force_style=sub_style_str)
 
@@ -306,9 +315,14 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         
         st.markdown("<b>🎬 Visual & Subs</b>", unsafe_allow_html=True)
         cb_blur = st.checkbox("👁️ Cinematic Black Mask", value=True)
-        # 👇 NEW: Checkbox to toggle thumbnail text rendering
         cb_thumb_text = st.checkbox("🖼️ Add Viral Title to Thumbnail", value=True)
-        watermark_text = st.text_input("Text Watermark", "")
+        
+        # 👇 NEW: Added Logo / Text Watermark options
+        st.markdown("<b>©️ Brand Watermark</b>", unsafe_allow_html=True)
+        uploaded_logo = st.file_uploader("🖼️ Add Logo Image (Top Right)", type=["png", "jpg", "jpeg"])
+        use_text_watermark = st.checkbox("✍️ Use Text Watermark instead", value=False)
+        watermark_text = st.text_input("Text Watermark", "") if use_text_watermark else ""
+        
         subtitle_mode = st.radio("Subtitle Output", ["Both (Burn + SRT)", "Export SRT File Only", "Burn into Video"])
 
     st.markdown('<div class="setting-panel"><h3>📺 Media Acquisition & Setup</h3>', unsafe_allow_html=True)
@@ -464,22 +478,18 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     parsed_timestamps, speech_text = parse_and_save_real_srt(clean_raw_srt, srt_final, use_fade=sub_fade)
                     st.session_state.generated_script = clean_raw_srt
                     
-                    # 👇 FIX: Option to toggle Thumbnail Text with Pyidaungsu
                     try:
                         thumb_time = min(get_file_duration(v_input)/3, 15)
                         font_path = "Pyidaungsu.ttf"
                         
                         try:
                             stream = ffmpeg.input(v_input, ss=thumb_time)
-                            
                             if cb_thumb_text:
                                 wrapped_title = textwrap.fill(st.session_state.viral_title, width=25)
                                 with open("thumb_text.txt", "w", encoding="utf-8") as tf:
                                     tf.write(wrapped_title)
-                                    
                                 if os.path.exists(font_path):
                                     stream = ffmpeg.filter(stream.video, 'drawtext', textfile='thumb_text.txt', fontfile=font_path, fontcolor='white', fontsize=65, x='(w-text_w)/2', y='h-text_h-100', box=1, boxcolor='red@0.9', boxborderw=20, borderw=3, bordercolor='black', line_spacing=15)
-                                    
                             ffmpeg.output(stream, "auto_thumb.jpg", vframes=1).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
                         except:
                             ffmpeg.input(v_input, ss=thumb_time).output("auto_thumb.jpg", vframes=1).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
@@ -502,7 +512,13 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                 prim_c = "&H0000FFFF" if "Yellow" in sub_color else ("&H00FFFFFF" if "White" in sub_color else "&H0000FF00")
                 dyn_style = f"FontName={sub_font.split()[0]},FontSize={sub_size},PrimaryColour={prim_c},BackColour={'&H80000000' if sub_bg else '&H00000000'},BorderStyle={3 if sub_bg else 1},Outline={0 if sub_bg else sub_thickness},Alignment={align_val},MarginV=60"
                 
-                success, err_msg = render_premium_saas_video(v_input, a_generated, parsed_timestamps, v_final, video_ratio, cb_bypass, cb_blur, watermark_text, subtitle_mode, cb_mirror, cb_color, cb_grain, cb_fps, dyn_style, cb_freeze)
+                # 👇 NEW: Handle Logo Upload and pass to render function
+                logo_file_path = None
+                if uploaded_logo and not use_text_watermark:
+                    logo_file_path = "temp_logo.png"
+                    with open(logo_file_path, "wb") as f: f.write(uploaded_logo.read())
+
+                success, err_msg = render_premium_saas_video(v_input, a_generated, parsed_timestamps, v_final, video_ratio, cb_bypass, cb_blur, watermark_text, subtitle_mode, cb_mirror, cb_color, cb_grain, cb_fps, dyn_style, cb_freeze, logo_file_path)
                 if not success: st.error(f"Sync Failure: {err_msg}")
 
             if success and selected_bgm not in ["None (BGM မထည့်ပါ)"]:
