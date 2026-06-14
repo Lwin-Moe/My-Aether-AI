@@ -49,7 +49,6 @@ def load_key(file_path):
 def save_key(file_path, key):
     with open(file_path, "w", encoding="utf-8") as f: f.write(key)
 
-# 👇 NEW: Helper function to generate a download link that DOES NOT refresh the Streamlit page
 def get_download_link(file_path, file_name, link_text):
     if not os.path.exists(file_path): return ""
     with open(file_path, "rb") as f:
@@ -603,6 +602,9 @@ elif app_mode == "🎙️ Faceless Channel Studio":
         st.markdown("<b>🎨 Visual & Niche Settings</b>", unsafe_allow_html=True)
         fc_niche = st.selectbox("Select Niche", ["👻 Horror / Creepypasta", "💔 Reddit Relationship Drama", "🧠 Dark Psychology", "💡 Fun Facts / Trivia"])
         fc_ratio = st.selectbox("Video Ratio", ["9:16 (TikTok/Shorts)", "16:9 (YouTube)", "Original"], key="fc_ratio")
+        
+        # 👇 FIX: Added slider for story duration (1 to 10 mins)
+        fc_duration = st.slider("⏱️ Story Duration (Minutes)", 1, 10, 3)
         st.caption("💡 Subtitles များသည် Viral ဖြစ်စေရန် (Alex Hormozi Style) အလယ်တည့်တည့်တွင် အကြီးကြီး အော်တိုချိန်ညှိပေးထားပါသည်။")
 
         bgm_options = ["None (BGM မထည့်ပါ)"]
@@ -621,9 +623,13 @@ elif app_mode == "🎙️ Faceless Channel Studio":
             keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
 
             # STEP 1: Generate Story
-            with st.spinner("⏳ [အဆင့် ၁/၅] Gemini ဖြင့် ၃ မိနစ်စာ ဇာတ်လမ်း ရေးသားနေပါသည်..."):
+            with st.spinner(f"⏳ [အဆင့် ၁/၅] Gemini ဖြင့် {fc_duration} မိနစ်စာ ဇာတ်လမ်း ရေးသားနေပါသည်..."):
                 pbar.progress(10, text="📝 ဇာတ်လမ်း ရေးသားနေပါသည်...")
-                story_prompt = f"Write an engaging 3-minute highly viral script for a {fc_niche} TikTok video in natural spoken Burmese. The story should be around 400-450 words. Start with an extreme hook. Do not use english transliteration. Include Synergy audio tags like [pause=1.0]."
+                
+                # 👇 FIX: Dynamic word count based on selected duration
+                target_words = fc_duration * 140
+                story_prompt = f"Write an engaging {fc_duration}-minute highly viral script for a {fc_niche} TikTok video in natural spoken Burmese. The story should be around {target_words} words. Start with an extreme hook. Do not use english transliteration. Include Synergy audio tags like [pause=1.0]."
+                
                 fc_story_text = ""
                 last_err = ""
                 for key in keys_list:
@@ -648,7 +654,7 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     fc_audio_dur = get_file_duration("fc_audio.wav")
                 except Exception as e: st.error(f"Audio Error: {e}"); st.stop()
 
-            # STEP 3: Fallback Image/Video Generation (Parallel Downloading)
+            # STEP 3: Fallback Image/Video Generation (Parallel Downloading with SD format)
             with st.spinner("⏳ [အဆင့် ၃/၅] Pexels ဖြင့် ဇာတ်လမ်းနှင့် ကိုက်ညီသော ဗီဒီယိုများ ရယူနေပါသည်..."):
                 pbar.progress(50, text="🎥 Visuals Generation စတင်နေပါသည်...")
                 try:
@@ -668,13 +674,13 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                         st.error(f"Keyword Error: Key အားလုံး Limit ပြည့်နေပါသည်။ {last_err}")
                         st.stop()
                     
-                    # 👇 FIX: Using ThreadPoolExecutor for Parallel Fast Downloading without async/await errors
                     generated_clips = []
                     pexels_api_key = locals().get('pexels_key_input', '').strip()
                     
                     step3_start_time = time.time()
                     total_clips = len(search_keywords)
                     
+                    # 👇 FIX: Parallel downloading using concurrent.futures and SD resolution
                     def fetch_pexels_clip(kw, idx):
                         try:
                             clean_kw = kw.strip().replace(" ", "+")
@@ -687,8 +693,9 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                                 res = requests.get(pexels_url, headers=headers, timeout=30)
                                 if res.status_code == 200 and res.json().get('videos'):
                                     video_files = res.json()['videos'][0]['video_files']
-                                    hd_links = [vf['link'] for vf in video_files if vf['quality'] == 'hd']
-                                    best_link = hd_links[0] if hd_links else video_files[0]['link']
+                                    # 👇 FIX: Specifically target 'sd' for much faster download speed
+                                    sd_links = [vf['link'] for vf in video_files if vf['quality'] == 'sd']
+                                    best_link = sd_links[0] if sd_links else video_files[0]['link']
                             else:
                                 search_url = f"https://www.pexels.com/search/videos/{clean_kw}/?orientation={orientation}"
                                 headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
@@ -702,7 +709,7 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                                 vid_res = requests.get(best_link, stream=True, timeout=60)
                                 if vid_res.status_code == 200:
                                     with open(clip_path, "wb") as f:
-                                        for chunk in vid_res.iter_content(chunk_size=1024 * 1024): # 1MB chunks for max speed
+                                        for chunk in vid_res.iter_content(chunk_size=1024 * 1024): 
                                             if chunk: f.write(chunk)
                                     return clip_path
                         except: pass
