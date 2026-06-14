@@ -590,9 +590,6 @@ elif app_mode == "🎙️ Faceless Channel Studio":
     st.markdown('<div class="setting-panel"><h3>👻 Fully-Automated Faceless Channel Studio</h3>', unsafe_allow_html=True)
     st.markdown("TikTok, FB Reels များအတွက် Reddit Stories, Horror ပုံပြင်များကို AI ဖြင့် အလိုအလျောက် ဗီဒီယိုဖန်တီးပါ။")
 
-    local_fonts = [f for f in os.listdir(".") if f.endswith((".ttf", ".otf"))]
-    default_fonts = local_fonts if local_fonts else ["Pyidaungsu.ttf"]
-
     with st.sidebar:
         st.markdown("---")
         st.markdown("<b>🎙️ Voice & Audio Settings</b>", unsafe_allow_html=True)
@@ -717,7 +714,8 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     with open("fc_concat.txt", "w") as f:
                         for c in generated_clips: f.write(f"file '{c}'\n")
                     
-                    subprocess.run([FFMPEG_BINARY, "-stream_loop", "-1", "-f", "concat", "-safe", "0", "-i", "fc_concat.txt", "-t", str(fc_audio_dur), "-c", "copy", "fc_video_loop.mp4"], quiet=True)
+                    # 👇 FIX: Changed quiet=True to capture_output=True to prevent Popen.__init__() unexpected keyword argument 'quiet' error
+                    subprocess.run([FFMPEG_BINARY, "-stream_loop", "-1", "-f", "concat", "-safe", "0", "-i", "fc_concat.txt", "-t", str(fc_audio_dur), "-c", "copy", "fc_video_loop.mp4"], capture_output=True)
                 except Exception as e: st.error(f"Visual Error: {e}"); st.stop()
 
             # STEP 4: SRT Sync
@@ -734,7 +732,6 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                         srt_prompt = "Listen to the audio. Output ONLY a valid SRT file in Burmese. CRITICAL RULE: Each subtitle block MUST contain ONLY 1 to 4 words maximum (fast-paced TikTok style). Ensure timestamps are precise. No markdown."
                         srt_res = client.models.generate_content(model="gemini-2.5-flash", contents=[audio_upload, srt_prompt])
                         
-                        # 👇 FIX: Prevent syntax error when replacing triple backticks
                         marker = chr(96) * 3
                         fc_srt_text = srt_res.text.strip().replace(f"{marker}srt", "").replace(marker, "")
                         
