@@ -630,7 +630,6 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                 pbar.progress(10, text="📝 ဇာတ်လမ်း ရေးသားနေပါသည်...")
                 
                 target_words = fc_duration * 140
-                # 👇 FIX: Added strong prompt rule for a 3-second viral hook as requested
                 story_prompt = f"Write an engaging {fc_duration}-minute highly viral script for a {fc_niche} TikTok video in natural spoken Burmese. The story should be around {target_words} words. CRITICAL RULE: Start the script with a mind-blowing, highly engaging 3-second viral hook (e.g., a shocking statement, a scary question, or a mysterious fact) to grab the viewer's attention immediately. Make them stop scrolling! Do not use english transliteration. Include Synergy audio tags like [pause=1.0]."
                 
                 fc_story_text = ""
@@ -657,8 +656,8 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     fc_audio_dur = get_file_duration("fc_audio.wav")
                 except Exception as e: st.error(f"Audio Error: {e}"); st.stop()
 
-            # STEP 3 (Image Generation + Cinematic Animation using FFmpeg Ken Burns)
-            with st.spinner("⏳ [အဆင့် ၃/၅] Gemini (Imagen 3) ဖြင့် ပုံများဖန်တီးပြီး Animation သွင်းနေပါသည်..."):
+            # STEP 3: Fallback Image/Video Generation (Image Generation + Cinematic Animation using FFmpeg Ken Burns)
+            with st.spinner("⏳ [အဆင့် ၃/၅] Gemini (Imagen 4) ဖြင့် ပုံများဖန်တီးပြီး Animation သွင်းနေပါသည်..."):
                 pbar.progress(50, text="🎨 AI ပုံရိပ်များ ဖန်တီးနေပါသည်...")
                 try:
                     search_keywords = []
@@ -690,8 +689,9 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                         for key in keys_list:
                             try:
                                 client = genai.Client(api_key=key)
+                                # 👇 FIX: Replaced unsupported Imagen 3 with Imagen 4 based on user's API capabilities
                                 result = client.models.generate_images(
-                                    model='imagen-3.0-generate-001',
+                                    model='imagen-4.0-generate-001',
                                     prompt=clean_prompt,
                                     config=dict(
                                         number_of_images=1,
@@ -702,7 +702,9 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                                 with open(img_path, "wb") as f:
                                     f.write(result.generated_images[0].image.image_bytes)
                                 break
-                            except: continue
+                            except Exception as model_err: 
+                                last_err = str(model_err)
+                                continue
 
                         if os.path.exists(img_path):
                             pbar.progress(50 + (i * 5), text=f"🎥 ပုံမှ ဗီဒီယိုသို့ ပြောင်းလဲနေပါသည် ({i+1}/{len(search_keywords)})...")
@@ -711,7 +713,7 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                                 generated_clips.append(clip_path)
 
                     if not generated_clips:
-                        st.error("❌ Image Generation Failed. Please ensure your Gemini API Key supports Imagen-3.")
+                        st.error(f"❌ Image Generation Failed. Please ensure your Gemini API Key supports Imagen-4. Error: {last_err}")
                         st.stop()
                     
                     pbar.progress(65, text="🎞️ ဗီဒီယိုများကို ပေါင်းစပ်နေပါသည်...")
