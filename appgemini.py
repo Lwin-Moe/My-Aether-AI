@@ -24,6 +24,7 @@ import datetime
 import random
 import shutil
 import textwrap 
+import urllib.parse # 👇 NEW: Imported for URL encoding the image prompts
 
 # 👇 FIX: Prioritize system FFmpeg (which supports Burmese Text Shaping) over imageio_ffmpeg
 if shutil.which("ffmpeg"):
@@ -629,46 +630,52 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     fc_audio_dur = get_file_duration("fc_audio.wav")
                 except Exception as e: st.error(f"Audio Error: {e}"); st.stop()
 
-            # STEP 3: Veo Generation
-            with st.spinner("⏳ [အဆင့် ၃/၅] Veo ဖြင့် ဇာတ်လမ်းနှင့် ကိုက်ညီသော ဗီဒီယိုများ ဆွဲနေပါသည်..."):
-                pbar.progress(50, text="🎥 Veo Video Generation အလုပ်လုပ်နေပါသည် (အချိန်အနည်းငယ်ကြာမည်)...")
+            # STEP 3: Fallback Image/Video Generation (Pollinations AI + Cinematic Motion)
+            with st.spinner("⏳ [အဆင့် ၃/၅] Pollinations AI ဖြင့် ဇာတ်လမ်းနှင့် ကိုက်ညီသော ပုံရိပ်များ ဆွဲနေပါသည်..."):
+                pbar.progress(50, text="🎥 Visuals Generation အလုပ်လုပ်နေပါသည် (အချိန်အနည်းငယ်ကြာမည်)...")
                 try:
-                    veo_aspect = "vertical 9:16 format" if "9:16" in fc_ratio else ("horizontal 16:9 format" if "16:9" in fc_ratio else "high quality cinematic format")
+                    # Request distinct prompts from Gemini
+                    prompt_req = client.models.generate_content(model="gemini-2.5-flash", contents=f"Based on this story, give me exactly THREE short, distinct English image generation prompts (max 15 words each) describing the scenery. Avoid any violent, gory, or explicitly scary words to bypass safety filters. Format strictly separated by a pipe '|'. Story: {fc_story_text[:200]}")
+                    img_prompts = prompt_req.text.split('|')[:3]
                     
-                    # 👇 FIX: Changed the prompt heavily to bypass Google Safety Filter Block
-                    prompt_req = client.models.generate_content(model="gemini-2.5-flash", contents=f"Based on this story, give me exactly TWO short, distinct English video generation prompts (max 15 words each) describing the scenery. Avoid any violent, gory, or explicitly scary words to bypass safety filters. MUST append '{veo_aspect}' to each prompt. Format strictly separated by a pipe '|'. Story: {fc_story_text[:200]}")
-                    veo_prompts = prompt_req.text.split('|')[:2]
-                    
+                    width, height = (1080, 1920) if "9:16" in fc_ratio else (1920, 1080)
                     generated_clips = []
-                    last_veo_error = "Unknown API Error"
                     
-                    for i, v_prompt in enumerate(veo_prompts):
-                        for key in keys_list:
-                            try:
-                                url = f"https://generativelanguage.googleapis.com/v1beta/models/veo-3.0-generate-001:generateContent?key={key}"
-                                res = requests.post(url, json={"contents": [{"parts": [{"text": v_prompt.strip()}]}], "generationConfig": {"responseModalities": ["VIDEO"]}}, timeout=120)
-                                if res.status_code == 200:
-                                    clip_path = f"veo_clip_{i}.mp4"
-                                    with open(clip_path, "wb") as f: f.write(base64.b64decode(res.json()["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]))
-                                    generated_clips.append(clip_path)
-                                    break
-                                else:
-                                    # 👇 FIX: Capture exact error text returned from Google Server
-                                    last_veo_error = res.text
-                            except Exception as req_e: 
-                                last_veo_error = str(req_e)
-                                continue
-                    
+                    for i, v_prompt in enumerate(img_prompts):
+                        try:
+                            # Add quality keywords and URL encode the prompt
+                            safe_prompt = urllib.parse.quote(v_prompt.strip() + ", cinematic masterpiece, highly detailed, 8k resolution, photorealistic")
+                            img_url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width={width}&height={height}&nologo=true"
+                            img_path = f"fc_img_{i}.jpg"
+                            clip_path = f"fc_clip_{i}.mp4"
+                            
+                            # Download Free Unlimited Image
+                            res = requests.get(img_url, timeout=60)
+                            if res.status_code == 200:
+                                with open(img_path, "wb") as f: f.write(res.content)
+                                
+                                # Convert static image to slow-zooming cinematic video using FFmpeg
+                                (
+                                    ffmpeg.input(img_path, loop=1, t=20) # Generate 20s clip per image
+                                    .filter('zoompan', z='min(zoom+0.001,1.1)', d=500, x='iw/2-(iw/zoom/2)', y='ih/2-(ih/zoom/2)', s=f'{width}x{height}')
+                                    .output(clip_path, vcodec='libx264', pix_fmt='yuv420p', r=25)
+                                    .overwrite_output()
+                                    .run(cmd=FFMPEG_BINARY, quiet=True)
+                                )
+                                generated_clips.append(clip_path)
+                        except Exception as loop_e:
+                            st.error(f"Clip Generation Error: {loop_e}")
+                            continue
+                            
                     if not generated_clips:
-                        # 👇 FIX: Output the real error to the Streamlit UI
-                        st.error(f"❌ Veo Generation Failed. အကြောင်းရင်း: {last_veo_error}")
+                        st.error("❌ Visual Generation Failed. ဆာဗာချိတ်ဆက်မှု အခက်အခဲရှိနေပါသည်။")
                         st.stop()
                     
                     with open("fc_concat.txt", "w") as f:
                         for c in generated_clips: f.write(f"file '{c}'\n")
                     
                     subprocess.run([FFMPEG_BINARY, "-stream_loop", "-1", "-f", "concat", "-safe", "0", "-i", "fc_concat.txt", "-t", str(fc_audio_dur), "-c", "copy", "fc_video_loop.mp4"], quiet=True)
-                except Exception as e: st.error(f"Veo Error: {e}"); st.stop()
+                except Exception as e: st.error(f"Visual Error: {e}"); st.stop()
 
             # STEP 4: SRT Sync (Gemini Audio to SRT)
             with st.spinner("⏳ [အဆင့် ၄/၅] စာတန်းထိုးများကို Alex Hormozi ပုံစံ ချိန်ညှိနေပါသည်..."):
