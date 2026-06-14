@@ -656,7 +656,7 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     fc_audio_dur = get_file_duration("fc_audio.wav")
                 except Exception as e: st.error(f"Audio Error: {e}"); st.stop()
 
-            # STEP 3 (Image Generation + Cinematic Animation using FFmpeg Ken Burns)
+            # STEP 3: Fallback Image/Video Generation (Image Generation + Cinematic Animation using FFmpeg Ken Burns)
             with st.spinner("⏳ [အဆင့် ၃/၅] AI ဖြင့် ပုံများဖန်တီးပြီး Animation သွင်းနေပါသည်..."):
                 pbar.progress(50, text="🎨 AI ပုံရိပ်များ ဖန်တီးနေပါသည်...")
                 try:
@@ -687,21 +687,32 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                         clean_prompt = img_prompt.strip()
                         img_path = f"fc_img_{i}.jpg"
                         clip_path = f"fc_clip_{i}.mp4"
+                        last_err = "" # Reset error variable for image generation
                         
-                        try:
-                            # 👇 FIX: Replaced paid Gemini Imagen with 100% Free Pollinations AI (No API Key needed)
-                            encoded_prompt = urllib.parse.quote(f"{clean_prompt}, cinematic, masterpiece, 8k resolution, highly detailed")
-                            pollinations_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={img_w}&height={img_h}&nologo=true"
-                            
-                            img_res = requests.get(pollinations_url, timeout=60)
-                            if img_res.status_code == 200:
-                                with open(img_path, "wb") as f:
-                                    f.write(img_res.content)
-                        except Exception as img_err: 
-                            last_err = str(img_err)
-                            continue
+                        img_downloaded = False
+                        encoded_prompt = urllib.parse.quote(f"{clean_prompt}, cinematic, masterpiece, 8k resolution, highly detailed")
+                        
+                        # Added 3 Retries and User-Agent Headers to prevent Free API blocks
+                        for attempt in range(3):
+                            try:
+                                seed = random.randint(1, 100000)
+                                pollinations_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={img_w}&height={img_h}&nologo=true&seed={seed}"
+                                headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+                                
+                                img_res = requests.get(pollinations_url, headers=headers, timeout=60)
+                                if img_res.status_code == 200 and len(img_res.content) > 5000: # Ensure valid image size
+                                    with open(img_path, "wb") as f:
+                                        f.write(img_res.content)
+                                    img_downloaded = True
+                                    break
+                                else:
+                                    last_err = f"API Status: {img_res.status_code}"
+                                    time.sleep(2)
+                            except Exception as img_err: 
+                                last_err = str(img_err)
+                                time.sleep(2)
 
-                        if os.path.exists(img_path):
+                        if img_downloaded and os.path.exists(img_path):
                             pbar.progress(50 + (i * 5), text=f"🎥 ပုံမှ ဗီဒီယိုသို့ ပြောင်းလဲနေပါသည် ({i+1}/{len(search_keywords)})...")
                             # Apply Ken Burns Animation
                             subprocess.run([FFMPEG_BINARY, "-y", "-loop", "1", "-i", img_path, "-t", str(clip_dur), "-vf", f"scale=-2:2000,zoompan=z='min(zoom+0.001,1.15)':d={int(clip_dur*25)}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={target_scale},fps=25", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "superfast", clip_path], capture_output=True)
@@ -709,7 +720,7 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                                 generated_clips.append(clip_path)
 
                     if not generated_clips:
-                        st.error(f"❌ Image Generation Failed. AI Image service might be busy. Error: {last_err}")
+                        st.error(f"❌ Image Generation Failed. AI Image service might be busy. Please try again. Error: {last_err}")
                         st.stop()
                     
                     pbar.progress(65, text="🎞️ ဗီဒီယိုများကို ပေါင်းစပ်နေပါသည်...")
