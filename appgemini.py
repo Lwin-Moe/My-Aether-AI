@@ -24,7 +24,6 @@ import datetime
 import random
 import shutil
 import textwrap 
-import urllib.parse # 👇 NEW: Imported for URL encoding the image prompts
 
 # 👇 FIX: Prioritize system FFmpeg (which supports Burmese Text Shaping) over imageio_ffmpeg
 if shutil.which("ffmpeg"):
@@ -38,6 +37,7 @@ ELEVEN_KEY_FILE = "saved_eleven_key.txt"
 GROQ_KEY_FILE = "saved_groq_key.txt"
 OPENAI_KEY_FILE = "saved_openai_key.txt"
 ELEVEN_VOICE_ID_FILE = "saved_eleven_voice_id.txt"
+PEXELS_KEY_FILE = "saved_pexels_key.txt" # 👇 NEW: Save file for Pexels API Key
 
 def load_key(file_path):
     if os.path.exists(file_path):
@@ -284,6 +284,14 @@ with st.sidebar:
         saved_openai = load_key(OPENAI_KEY_FILE)
         api_key_input = st.text_input("OpenAI API Key", type="password", value=saved_openai)
         if api_key_input and api_key_input != saved_openai: save_key(OPENAI_KEY_FILE, api_key_input)
+    
+    # 👇 NEW: Added Pexels API Key input for Faceless Studio
+    if app_mode == "🎙️ Faceless Channel Studio":
+        st.markdown("---")
+        st.markdown("### 🔑 Pexels API Key (Optional)")
+        saved_pexels = load_key(PEXELS_KEY_FILE)
+        pexels_key_input = st.text_input("Pexels API Key (Free API for HQ Videos)", type="password", value=saved_pexels)
+        if pexels_key_input and pexels_key_input != saved_pexels: save_key(PEXELS_KEY_FILE, pexels_key_input)
 
 # =====================================================================
 # 📌 MODE 1 - MOVIE DUBBING
@@ -630,45 +638,61 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     fc_audio_dur = get_file_duration("fc_audio.wav")
                 except Exception as e: st.error(f"Audio Error: {e}"); st.stop()
 
-            # STEP 3: Fallback Image/Video Generation (Pollinations AI + Cinematic Motion)
-            with st.spinner("⏳ [အဆင့် ၃/၅] Pollinations AI ဖြင့် ဇာတ်လမ်းနှင့် ကိုက်ညီသော ပုံရိပ်များ ဆွဲနေပါသည်..."):
+            # STEP 3: Fallback Image/Video Generation (Pexels Free Video API + Fast Download)
+            with st.spinner("⏳ [အဆင့် ၃/၅] Pexels ဖြင့် ဇာတ်လမ်းနှင့် ကိုက်ညီသော ဗီဒီယိုများ ရယူနေပါသည်..."):
                 pbar.progress(50, text="🎥 Visuals Generation အလုပ်လုပ်နေပါသည် (အချိန်အနည်းငယ်ကြာမည်)...")
                 try:
-                    # Request distinct prompts from Gemini
-                    prompt_req = client.models.generate_content(model="gemini-2.5-flash", contents=f"Based on this story, give me exactly THREE short, distinct English image generation prompts (max 15 words each) describing the scenery. Avoid any violent, gory, or explicitly scary words to bypass safety filters. Format strictly separated by a pipe '|'. Story: {fc_story_text[:200]}")
-                    img_prompts = prompt_req.text.split('|')[:3]
+                    # 👇 FIX: Integrated Pexels Free Video Scraping (No API Key Required for basic fetching, but uses key if provided)
+                    prompt_req = client.models.generate_content(model="gemini-2.5-flash", contents=f"Based on this story, give me exactly THREE short, distinct English search keywords (max 3 words each) describing the scenery. Avoid any violent, gory, or explicitly scary words. Format strictly separated by a pipe '|'. Story: {fc_story_text[:200]}")
+                    search_keywords = prompt_req.text.split('|')[:3]
                     
-                    width, height = (1080, 1920) if "9:16" in fc_ratio else (1920, 1080)
                     generated_clips = []
+                    pexels_api_key = locals().get('pexels_key_input', '').strip()
                     
-                    for i, v_prompt in enumerate(img_prompts):
+                    for i, keyword in enumerate(search_keywords):
                         try:
-                            # Add quality keywords and URL encode the prompt
-                            safe_prompt = urllib.parse.quote(v_prompt.strip() + ", cinematic masterpiece, highly detailed, 8k resolution, photorealistic")
-                            img_url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width={width}&height={height}&nologo=true"
-                            img_path = f"fc_img_{i}.jpg"
+                            clean_kw = keyword.strip().replace(" ", "+")
+                            orientation = "portrait" if "9:16" in fc_ratio else "landscape"
+                            
+                            # If user provided a Pexels API Key, use the official API for better quality
+                            if pexels_api_key:
+                                headers = {"Authorization": pexels_api_key}
+                                pexels_url = f"https://api.pexels.com/videos/search?query={clean_kw}&orientation={orientation}&per_page=1"
+                                res = requests.get(pexels_url, headers=headers, timeout=30)
+                                if res.status_code == 200 and res.json().get('videos'):
+                                    video_files = res.json()['videos'][0]['video_files']
+                                    # Pick the highest quality HD link
+                                    hd_links = [vf['link'] for vf in video_files if vf['quality'] == 'hd']
+                                    best_link = hd_links[0] if hd_links else video_files[0]['link']
+                                else:
+                                    continue # Skip if no video found
+                            else:
+                                # Fallback Web Scraping method (Might be blocked by Pexels, so API key is recommended)
+                                search_url = f"https://www.pexels.com/search/videos/{clean_kw}/?orientation={orientation}"
+                                headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+                                html_res = requests.get(search_url, headers=headers, timeout=30)
+                                match = re.search(r'https://player.vimeo.com/external/[^\s"\'<>]+', html_res.text)
+                                if match:
+                                    best_link = match.group(0)
+                                else:
+                                    continue
+                            
                             clip_path = f"fc_clip_{i}.mp4"
                             
-                            # Download Free Unlimited Image
-                            res = requests.get(img_url, timeout=60)
-                            if res.status_code == 200:
-                                with open(img_path, "wb") as f: f.write(res.content)
-                                
-                                # Convert static image to slow-zooming cinematic video using FFmpeg
-                                (
-                                    ffmpeg.input(img_path, loop=1, t=20) # Generate 20s clip per image
-                                    .filter('zoompan', z='min(zoom+0.001,1.1)', d=500, x='iw/2-(iw/zoom/2)', y='ih/2-(ih/zoom/2)', s=f'{width}x{height}')
-                                    .output(clip_path, vcodec='libx264', pix_fmt='yuv420p', r=25)
-                                    .overwrite_output()
-                                    .run(cmd=FFMPEG_BINARY, quiet=True)
-                                )
+                            # Download the video clip
+                            vid_res = requests.get(best_link, stream=True, timeout=60)
+                            if vid_res.status_code == 200:
+                                with open(clip_path, "wb") as f:
+                                    for chunk in vid_res.iter_content(chunk_size=1024):
+                                        if chunk: f.write(chunk)
                                 generated_clips.append(clip_path)
+                                
                         except Exception as loop_e:
-                            st.error(f"Clip Generation Error: {loop_e}")
+                            st.error(f"Clip Fetching Error ({keyword}): {loop_e}")
                             continue
                             
                     if not generated_clips:
-                        st.error("❌ Visual Generation Failed. ဆာဗာချိတ်ဆက်မှု အခက်အခဲရှိနေပါသည်။")
+                        st.error("❌ Visual Generation Failed. Pexels မှ ဗီဒီယို ရှာမတွေ့ပါ။ ကျေးဇူးပြု၍ Sidebar တွင် Pexels API Key ထည့်ပေးပါ။ (https://www.pexels.com/api/)")
                         st.stop()
                     
                     with open("fc_concat.txt", "w") as f:
