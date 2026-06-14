@@ -268,7 +268,8 @@ st.markdown('<div class="sub-title">AI Studio V52 ⚡ Premium Edition</div>', un
 
 with st.sidebar:
     st.markdown("### 🧭 Navigation Menu")
-    app_mode = st.radio("Select Studio Mode:", ["🎙️ Movie Dubbing Studio", "🎥 Veo Video Studio", "🎵 Lyria Music Studio","⚡ Translation/Transcript Studio","📥 Video Downloader Hub",])
+    # 👇 NEW: Added Faceless Channel Studio to the App Modes
+    app_mode = st.radio("Select Studio Mode:", ["🎙️ Movie Dubbing Studio", "🎙️ Faceless Channel Studio", "🎥 Veo Video Studio", "🎵 Lyria Music Studio","⚡ Translation/Transcript Studio","📥 Video Downloader Hub"])
     st.markdown("---")
     ai_provider = st.selectbox("Choose AI Provider", ["Google Gemini (Flash - Recommended)", "OpenAI (GPT-5.5 Pro)", "Groq API (Fast & Free)"])
     saved_gemini = load_key(API_KEY_FILE)
@@ -342,13 +343,10 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         st.markdown("<div class='sub-box'>", unsafe_allow_html=True)
         st.markdown("<p style='font-weight: bold; color: #10b981; font-size: 16px;'>🎵 Audio Mixing & Auto-Ducking</p>", unsafe_allow_html=True)
         bgm_options = ["None (BGM မထည့်ပါ)"]
-        
-        # 👇 FIX: Auto-load ONLY .mp3 files dynamically for BGM
         bgm_files = [f for f in os.listdir("bgm_tracks") if f.endswith(".mp3")] if os.path.exists("bgm_tracks") else []
         if bgm_files:
             bgm_options.insert(1, "🤖 Auto (Random Select)")
             bgm_options.extend(bgm_files)
-            
         selected_bgm = st.selectbox("🎼 Background Music", bgm_options)
         bgm_volume = st.slider("🔊 BGM Volume", 1, 50, 10) / 100.0
         st.markdown("</div>", unsafe_allow_html=True)
@@ -484,15 +482,12 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                         
                         try:
                             stream = ffmpeg.input(v_input, ss=thumb_time)
-                            
                             if cb_thumb_text:
                                 wrapped_title = textwrap.fill(st.session_state.viral_title, width=25)
                                 with open("thumb_text.txt", "w", encoding="utf-8") as tf:
                                     tf.write(wrapped_title)
-                                    
                                 if os.path.exists(font_path):
                                     stream = ffmpeg.filter(stream.video, 'drawtext', textfile='thumb_text.txt', fontfile=font_path, fontcolor='white', fontsize=65, x='(w-text_w)/2', y='h-text_h-100', box=1, boxcolor='red@0.9', boxborderw=20, borderw=3, bordercolor='black', line_spacing=15)
-                                    
                             ffmpeg.output(stream, "auto_thumb.jpg", vframes=1).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
                         except:
                             ffmpeg.input(v_input, ss=thumb_time).output("auto_thumb.jpg", vframes=1).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
@@ -575,6 +570,148 @@ if app_mode == "🎙️ Movie Dubbing Studio":
             with st.expander("🇲🇲 AI Generated Script", expanded=True):
                 st.text_area("AI မှ ရေးသားထားသော ဇာတ်ညွှန်း:", value=st.session_state.generated_script, height=250, disabled=True)
             st.markdown('</div>', unsafe_allow_html=True)
+
+# =====================================================================
+# 📌 MODE 1.5 - FACELESS CHANNEL STUDIO (NEW!)
+# =====================================================================
+elif app_mode == "🎙️ Faceless Channel Studio":
+    st.markdown('<div class="setting-panel"><h3>👻 Fully-Automated Faceless Channel Studio</h3>', unsafe_allow_html=True)
+    st.markdown("TikTok, FB Reels များအတွက် Reddit Stories, Horror ပုံပြင်များကို AI ဖြင့် အလိုအလျောက် ဗီဒီယိုဖန်တီးပါ။")
+
+    # 👇 NEW: Auto Font Fetcher Logic
+    local_fonts = [f for f in os.listdir(".") if f.endswith((".ttf", ".otf"))]
+    default_fonts = local_fonts if local_fonts else ["Pyidaungsu.ttf"]
+
+    with st.sidebar:
+        st.markdown("---")
+        st.markdown("<b>🎙️ Voice & Audio Settings</b>", unsafe_allow_html=True)
+        fc_audio_engine = st.radio("Voice Engine", ["Edge-TTS (Free)", "Google Synergy TTS (API)"], key="fc_engine")
+        if "Synergy" in fc_audio_engine: fc_synergy_key = st.text_input("Synergy TTS Key", type="password", value=saved_gemini, key="fc_syn")
+        fc_voice_char = st.selectbox("Voice Model", ["Synergy Puck (Male)", "Synergy Charon (Deep)"] if "Synergy" in fc_audio_engine else ["ဇော်ဇော် (Male)", "အောင်အောင် (Deep)", "နှင်းနှင်း (Female)"], key="fc_voice")
+        fc_fx = st.selectbox("Voice FX (Effect)", ["None", "👹 Demon / Horror", "🤫 ASMR / Whisper", "🎙️ Epic Trailer"], key="fc_fx")
+        
+        st.markdown("---")
+        st.markdown("<b>🎨 Visual & Niche Settings</b>", unsafe_allow_html=True)
+        fc_niche = st.selectbox("Select Niche", ["👻 Horror / Creepypasta", "💔 Reddit Relationship Drama", "🧠 Dark Psychology", "💡 Fun Facts / Trivia"])
+        
+        # 👇 NEW: Niche-Specific Subtitles Setup & Auto Font Dropdown
+        fc_font = st.selectbox("🅰️ Auto-Detected Font", default_fonts, key="fc_font")
+        st.caption("💡 Subtitles များသည် Viral ဖြစ်စေရန် (Alex Hormozi Style) အလယ်တည့်တည့်တွင် အကြီးကြီး အော်တိုချိန်ညှိပေးထားပါသည်။")
+
+        bgm_options = ["None (BGM မထည့်ပါ)"]
+        bgm_files = [f for f in os.listdir("bgm_tracks") if f.endswith(".mp3")] if os.path.exists("bgm_tracks") else []
+        if bgm_files:
+            bgm_options.insert(1, "🤖 Auto (Random Select)")
+            bgm_options.extend(bgm_files)
+        fc_bgm = st.selectbox("🎼 Background Music", bgm_options, key="fc_bgm")
+        fc_bgm_vol = st.slider("🔊 BGM Volume", 1, 50, 8, key="fc_bgm_vol") / 100.0
+
+    if st.button("🚀 CREATE FACELESS VIDEO (AUTO-MAGIC)"):
+        if not api_key_input: st.error("⚠️ Google Gemini API Key ထည့်သွင်းပေးပါ။ (Sidebar တွင်ထည့်ပါ)")
+        else:
+            st.session_state.render_success = False
+            pbar = st.progress(0, text="🚀 အလိုအလျောက် ဖန်တီးမှု စတင်နေပါပြီ...")
+            keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
+
+            # STEP 1: Generate Story
+            with st.spinner("⏳ [အဆင့် ၁/၅] Gemini ဖြင့် ၃ မိနစ်စာ ဇာတ်လမ်း ရေးသားနေပါသည်..."):
+                pbar.progress(10, text="📝 ဇာတ်လမ်း ရေးသားနေပါသည်...")
+                try:
+                    story_prompt = f"Write an engaging 3-minute highly viral script for a {fc_niche} TikTok video in natural spoken Burmese. The story should be around 400-450 words. Start with an extreme hook. Do not use english transliteration. Include Synergy audio tags like [pause=1.0]."
+                    client = genai.Client(api_key=keys_list[0])
+                    response = client.models.generate_content(model="gemini-2.5-flash", contents=story_prompt)
+                    fc_story_text = response.text.strip()
+                except Exception as e: st.error(f"Story Error: {e}"); st.stop()
+
+            # STEP 2: Generate Audio
+            with st.spinner("⏳ [အဆင့် ၂/၅] AI သရုပ်ဆောင်ဖြင့် အသံဖန်တီးနေပါသည်..."):
+                pbar.progress(30, text="🎙️ အသံဖန်တီးနေပါသည်...")
+                try:
+                    clean_story = re.sub(r'\[.*?\]', '', fc_story_text) # For TTS if edge is used
+                    asyncio.run(generate_tts(fc_story_text if "Synergy" in fc_audio_engine else clean_story, fc_voice_char, "fc_audio.wav", engine=fc_audio_engine, gemini_key=locals().get('fc_synergy_key', api_key_input), voice_fx=fc_fx))
+                    fc_audio_dur = get_file_duration("fc_audio.wav")
+                except Exception as e: st.error(f"Audio Error: {e}"); st.stop()
+
+            # STEP 3: Veo Generation (Generate 2 clips to loop)
+            with st.spinner("⏳ [အဆင့် ၃/၅] Veo ဖြင့် ဇာတ်လမ်းနှင့် ကိုက်ညီသော ဗီဒီယိုများ ဆွဲနေပါသည်..."):
+                pbar.progress(50, text="🎥 Veo Video Generation အလုပ်လုပ်နေပါသည် (အချိန်အနည်းငယ်ကြာမည်)...")
+                try:
+                    prompt_req = client.models.generate_content(model="gemini-2.5-flash", contents=f"Based on this story, give me exactly TWO short, distinct English image/video generation prompts (max 10 words each) describing the creepy/dramatic vibe. Format them strictly separated by a pipe '|'. Story: {fc_story_text[:200]}")
+                    veo_prompts = prompt_req.text.split('|')[:2]
+                    
+                    generated_clips = []
+                    for i, v_prompt in enumerate(veo_prompts):
+                        for key in keys_list:
+                            try:
+                                url = f"https://generativelanguage.googleapis.com/v1beta/models/veo-2.0-generate-001:generateContent?key={key}"
+                                res = requests.post(url, json={"contents": [{"parts": [{"text": v_prompt.strip()}]}], "generationConfig": {"responseModalities": ["VIDEO"]}}, timeout=120)
+                                if res.status_code == 200:
+                                    clip_path = f"veo_clip_{i}.mp4"
+                                    with open(clip_path, "wb") as f: f.write(base64.b64decode(res.json()["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]))
+                                    generated_clips.append(clip_path)
+                                    break
+                            except: continue
+                    
+                    if not generated_clips:
+                        st.error("❌ Veo Generation Failed. သင့် Key များ Limit ပြည့်သွားပါပြီ။")
+                        st.stop()
+                    
+                    # Concat and loop the clips to match audio duration
+                    with open("fc_concat.txt", "w") as f:
+                        for c in generated_clips: f.write(f"file '{c}'\n")
+                    
+                    subprocess.run([FFMPEG_BINARY, "-stream_loop", "-1", "-f", "concat", "-safe", "0", "-i", "fc_concat.txt", "-t", str(fc_audio_dur), "-c", "copy", "fc_video_loop.mp4"], quiet=True)
+                except Exception as e: st.error(f"Veo Error: {e}"); st.stop()
+
+            # STEP 4: SRT Sync (Gemini Audio to SRT)
+            with st.spinner("⏳ [အဆင့် ၄/၅] စာတန်းထိုးများကို Alex Hormozi ပုံစံ ချိန်ညှိနေပါသည်..."):
+                pbar.progress(70, text="📝 Timeline ချိန်ညှိနေပါသည်...")
+                try:
+                    audio_upload = client.files.upload(file="fc_audio.wav")
+                    while "PROCESSING" in str(client.files.get(name=audio_upload.name).state): time.sleep(2)
+                    
+                    srt_prompt = "Listen to the audio. Output ONLY a valid SRT file in Burmese. CRITICAL RULE: Each subtitle block MUST contain ONLY 1 to 4 words maximum (fast-paced TikTok style). Ensure timestamps are precise. No markdown."
+                    srt_res = client.models.generate_content(model="gemini-2.5-flash", contents=[audio_upload, srt_prompt])
+                    fc_srt_text = srt_res.text.strip().replace("```srt", "").replace("```", "")
+                    
+                    fc_parsed, _ = parse_and_save_real_srt(fc_srt_text, "subtitles.srt")
+                    client.files.delete(name=audio_upload.name)
+                except Exception as e: st.error(f"SRT Error: {e}"); st.stop()
+
+            # STEP 5: Final Master Rendering
+            with st.spinner("⏳ [အဆင့် ၅/၅] အားလုံးကိုပေါင်းစပ်ပြီး Master Video ထုတ်လုပ်နေပါသည်..."):
+                pbar.progress(85, text="🎬 Master Rendering အလုပ်လုပ်နေပါသည်...")
+                try:
+                    # 👇 NEW: Subtitle Style locked for Faceless TikTok Niche
+                    # Alignment=5 (Center of screen), MarginV=150 (perfect height), Big Yellow Text + Black Background Box
+                    dyn_fc_style = f"FontName={fc_font.replace('.ttf', '').replace('.otf', '')},FontSize=35,PrimaryColour=&H0000FFFF,BackColour=&H90000000,BorderStyle=3,Outline=0,Shadow=1,Alignment=5,MarginV=150"
+                    
+                    success, err_msg = render_premium_saas_video("fc_video_loop.mp4", "fc_audio.wav", fc_parsed, "FACELESS_FINAL.mp4", "9:16 (TikTok/Shorts)", use_bypass=True, sub_style_str=dyn_fc_style)
+                    
+                    if success and fc_bgm not in ["None (BGM မထည့်ပါ)"]:
+                        bgm_path = os.path.join("bgm_tracks", random.choice(bgm_files) if "Auto" in fc_bgm else fc_bgm)
+                        if os.path.exists(bgm_path):
+                            try:
+                                ducked = ffmpeg.filter([ffmpeg.input(bgm_path, stream_loop=-1).audio.filter('aresample', 44100).filter('volume', fc_bgm_vol), ffmpeg.input("FACELESS_FINAL.mp4").audio], 'sidechaincompress', threshold=0.04, ratio=4, attack=50, release=300)
+                                mixed = ffmpeg.filter([ffmpeg.input("FACELESS_FINAL.mp4").audio, ducked], 'amix', inputs=2, duration='first').filter('volume', 2.0)
+                                ffmpeg.output(ffmpeg.input("FACELESS_FINAL.mp4").video, mixed, "temp_faceless.mp4", vcodec='copy', acodec='aac', t=fc_audio_dur).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
+                                shutil.move("temp_faceless.mp4", "FACELESS_FINAL.mp4")
+                            except: pass
+                            
+                    pbar.progress(100, text="✅ အားလုံး ပြီးစီးပါပြီ!")
+                    st.balloons()
+                    st.success("🎉 Faceless Video ထုတ်လုပ်မှု အောင်မြင်စွာ ပြီးစီးပါပြီ!")
+                    
+                    col_f1, col_f2 = st.columns(2)
+                    with col_f1:
+                        st.video("FACELESS_FINAL.mp4")
+                        with open("FACELESS_FINAL.mp4", "rb") as f:
+                            st.download_button("📥 Download Final Video", f, "Viral_Faceless.mp4")
+                    with col_f2:
+                        st.markdown("### 📝 Generated Story")
+                        st.text_area("ဇာတ်လမ်း:", value=fc_story_text, height=300, disabled=True)
+                except Exception as e: st.error(f"Render Error: {e}"); st.stop()
+
 
 # =====================================================================
 # 📌 MODE 2 - VEO VIDEO STUDIO
