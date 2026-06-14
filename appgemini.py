@@ -40,6 +40,10 @@ OPENAI_KEY_FILE = "saved_openai_key.txt"
 ELEVEN_VOICE_ID_FILE = "saved_eleven_voice_id.txt"
 PEXELS_KEY_FILE = "saved_pexels_key.txt"
 
+# 👇 FIX: Dedicated fonts directory setup
+FONT_DIR = "fonts"
+if not os.path.exists(FONT_DIR): os.makedirs(FONT_DIR)
+
 def load_key(file_path):
     if os.path.exists(file_path):
         with open(file_path, "r", encoding="utf-8") as f: return f.read().strip()
@@ -183,7 +187,9 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
     with open(output_file, "w", encoding="utf-8-sig") as f: f.write(clean_srt)
     parsed_lines = []
     full_speech = []
-    matches = list(re.finditer(r'(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})', clean_srt))
+    
+    # 👇 FIX: More robust timestamp matching in case Gemini messes up slightly
+    matches = list(re.finditer(r'(\d{1,2}:\d{1,2}(?::\d{1,2})?[,.]\d{1,3})\s*-->\s*(\d{1,2}:\d{1,2}(?::\d{1,2})?[,.]\d{1,3})', clean_srt))
     for i in range(len(matches)):
         start_str = matches[i].group(1).replace('.', ',')
         end_str = matches[i].group(2).replace('.', ',')
@@ -197,7 +203,10 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
         if block:
             try:
                 def to_sec(t):
-                    h, m, s_ms = t.split(':'); s, ms = s_ms.split(',')
+                    parts = t.split(':')
+                    if len(parts) == 3: h, m, s_ms = parts
+                    else: h, m, s_ms = 0, parts[0], parts[1] # Handle missing hours gracefully
+                    s, ms = s_ms.split(',')
                     return int(h)*3600 + int(m)*60 + int(s) + int(ms.ljust(3, '0'))/1000.0
                 text_content = block.strip()
                 if use_fade: text_content = "{\\fad(250,250)}" + text_content
@@ -256,8 +265,9 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
             logo = ffmpeg.filter(logo, 'scale', -1, 80)
             video = ffmpeg.overlay(video, logo, x='W-w-20', y=20)
 
+        # 👇 FIX: Changed fontsdir to point to the FONT_DIR explicitly
         if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"] and os.path.exists("subtitles.srt"):
-            video = ffmpeg.filter(video, 'subtitles', safe_srt_path_escaped, charenc='UTF-8', fontsdir='.', force_style=sub_style_str)
+            video = ffmpeg.filter(video, 'subtitles', safe_srt_path_escaped, charenc='UTF-8', fontsdir=FONT_DIR, force_style=sub_style_str)
 
         out = ffmpeg.output(video, audio, out_v, vcodec='libx264', acodec='aac', preset='fast', crf=21, t=v_max_dur)
         out.run(cmd=FFMPEG_BINARY, overwrite_output=True, capture_stdout=True, capture_stderr=True)
@@ -267,6 +277,10 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
 # --- 3. UI INTERFACE & NAVIGATION ---
 st.markdown('<div class="main-title">AETHER FILMWORKS</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">AI Studio V52 ⚡ Premium Edition</div>', unsafe_allow_html=True)
+
+# 👇 FIX: Fetch fonts dynamically from the dedicated FONT_DIR
+local_fonts = [f for f in os.listdir(FONT_DIR) if f.endswith((".ttf", ".otf"))]
+default_fonts = local_fonts if local_fonts else ["Pyidaungsu.ttf"]
 
 with st.sidebar:
     st.markdown("### 🧭 Navigation Menu")
@@ -370,7 +384,10 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         if subtitle_mode in ["Both (Burn + SRT)", "Burn into Video"]:
             sub_position = st.selectbox("📍 Position", ["Bottom", "Center", "Top"])
             sub_color = st.selectbox("🎨 Color", ["Yellow Text + Black Outline", "White Text + Black Outline", "Neon Green Text + Black Outline"])
-            sub_font = st.selectbox("🅰️ Font Family", ["Pyidaungsu", "NotoSans-Bold", "Myanmar3_2018", "Padauk"])
+            
+            # 👇 FIX: Mode 1 now uses dynamic fonts from FONT_DIR
+            sub_font = st.selectbox("🅰️ Font Family", default_fonts)
+            
             sub_size = st.slider("🔠 Font Size", 16, 40, 22)
             sub_thickness = st.slider("✒️ Outline Thickness", 1.0, 5.0, 2.5)
             col_s1, col_s2 = st.columns(2)
@@ -423,7 +440,9 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     if script_cta: extra_rules += " [CTA]: End the script with a strong Call to Action asking a question."
 
                     extra_rules += "\nAt the absolute end of the response, you MUST include these two lines on separate lines:\n[TITLE: (Provide a viral Burmese title here)]\n[TAGS: #tag1 #tag2]"
-                    hormozi_rule = " [HORMOZI]: Split the subtitles into chunks of 3-5 words max." if sub_short else ""
+                    
+                    # 👇 FIX: Changed the prompt heavily to enforce strict formatting
+                    hormozi_rule = " [HORMOZI]: Split the subtitles into chunks of 3-5 words max. Ensure timestamps are strictly in standard HH:MM:SS,mmm format (e.g., 00:00:04,000 --> 00:00:05,500). Do not skip hours." if sub_short else "Ensure timestamps are strictly in standard HH:MM:SS,mmm format (e.g., 00:00:04,000 --> 00:00:05,500)."
 
                     if "Gemini" in ai_provider:
                         keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
@@ -486,7 +505,8 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     
                     try:
                         thumb_time = min(get_file_duration(v_input)/3, 15)
-                        font_path = "Pyidaungsu.ttf"
+                        # 👇 FIX: Changed font path logic for thumbnail
+                        font_path = os.path.join(FONT_DIR, sub_font)
                         
                         try:
                             stream = ffmpeg.input(v_input, ss=thumb_time)
@@ -516,7 +536,10 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                 pbar.progress(80, text="🎬 [အဆင့် ၅/၆] ဗီဒီယိုနှင့် စာတန်းထိုး ပေါင်းစပ်နေပါသည်...")
                 align_val = 2 if "Bottom" in sub_position else (5 if "Center" in sub_position else 8)
                 prim_c = "&H0000FFFF" if "Yellow" in sub_color else ("&H00FFFFFF" if "White" in sub_color else "&H0000FF00")
-                dyn_style = f"FontName={sub_font.split()[0]},FontSize={sub_size},PrimaryColour={prim_c},BackColour={'&H80000000' if sub_bg else '&H00000000'},BorderStyle={3 if sub_bg else 1},Outline={0 if sub_bg else sub_thickness},Alignment={align_val},MarginV=60"
+                
+                # 👇 FIX: Safely stripped out the .ttf extension so FFmpeg reads it correctly
+                font_name_only = sub_font.replace('.ttf', '').replace('.otf', '')
+                dyn_style = f"FontName={font_name_only},FontSize={sub_size},PrimaryColour={prim_c},BackColour={'&H80000000' if sub_bg else '&H00000000'},BorderStyle={3 if sub_bg else 1},Outline={0 if sub_bg else sub_thickness},Alignment={align_val},MarginV=60"
                 
                 logo_file_path = None
                 if uploaded_logo and not use_text_watermark:
@@ -526,7 +549,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                 success, err_msg = render_premium_saas_video(v_input, a_generated, parsed_timestamps, v_final, video_ratio, cb_bypass, cb_blur, watermark_text, subtitle_mode, cb_mirror, cb_color, cb_grain, cb_fps, dyn_style, cb_freeze, logo_file_path)
                 if not success:
                     st.error(f"Sync Failure: {err_msg}")
-                    st.stop() # 👇 FIX: Stop execution if rendering fails
+                    st.stop()
 
             if success and selected_bgm not in ["None (BGM မထည့်ပါ)"]:
                 with st.spinner("⏳ [အဆင့် ၆/၆] Auto-Ducking ဖြင့် BGM ထပ်မံပေါင်းစပ်နေပါသည်..."):
@@ -588,9 +611,6 @@ elif app_mode == "🎙️ Faceless Channel Studio":
     st.markdown('<div class="setting-panel"><h3>👻 Fully-Automated Faceless Channel Studio</h3>', unsafe_allow_html=True)
     st.markdown("TikTok, FB Reels များအတွက် Reddit Stories, Horror ပုံပြင်များကို AI ဖြင့် အလိုအလျောက် ဗီဒီယိုဖန်တီးပါ။")
 
-    local_fonts = [f for f in os.listdir(".") if f.endswith((".ttf", ".otf"))]
-    default_fonts = local_fonts if local_fonts else ["Pyidaungsu.ttf"]
-
     with st.sidebar:
         st.markdown("---")
         st.markdown("<b>🎙️ Voice & Audio Settings</b>", unsafe_allow_html=True)
@@ -603,7 +623,10 @@ elif app_mode == "🎙️ Faceless Channel Studio":
         st.markdown("<b>🎨 Visual & Niche Settings</b>", unsafe_allow_html=True)
         fc_niche = st.selectbox("Select Niche", ["👻 Horror / Creepypasta", "💔 Reddit Relationship Drama", "🧠 Dark Psychology", "💡 Fun Facts / Trivia"])
         fc_ratio = st.selectbox("Video Ratio", ["9:16 (TikTok/Shorts)", "16:9 (YouTube)", "Original"], key="fc_ratio")
+        
+        # 👇 FIX: Same dynamic font list used here
         fc_font = st.selectbox("🅰️ Auto-Detected Font", default_fonts, key="fc_font")
+        
         st.caption("💡 Subtitles များသည် Viral ဖြစ်စေရန် (Alex Hormozi Style) အလယ်တည့်တည့်တွင် အကြီးကြီး အော်တိုချိန်ညှိပေးထားပါသည်။")
 
         bgm_options = ["None (BGM မထည့်ပါ)"]
@@ -692,7 +715,6 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                         st.error("❌ Visual Generation Failed. Pexels မှ ဗီဒီယို ရှာမတွေ့ပါ။ ကျေးဇူးပြု၍ Sidebar တွင် Pexels API Key ထည့်ပေးပါ။ (https://www.pexels.com/api/)")
                         st.stop()
                     
-                    # 👇 FIX: Scale and crop all downloaded videos to the EXACT target resolution to prevent FFmpeg concat errors
                     width, height = (1080, 1920) if "9:16" in fc_ratio else (1920, 1080)
                     streams = []
                     for c in generated_clips:
@@ -718,7 +740,8 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     audio_upload = client.files.upload(file="fc_audio.wav")
                     while "PROCESSING" in str(client.files.get(name=audio_upload.name).state): time.sleep(2)
                     
-                    srt_prompt = "Listen to the audio. Output ONLY a valid SRT file in Burmese. CRITICAL RULE: Each subtitle block MUST contain ONLY 1 to 4 words maximum (fast-paced TikTok style). Ensure timestamps are precise. No markdown."
+                    # 👇 FIX: Enforced strict HH:MM:SS,mmm timestamp prompt to prevent text leakage
+                    srt_prompt = "Listen to the audio. Output ONLY a valid SRT file in Burmese. CRITICAL RULE: Each subtitle block MUST contain ONLY 1 to 4 words maximum (fast-paced TikTok style). Ensure timestamps are strictly in standard HH:MM:SS,mmm format (e.g., 00:00:04,000 --> 00:00:05,500). Do not skip the hours. No markdown."
                     srt_res = client.models.generate_content(model="gemini-2.5-flash", contents=[audio_upload, srt_prompt])
                     fc_srt_text = srt_res.text.strip().replace("```srt", "").replace("```", "")
                     
@@ -736,7 +759,7 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     
                     if not success:
                         st.error(f"Render Error: {err_msg}")
-                        st.stop() # 👇 FIX: Prevent app from trying to load a missing file
+                        st.stop()
                     
                     if success and fc_bgm not in ["None (BGM မထည့်ပါ)"]:
                         bgm_path = os.path.join("bgm_tracks", random.choice(bgm_files) if "Auto" in fc_bgm else fc_bgm)
