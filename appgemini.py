@@ -49,7 +49,7 @@ GROQ_KEY_FILE = "saved_groq_key.txt"
 OPENAI_KEY_FILE = "saved_openai_key.txt"
 ELEVEN_VOICE_ID_FILE = "saved_eleven_voice_id.txt"
 PEXELS_KEY_FILE = "saved_pexels_key.txt" 
-HF_KEY_FILE = "saved_hf_key.txt" # 👇 Added Hugging Face Key File back
+HF_KEY_FILE = "saved_hf_key.txt" 
 
 def load_key(file_path):
     if os.path.exists(file_path):
@@ -341,7 +341,6 @@ with st.sidebar:
         groq_key_fc = st.text_input("Groq API Key (For Accurate Whisper Subtitle Sync)", type="password", value=saved_groq_fc)
         if groq_key_fc and groq_key_fc != saved_groq_fc: save_key(GROQ_KEY_FILE, groq_key_fc)
         
-        # 👇 FIX: Added Hugging Face API Key input field back
         saved_hf = load_key(HF_KEY_FILE)
         hf_key_input = st.text_input("Hugging Face API Key (FLUX Image AI)", type="password", value=saved_hf)
         if hf_key_input and hf_key_input != saved_hf: save_key(HF_KEY_FILE, hf_key_input)
@@ -675,8 +674,7 @@ elif app_mode == "🎙️ Faceless Channel Studio":
         
     with col_fc2:
         st.markdown("<div class='sub-box'>", unsafe_allow_html=True)
-        # 👇 FIX: Restored Pollinations AI (with Robust Retry) & HuggingFace FLUX
-        fc_visual_mode = st.radio("🎥 Visuals Source", ["🎨 AI Images (Hugging Face FLUX)", "🎨 AI Images (Pollinations AI)", "🌐 Auto-Fetch Pexels Videos", "🖼️ Upload Manual Images"])
+        fc_visual_mode = st.radio("🎥 Visuals Source", ["🎨 AI Images (Hugging Face Auto-Fallback)", "🎨 AI Images (Pollinations AI)", "🌐 Auto-Fetch Pexels Videos", "🖼️ Upload Manual Images"])
         fc_uploaded_images = None
         if "Upload" in fc_visual_mode:
             fc_uploaded_images = st.file_uploader("🖼️ Upload Images (JPG/PNG)", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
@@ -725,7 +723,7 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     fc_audio_dur = get_file_duration("fc_audio.wav")
                 except Exception as e: st.error(f"Audio Error: {e}"); st.stop()
 
-            # STEP 3: Fallback Image/Video Generation 
+            # STEP 3: Fallback Image/Video Generation
             with st.spinner("⏳ [အဆင့် ၃/၅] Visuals များကို ပြင်ဆင်နေပါသည်..."):
                 pbar.progress(50, text="🎥 Visuals ပြင်ဆင်နေပါသည်...")
                 try:
@@ -752,7 +750,7 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                             if os.path.exists(clip_path):
                                 generated_clips.append(clip_path)
 
-                    elif "FLUX" in fc_visual_mode:
+                    elif "Hugging" in fc_visual_mode:
                         search_keywords = []
                         last_err = ""
                         for key in keys_list:
@@ -776,7 +774,12 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                             st.stop()
 
                         hf_headers = {"Authorization": f"Bearer {hf_api_key}"}
-                        hf_api_url = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell"
+                        
+                        hf_models = [
+                            "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell",
+                            "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-3.5-large",
+                            "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0"
+                        ]
 
                         for i, img_prompt in enumerate(search_keywords):
                             clean_prompt = img_prompt.strip()
@@ -785,30 +788,34 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                             last_err = "" 
                             img_downloaded = False
                             
-                            for attempt in range(3):
-                                try:
-                                    payload = {"inputs": f"{clean_prompt}, cinematic, masterpiece, 8k resolution, highly detailed"}
-                                    img_res = requests.post(hf_api_url, headers=hf_headers, json=payload, timeout=60)
-                                    if img_res.status_code == 200 and len(img_res.content) > 5000: 
-                                        with open(img_path, "wb") as f:
-                                            f.write(img_res.content)
-                                        img_downloaded = True
-                                        break
-                                    else:
-                                        last_err = f"API Status: {img_res.status_code} - {img_res.text[:100]}"
+                            for hf_url in hf_models:
+                                if img_downloaded: break
+                                model_name = hf_url.split('/')[-1]
+                                
+                                for attempt in range(2):
+                                    try:
+                                        payload = {"inputs": f"{clean_prompt}, cinematic, masterpiece, 8k resolution, highly detailed"}
+                                        img_res = requests.post(hf_url, headers=hf_headers, json=payload, timeout=60)
+                                        if img_res.status_code == 200 and len(img_res.content) > 5000: 
+                                            with open(img_path, "wb") as f:
+                                                f.write(img_res.content)
+                                            img_downloaded = True
+                                            break
+                                        else:
+                                            last_err = f"API Status: {img_res.status_code} ({model_name})"
+                                            time.sleep(2)
+                                    except Exception as img_err: 
+                                        last_err = str(img_err)
                                         time.sleep(2)
-                                except Exception as img_err: 
-                                    last_err = str(img_err)
-                                    time.sleep(2)
 
                             if img_downloaded and os.path.exists(img_path):
-                                pbar.progress(50 + int((i/len(search_keywords))*15), text=f"🎥 FLUX ပုံမှ ဗီဒီယိုသို့ ပြောင်းလဲနေပါသည် ({i+1}/{len(search_keywords)})...")
+                                pbar.progress(50 + int((i/len(search_keywords))*15), text=f"🎥 AI ပုံမှ ဗီဒီယိုသို့ ပြောင်းလဲနေပါသည် ({i+1}/{len(search_keywords)})...")
                                 subprocess.run([FFMPEG_BINARY, "-y", "-loop", "1", "-i", img_path, "-t", str(clip_dur), "-vf", f"scale=-2:2000,zoompan=z='min(zoom+0.001,1.15)':d={int(clip_dur*25)}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={target_scale},fps=25", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "superfast", clip_path], capture_output=True)
                                 if os.path.exists(clip_path):
                                     generated_clips.append(clip_path)
 
                         if not generated_clips:
-                            st.error(f"❌ FLUX Image Generation Failed. Error: {last_err}")
+                            st.error(f"❌ AI Image Generation Failed after trying all fallback models. Error: {last_err}")
                             st.stop()
 
                     elif "Pollinations" in fc_visual_mode:
@@ -967,7 +974,6 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                         
                         pbar.progress(78, text="📝 AI ဖြင့် Emoji များ ထည့်သွင်းနေပါသည်...")
                         client_gemini = genai.Client(api_key=keys_list[0])
-                        # 👇 FIX: Code-based marker injection to prevent Syntax Error from backticks
                         srt_prompt = f"Rewrite this Burmese SRT file into fast-paced TikTok style. CRITICAL RULES:\n1. Break down the subtitles into chunks of ONLY 1 to 4 words maximum per block.\n2. Interpolate the timestamps accurately and ALWAYS use strict 'HH:MM:SS,mmm' format.\n3. Add ONE relevant emoji at the end of every subtitle block to make it engaging.\n4. Output ONLY valid SRT format without any markdown blocks.\n\nOriginal SRT:\n{raw_srt}"
                         srt_res = client_gemini.models.generate_content(model="gemini-2.5-flash", contents=srt_prompt)
                         
@@ -1006,7 +1012,6 @@ elif app_mode == "🎙️ Faceless Channel Studio":
             with st.spinner("⏳ [အဆင့် ၅/၅] အားလုံးကိုပေါင်းစပ်ပြီး Master Video ထုတ်လုပ်နေပါသည်..."):
                 pbar.progress(85, text="🎬 Master Rendering အလုပ်လုပ်နေပါသည်...")
                 try:
-                    # 👇 FIX: Font Size 20 and Blood Red Color (&H000000FF)
                     selected_font = fc_sub_font.split()[0]
                     dyn_fc_style = f"FontName={selected_font},FontSize=20,PrimaryColour=&H000000FF,BackColour=&H00000000,BorderStyle=1,Outline=2.5,Shadow=2,Bold=1,Alignment=5,MarginV=80"
                     
