@@ -33,7 +33,7 @@ if shutil.which("ffmpeg"):
 else:
     FFMPEG_BINARY = imageio_ffmpeg.get_ffmpeg_exe()
 
-# 👇 FIX: Absolute Path for Font Directory (Fixes Tofu Boxes completely)
+# 👇 FIX: Absolute Path for Font Directory 
 FONT_DIR = os.path.abspath("font")
 
 if os.path.exists(FONT_DIR) and any(f.endswith('.ttf') for f in os.listdir(FONT_DIR)):
@@ -207,7 +207,8 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
         finally:
             if os.path.exists(temp_out): os.remove(temp_out)
 
-def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
+# 👇 FIX: Added Python Mathematical Force Chopper for Max 3 Words!
+def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False, max_words=3):
     marker = chr(96) * 3
     clean_srt = raw_srt_text.replace(f"{marker}srt", "").replace(marker, "").strip()
     parsed_lines = []
@@ -250,11 +251,21 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
                 text_content = re.sub(r'\[.*?\]', '', text_content)
                 text_content = re.sub(r'\{.*?\}', '', text_content).strip()
                 
-                if use_fade and text_content: 
-                    text_content = "{\\fscx0\\fscy0\\t(0,150,\\fscx100\\fscy100)}" + text_content
-                    
-                parsed_lines.append((to_sec(start_str), to_sec(end_str), text_content))
-                full_speech.append(block.strip())
+                # 🔥 Mathematical Force Chunking Algorithm
+                words = text_content.split()
+                if len(words) > max_words:
+                    chunks = [" ".join(words[j:j+max_words]) for j in range(0, len(words), max_words)]
+                    dur = (to_sec(end_str) - to_sec(start_str)) / max(1, len(chunks))
+                    for idx, chunk in enumerate(chunks):
+                        c_start = to_sec(start_str) + (idx * dur)
+                        c_end = to_sec(start_str) + ((idx + 1) * dur)
+                        formatted_chunk = "{\\fscx0\\fscy0\\t(0,150,\\fscx100\\fscy100)}" + chunk if use_fade else chunk
+                        parsed_lines.append((c_start, c_end, formatted_chunk))
+                        full_speech.append(chunk)
+                else:
+                    formatted_chunk = "{\\fscx0\\fscy0\\t(0,150,\\fscx100\\fscy100)}" + text_content if use_fade else text_content
+                    parsed_lines.append((to_sec(start_str), to_sec(end_str), formatted_chunk))
+                    full_speech.append(text_content)
             except: pass
 
     if not parsed_lines:
@@ -280,7 +291,6 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         safe_srt_path = os.path.abspath("subtitles.srt").replace('\\', '/')
         safe_srt_path_escaped = safe_srt_path.replace(':', '\\:')
         
-        # Format the font directory path so ffmpeg doesn't crash on Linux/Windows
         safe_font_dir = font_dir.replace('\\', '/').replace(':', '\\:')
         
         with open("subtitles.srt", "w", encoding="utf-8-sig") as f:
@@ -584,7 +594,18 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                 pbar.progress(80, text="🎬 [အဆင့် ၅/၆] ဗီဒီယိုနှင့် စာတန်းထိုး ပေါင်းစပ်နေပါသည်...")
                 align_val = 2 if "Bottom" in sub_position else (5 if "Center" in sub_position else 8)
                 prim_c = "&H0000FFFF" if "Yellow" in sub_color else ("&H00FFFFFF" if "White" in sub_color else "&H0000FF00")
-                dyn_style = f"FontName={sub_font.split()[0]},FontSize={sub_size},PrimaryColour={prim_c},BackColour={'&H80000000' if sub_bg else '&H00000000'},BorderStyle={3 if sub_bg else 1},Outline={0 if sub_bg else sub_thickness},Alignment={align_val},MarginV=60"
+                
+                # Smart Font Mapper for Movie Dubbing too
+                raw_font = sub_font
+                if "Pyidaungsu" in raw_font: real_font_name = "Pyidaungsu"
+                elif "Padauk" in raw_font: real_font_name = "Padauk"
+                elif "Myanmar3" in raw_font: real_font_name = "Myanmar3"
+                elif "Cherry" in raw_font: real_font_name = "Cherry Unicode"
+                elif "Zawgyi" in raw_font: real_font_name = "Zawgyi-One"
+                elif "Noto" in raw_font: real_font_name = "Noto Sans Myanmar" 
+                else: real_font_name = raw_font.split('-')[0].split('_')[0]
+
+                dyn_style = f"FontName={real_font_name},FontSize={sub_size},PrimaryColour={prim_c},BackColour={'&H80000000' if sub_bg else '&H00000000'},BorderStyle={3 if sub_bg else 1},Outline={0 if sub_bg else sub_thickness},Alignment={align_val},MarginV=60"
                 
                 logo_file_path = None
                 if uploaded_logo and not use_text_watermark:
@@ -970,7 +991,7 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     subprocess.run([FFMPEG_BINARY, "-y", "-stream_loop", "-1", "-f", "concat", "-safe", "0", "-i", "fc_concat.txt", "-t", str(fc_audio_dur), "-c", "copy", "fc_video_loop.mp4"], capture_output=True)
                 except Exception as e: st.error(f"Visual Error: {e}"); st.stop()
 
-            # 👇 FIX: STEP 4 - Strict Subtitle Chunking Rule added to Prompt
+            # 👇 FIX: STEP 4 - Bypassed Gemini AI. Used Python Math to force exact timestamps!
             with st.spinner("⏳ [အဆင့် ၄/၅] စာတန်းထိုးများကို ချိန်ညှိနေပါသည်..."):
                 pbar.progress(70, text="📝 Timeline ချိန်ညှိနေပါသည်...")
                 fc_parsed = None
@@ -988,15 +1009,9 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                                 response_format="srt",
                             )
                         
-                        pbar.progress(78, text="📝 AI ဖြင့် စာသားများ ချိန်ညှိနေပါသည်...")
-                        client_gemini = genai.Client(api_key=keys_list[0])
-                        srt_prompt = f"Rewrite this Burmese SRT file into fast-paced TikTok style.\nCRITICAL RULES:\n1. YOU MUST SPLIT long sentences into multiple subtitle blocks.\n2. EACH block MUST contain a MAXIMUM of 2 to 3 words. NO EXCEPTIONS.\n3. Interpolate and adjust the timestamps to match the newly split blocks accurately.\n4. ALWAYS use strict 'HH:MM:SS,mmm' format.\n5. Output ONLY valid SRT format without any markdown blocks.\n\nOriginal SRT:\n{raw_srt}"
-                        srt_res = client_gemini.models.generate_content(model="gemini-2.5-flash", contents=srt_prompt)
-                        
-                        marker = chr(96) * 3
-                        fc_srt_text = srt_res.text.strip().replace(f"{marker}srt", "").replace(marker, "")
-                        
-                        fc_parsed, _ = parse_and_save_real_srt(fc_srt_text, "subtitles.srt", use_fade=True)
+                        pbar.progress(78, text="📝 အတိအကျ စာပိုဒ်ခွဲနေပါသည်...")
+                        # Completely bypass Gemini's laziness. Force Mathematical Chop.
+                        fc_parsed, _ = parse_and_save_real_srt(raw_srt, "subtitles.srt", use_fade=True, max_words=3)
                     except Exception as e:
                         last_err = str(e)
                 
@@ -1007,13 +1022,13 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                             audio_upload = client.files.upload(file="fc_audio.wav")
                             while "PROCESSING" in str(client.files.get(name=audio_upload.name).state): time.sleep(2)
                             
-                            srt_prompt = "Listen to the audio. Output ONLY a valid SRT file in Burmese.\nCRITICAL RULES:\n1. YOU MUST SPLIT long sentences into multiple subtitle blocks.\n2. EACH block MUST contain a MAXIMUM of 2 to 3 words. NO EXCEPTIONS.\n3. ALWAYS use strict 'HH:MM:SS,mmm' format. No markdown."
+                            srt_prompt = "Listen to the audio. Output ONLY a valid SRT file in Burmese. No markdown."
                             srt_res = client.models.generate_content(model="gemini-2.5-flash", contents=[audio_upload, srt_prompt])
                             
                             marker = chr(96) * 3
                             fc_srt_text = srt_res.text.strip().replace(f"{marker}srt", "").replace(marker, "")
                             
-                            fc_parsed, _ = parse_and_save_real_srt(fc_srt_text, "subtitles.srt", use_fade=True)
+                            fc_parsed, _ = parse_and_save_real_srt(fc_srt_text, "subtitles.srt", use_fade=True, max_words=3)
                             client.files.delete(name=audio_upload.name)
                             break
                         except Exception as e:
@@ -1028,8 +1043,17 @@ elif app_mode == "🎙️ Faceless Channel Studio":
             with st.spinner("⏳ [အဆင့် ၅/၅] အားလုံးကိုပေါင်းစပ်ပြီး Master Video ထုတ်လုပ်နေပါသည်..."):
                 pbar.progress(85, text="🎬 Master Rendering အလုပ်လုပ်နေပါသည်...")
                 try:
-                    selected_font = fc_sub_font.split()[0]
-                    dyn_fc_style = f"FontName={selected_font},FontSize=20,PrimaryColour=&H000000FF,BackColour=&H00000000,BorderStyle=1,Outline=2.5,Shadow=2,Bold=1,Alignment=5,MarginV=80"
+                    # 👇 FIX: Smart Font Internal Name Mapper to fix Tofu Boxes!
+                    raw_font = fc_sub_font
+                    if "Pyidaungsu" in raw_font: real_font_name = "Pyidaungsu"
+                    elif "Padauk" in raw_font: real_font_name = "Padauk"
+                    elif "Myanmar3" in raw_font: real_font_name = "Myanmar3"
+                    elif "Cherry" in raw_font: real_font_name = "Cherry Unicode"
+                    elif "Zawgyi" in raw_font: real_font_name = "Zawgyi-One"
+                    elif "Noto" in raw_font: real_font_name = "Noto Sans Myanmar" 
+                    else: real_font_name = raw_font.split('-')[0].split('_')[0]
+
+                    dyn_fc_style = f"FontName={real_font_name},FontSize=20,PrimaryColour=&H000000FF,BackColour=&H00000000,BorderStyle=1,Outline=2.5,Shadow=2,Bold=1,Alignment=5,MarginV=80"
                     
                     success, err_msg = render_premium_saas_video("fc_video_loop.mp4", "fc_audio.wav", fc_parsed, "FACELESS_FINAL.mp4", fc_ratio, use_bypass=True, subtitle_mode=fc_subtitle_mode, sub_style_str=dyn_fc_style, font_dir=active_font_dir)
                     
