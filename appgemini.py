@@ -49,7 +49,6 @@ GROQ_KEY_FILE = "saved_groq_key.txt"
 OPENAI_KEY_FILE = "saved_openai_key.txt"
 ELEVEN_VOICE_ID_FILE = "saved_eleven_voice_id.txt"
 PEXELS_KEY_FILE = "saved_pexels_key.txt" 
-HF_KEY_FILE = "saved_hf_key.txt" # 👇 NEW: Hugging Face API Key File
 
 def load_key(file_path):
     if os.path.exists(file_path):
@@ -302,18 +301,13 @@ with st.sidebar:
         saved_openai = load_key(OPENAI_KEY_FILE)
         api_key_input = st.text_input("OpenAI API Key", type="password", value=saved_openai)
         if api_key_input and api_key_input != saved_openai: save_key(OPENAI_KEY_FILE, api_key_input)
-        
+
     if app_mode == "🎙️ Faceless Channel Studio":
         st.markdown("---")
         st.markdown("### 🔑 Additional API Keys")
         saved_pexels = load_key(PEXELS_KEY_FILE)
-        pexels_key_input = st.text_input("Pexels API Key (Optional)", type="password", value=saved_pexels)
+        pexels_key_input = st.text_input("Pexels API Key (Optional for SD Video)", type="password", value=saved_pexels)
         if pexels_key_input and pexels_key_input != saved_pexels: save_key(PEXELS_KEY_FILE, pexels_key_input)
-        
-        # 👇 NEW: Added Hugging Face API Key input field
-        saved_hf = load_key(HF_KEY_FILE)
-        hf_key_input = st.text_input("Hugging Face API Key (FLUX Image AI)", type="password", value=saved_hf)
-        if hf_key_input and hf_key_input != saved_hf: save_key(HF_KEY_FILE, hf_key_input)
 
 # =====================================================================
 # 📌 MODE 1 - MOVIE DUBBING
@@ -599,11 +593,11 @@ if app_mode == "🎙️ Movie Dubbing Studio":
             st.markdown('</div>', unsafe_allow_html=True)
 
 # =====================================================================
-# 📌 MODE 1.5 - FACELESS CHANNEL STUDIO (NEW!)
+# 📌 MODE 1.5 - FACELESS Channel Studio (WITH MANUAL CONTROLS)
 # =====================================================================
 elif app_mode == "🎙️ Faceless Channel Studio":
     st.markdown('<div class="setting-panel"><h3>👻 Fully-Automated Faceless Channel Studio</h3>', unsafe_allow_html=True)
-    st.markdown("TikTok, FB Reels များအတွက် Reddit Stories, Horror ပုံပြင်များကို AI ဖြင့် အလိုအလျောက် ဗီဒီယိုဖန်တီးပါ။")
+    st.markdown("TikTok, FB Reels များအတွက် Reddit Stories, Horror ပုံပြင်များကို ဖန်တီးပါ။")
 
     with st.sidebar:
         st.markdown("---")
@@ -631,34 +625,58 @@ elif app_mode == "🎙️ Faceless Channel Studio":
         fc_bgm = st.selectbox("🎼 Background Music", bgm_options, key="fc_bgm")
         fc_bgm_vol = st.slider("🔊 BGM Volume", 1, 50, 8, key="fc_bgm_vol") / 100.0
 
+    # 👇 NEW: Manual Override Options inside the Main View
+    st.markdown('<div class="setting-panel"><h4>🛠️ Manual Controls (Optional)</h4>', unsafe_allow_html=True)
+    col_fc1, col_fc2 = st.columns(2)
+    with col_fc1:
+        st.markdown("<div class='sub-box'>", unsafe_allow_html=True)
+        fc_script_mode = st.radio("📝 Story Script Source", ["🤖 Auto-Generate AI Script", "✍️ Manual Script Entry"])
+        fc_manual_script = ""
+        if "Manual" in fc_script_mode:
+            fc_manual_script = st.text_area("✍️ Paste your script here:", placeholder="သင့်ကိုယ်ပိုင် ဇာတ်ညွှန်းကို ဤနေရာတွင် ထည့်ပါ...", height=150)
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+    with col_fc2:
+        st.markdown("<div class='sub-box'>", unsafe_allow_html=True)
+        fc_visual_mode = st.radio("🎥 Visuals Source", ["🌐 Auto-Fetch Pexels Videos", "🖼️ Upload Manual Images"])
+        fc_uploaded_images = None
+        if "Upload" in fc_visual_mode:
+            fc_uploaded_images = st.file_uploader("🖼️ Upload Images (JPG/PNG)", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
     if st.button("🚀 CREATE FACELESS VIDEO (AUTO-MAGIC)"):
         if not api_key_input: st.error("⚠️ Google Gemini API Key ထည့်သွင်းပေးပါ။ (Sidebar တွင်ထည့်ပါ)")
+        elif "Manual" in fc_script_mode and not fc_manual_script.strip(): st.error("⚠️ Manual ဇာတ်ညွှန်း ထည့်သွင်းပေးပါ။")
+        elif "Upload" in fc_visual_mode and not fc_uploaded_images: st.error("⚠️ အနည်းဆုံး ပုံ (၁) ပုံ Upload တင်ပေးပါ။")
         else:
             st.session_state.render_success = False
             pbar = st.progress(0, text="🚀 အလိုအလျောက် ဖန်တီးမှု စတင်နေပါပြီ...")
             keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
 
-            # STEP 1: Generate Story
-            with st.spinner(f"⏳ [အဆင့် ၁/၅] Gemini ဖြင့် {fc_duration} မိနစ်စာ ဇာတ်လမ်း ရေးသားနေပါသည်..."):
-                pbar.progress(10, text="📝 ဇာတ်လမ်း ရေးသားနေပါသည်...")
-                
-                target_words = fc_duration * 140
-                story_prompt = f"Write an engaging {fc_duration}-minute highly viral script for a {fc_niche} TikTok video in natural spoken Burmese. The story should be around {target_words} words. CRITICAL RULE: Start the script with a mind-blowing, highly engaging 3-second viral hook (e.g., a shocking statement, a scary question, or a mysterious fact) to grab the viewer's attention immediately. Make them stop scrolling! Do not use english transliteration. Include Synergy audio tags like [pause=1.0]."
-                
-                fc_story_text = ""
-                last_err = ""
-                for key in keys_list:
-                    try:
-                        client = genai.Client(api_key=key)
-                        response = client.models.generate_content(model="gemini-2.5-flash", contents=story_prompt)
-                        fc_story_text = response.text.strip()
-                        break
-                    except Exception as e:
-                        last_err = str(e)
-                        continue
-                if not fc_story_text:
-                    st.error(f"Story Error: Key အားလုံး Limit ပြည့်နေပါသည်။ {last_err}")
-                    st.stop()
+            # STEP 1: Generate or Use Manual Story
+            fc_story_text = ""
+            if "Manual" in fc_script_mode:
+                pbar.progress(10, text="📝 Manual ဇာတ်ညွှန်းအား ဖတ်ယူနေပါသည်...")
+                fc_story_text = fc_manual_script.strip()
+            else:
+                with st.spinner(f"⏳ [အဆင့် ၁/၅] Gemini ဖြင့် {fc_duration} မိနစ်စာ ဇာတ်လမ်း ရေးသားနေပါသည်..."):
+                    pbar.progress(10, text="📝 ဇာတ်လမ်း ရေးသားနေပါသည်...")
+                    target_words = fc_duration * 140
+                    story_prompt = f"Write an engaging {fc_duration}-minute highly viral script for a {fc_niche} TikTok video in natural spoken Burmese. The story should be around {target_words} words. CRITICAL RULE: Start the script with a mind-blowing, highly engaging 3-second viral hook (e.g., a shocking statement, a scary question, or a mysterious fact) to grab the viewer's attention immediately. Make them stop scrolling! Do not use english transliteration. Include Synergy audio tags like [pause=1.0]."
+                    last_err = ""
+                    for key in keys_list:
+                        try:
+                            client = genai.Client(api_key=key)
+                            response = client.models.generate_content(model="gemini-2.5-flash", contents=story_prompt)
+                            fc_story_text = response.text.strip()
+                            break
+                        except Exception as e:
+                            last_err = str(e)
+                            continue
+                    if not fc_story_text:
+                        st.error(f"Story Error: Key အားလုံး Limit ပြည့်နေပါသည်။ {last_err}")
+                        st.stop()
 
             # STEP 2: Generate Audio
             with st.spinner("⏳ [အဆင့် ၂/၅] AI သရုပ်ဆောင်ဖြင့် အသံဖန်တီးနေပါသည်..."):
@@ -669,78 +687,104 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     fc_audio_dur = get_file_duration("fc_audio.wav")
                 except Exception as e: st.error(f"Audio Error: {e}"); st.stop()
 
-            # 👇 FIX: STEP 3 (Image Generation + Cinematic Animation using Hugging Face FLUX API)
-            with st.spinner("⏳ [အဆင့် ၃/၅] AI (Hugging Face) ဖြင့် ပုံများဖန်တီးပြီး Animation သွင်းနေပါသည်..."):
-                pbar.progress(50, text="🎨 AI ပုံရိပ်များ ဖန်တီးနေပါသည်...")
+            # STEP 3: Fallback Image/Video Generation (Pexels SD Video OR Manual Uploads)
+            with st.spinner("⏳ [အဆင့် ၃/၅] Visuals များကို ပြင်ဆင်နေပါသည်..."):
+                pbar.progress(50, text="🎥 Visuals ပြင်ဆင်နေပါသည်...")
                 try:
-                    search_keywords = []
-                    last_err = ""
-                    for key in keys_list:
-                        try:
-                            client = genai.Client(api_key=key)
-                            prompt_req = client.models.generate_content(model="gemini-2.5-flash", contents=f"Based on this story, give me exactly THREE detailed image generation prompts in English describing the core scenes. Make them cinematic, highly detailed, and dark/moody. Do not include any violent or explicitly scary words. Format strictly separated by a pipe '|'. Story: {fc_story_text[:200]}")
-                            search_keywords = prompt_req.text.split('|')[:3]
-                            break
-                        except Exception as e:
-                            last_err = str(e)
-                            continue
-                            
-                    if not search_keywords:
-                        st.error(f"Keyword Error: Key အားလုံး Limit ပြည့်နေပါသည်။ {last_err}")
-                        st.stop()
-                    
                     generated_clips = []
-                    clip_dur = fc_audio_dur / len(search_keywords)
-                    target_scale = "720x1280" if "9:16" in fc_ratio else "1280x720"
-
-                    hf_api_key = locals().get('hf_key_input', '').strip()
-                    if not hf_api_key:
-                        st.error("⚠️ Hugging Face API Key လိုအပ်ပါသည်။ Sidebar တွင် ထည့်သွင်းပေးပါ။")
-                        st.stop()
-
-                    hf_headers = {"Authorization": f"Bearer {hf_api_key}"}
-                    hf_api_url = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell"
-
-                    for i, img_prompt in enumerate(search_keywords):
-                        clean_prompt = img_prompt.strip()
-                        img_path = f"fc_img_{i}.jpg"
-                        clip_path = f"fc_clip_{i}.mp4"
-                        last_err = "" 
-                        
-                        img_downloaded = False
-                        
-                        for attempt in range(3):
-                            try:
-                                payload = {"inputs": f"{clean_prompt}, cinematic, masterpiece, 8k resolution, highly detailed"}
-                                img_res = requests.post(hf_api_url, headers=hf_headers, json=payload, timeout=60)
-                                
-                                if img_res.status_code == 200 and len(img_res.content) > 5000: 
-                                    with open(img_path, "wb") as f:
-                                        f.write(img_res.content)
-                                    img_downloaded = True
-                                    break
-                                else:
-                                    last_err = f"API Status: {img_res.status_code} - {img_res.text[:100]}"
-                                    time.sleep(2)
-                            except Exception as img_err: 
-                                last_err = str(img_err)
-                                time.sleep(2)
-
-                        if img_downloaded and os.path.exists(img_path):
-                            pbar.progress(50 + (i * 5), text=f"🎥 ပုံမှ ဗီဒီယိုသို့ ပြောင်းလဲနေပါသည် ({i+1}/{len(search_keywords)})...")
-                            subprocess.run([FFMPEG_BINARY, "-y", "-loop", "1", "-i", img_path, "-t", str(clip_dur), "-vf", f"scale=-2:2000,zoompan=z='min(zoom+0.001,1.15)':d={int(clip_dur*25)}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={target_scale},fps=25", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "superfast", clip_path], capture_output=True)
+                    target_scale = "720x1280" if "9:16" in fc_ratio else ("1280x720" if "16:9" in fc_ratio else "720x-2")
+                    
+                    if "Upload" in fc_visual_mode:
+                        clip_dur = fc_audio_dur / len(fc_uploaded_images)
+                        for i, img_file in enumerate(fc_uploaded_images):
+                            img_path = f"fc_img_{i}.jpg"
+                            clip_path = f"fc_clip_{i}.mp4"
+                            with open(img_path, "wb") as f:
+                                f.write(img_file.read())
+                            
+                            pbar.progress(50 + int((i/len(fc_uploaded_images))*15), text=f"🎥 Upload ပုံများကို Animation သွင်းနေပါသည် ({i+1}/{len(fc_uploaded_images)})...")
+                            # Ken Burns Animation for manual images
+                            subprocess.run([FFMPEG_BINARY, "-y", "-loop", "1", "-i", img_path, "-t", str(clip_dur), "-vf", f"scale=-2:2000,zoompan=z='min(zoom+0.001,1.15)':d={int(clip_dur*25)}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={target_scale.replace('x', ':')},fps=25", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "superfast", clip_path], capture_output=True)
                             if os.path.exists(clip_path):
                                 generated_clips.append(clip_path)
 
+                    else:
+                        # Auto-Fetch Pexels Videos (Restored safe & fast working logic)
+                        search_keywords = []
+                        last_err = ""
+                        for key in keys_list:
+                            try:
+                                client = genai.Client(api_key=key)
+                                prompt_req = client.models.generate_content(model="gemini-2.5-flash", contents=f"Based on this story, give me exactly THREE short, distinct English search keywords (max 3 words each) describing the scenery. Avoid any violent, gory, or explicitly scary words. Format strictly separated by a pipe '|'. Story: {fc_story_text[:200]}")
+                                search_keywords = prompt_req.text.split('|')[:3]
+                                break
+                            except Exception as e:
+                                last_err = str(e)
+                                continue
+                                
+                        if not search_keywords:
+                            st.error(f"Keyword Error: Key အားလုံး Limit ပြည့်နေပါသည်။ {last_err}")
+                            st.stop()
+                        
+                        pexels_api_key = locals().get('pexels_key_input', '').strip()
+                        step3_start_time = time.time()
+                        total_clips = len(search_keywords)
+                        
+                        def fetch_pexels_clip(kw, idx):
+                            try:
+                                clean_kw = kw.strip().replace(" ", "+")
+                                orientation = "portrait" if "9:16" in fc_ratio else "landscape"
+                                best_link = None
+                                
+                                if pexels_api_key:
+                                    headers = {"Authorization": pexels_api_key}
+                                    pexels_url = f"https://api.pexels.com/videos/search?query={clean_kw}&orientation={orientation}&per_page=1"
+                                    res = requests.get(pexels_url, headers=headers, timeout=30)
+                                    if res.status_code == 200 and res.json().get('videos'):
+                                        video_files = res.json()['videos'][0]['video_files']
+                                        sd_links = [vf['link'] for vf in video_files if vf['quality'] == 'sd']
+                                        best_link = sd_links[0] if sd_links else video_files[0]['link']
+                                else:
+                                    search_url = f"https://www.pexels.com/search/videos/{clean_kw}/?orientation={orientation}"
+                                    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+                                    html_res = requests.get(search_url, headers=headers, timeout=30)
+                                    match = re.search(r'https://player.vimeo.com/external/[^\s"\'<>]+', html_res.text)
+                                    if match: best_link = match.group(0)
+                                
+                                if best_link:
+                                    raw_path = f"raw_fc_clip_{idx}.mp4"
+                                    vid_res = requests.get(best_link, stream=True, timeout=60)
+                                    if vid_res.status_code == 200:
+                                        with open(raw_path, "wb") as f:
+                                            for chunk in vid_res.iter_content(chunk_size=1024 * 1024): 
+                                                if chunk: f.write(chunk)
+                                        
+                                        clip_path = f"fc_clip_{idx}.mp4"
+                                        scale_filter = "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280" if "9:16" in fc_ratio else ("scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720" if "16:9" in fc_ratio else "scale=720:-2")
+                                        subprocess.run([FFMPEG_BINARY, "-y", "-i", raw_path, "-vf", f"{scale_filter},fps=25,format=yuv420p", "-c:v", "libx264", "-preset", "superfast", "-crf", "26", "-an", clip_path], capture_output=True)
+                                        if os.path.exists(raw_path): os.remove(raw_path) 
+                                        return clip_path
+                            except: pass
+                            return None
+
+                        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+                            futures = [executor.submit(fetch_pexels_clip, kw, i) for i, kw in enumerate(search_keywords)]
+                            completed = 0
+                            for future in concurrent.futures.as_completed(futures):
+                                completed += 1
+                                pbar.progress(50 + (completed * 5), text=f"🎥 Pexels ဗီဒီယို ဆွဲယူနေပါသည် (Clip {completed}/{total_clips})...")
+                        
+                        generated_clips = [f"fc_clip_{i}.mp4" for i in range(total_clips) if os.path.exists(f"fc_clip_{i}.mp4")]
+
                     if not generated_clips:
-                        st.error(f"❌ Image Generation Failed. Hugging Face API error: {last_err}")
+                        st.error("❌ Visual Generation Failed. ပုံရိပ် သို့မဟုတ် ဗီဒီယို ပြင်ဆင်၍ မရပါ။")
                         st.stop()
                     
                     pbar.progress(65, text="🎞️ ဗီဒီယိုများကို ပေါင်းစပ်နေပါသည်...")
                     with open("fc_concat.txt", "w") as f:
                         for c in generated_clips: f.write(f"file '{c}'\n")
                     
-                    subprocess.run([FFMPEG_BINARY, "-y", "-f", "concat", "-safe", "0", "-i", "fc_concat.txt", "-t", str(fc_audio_dur), "-c", "copy", "fc_video_loop.mp4"], capture_output=True)
+                    subprocess.run([FFMPEG_BINARY, "-y", "-stream_loop", "-1", "-f", "concat", "-safe", "0", "-i", "fc_concat.txt", "-t", str(fc_audio_dur), "-c", "copy", "fc_video_loop.mp4"], capture_output=True)
                 except Exception as e: st.error(f"Visual Error: {e}"); st.stop()
 
             # STEP 4: SRT Sync
