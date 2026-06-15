@@ -216,7 +216,9 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
                     h, m, s_ms = t.split(':'); s, ms = s_ms.split(',')
                     return int(h)*3600 + int(m)*60 + int(s) + int(ms.ljust(3, '0'))/1000.0
                 text_content = block.strip()
-                if use_fade: text_content = "{\\fad(250,250)}" + text_content
+                # 👇 FIX: Changed simple fade to Pro Pop-up Animation for highly engaging subtitles!
+                if use_fade: 
+                    text_content = "{\\fscx0\\fscy0\\t(0,150,\\fscx100\\fscy100)}" + text_content
                 parsed_lines.append((to_sec(start_str), to_sec(end_str), text_content))
                 full_speech.append(block.strip())
             except: pass
@@ -308,6 +310,11 @@ with st.sidebar:
         saved_pexels = load_key(PEXELS_KEY_FILE)
         pexels_key_input = st.text_input("Pexels API Key (Optional for SD Video)", type="password", value=saved_pexels)
         if pexels_key_input and pexels_key_input != saved_pexels: save_key(PEXELS_KEY_FILE, pexels_key_input)
+        
+        # 👇 NEW: Added Groq API Key specifically for Whisper Accurate Sync in Faceless Studio
+        saved_groq_fc = load_key(GROQ_KEY_FILE)
+        groq_key_fc = st.text_input("Groq API Key (For Accurate Whisper Subtitle Sync)", type="password", value=saved_groq_fc)
+        if groq_key_fc and groq_key_fc != saved_groq_fc: save_key(GROQ_KEY_FILE, groq_key_fc)
 
 # =====================================================================
 # 📌 MODE 1 - MOVIE DUBBING
@@ -625,7 +632,6 @@ elif app_mode == "🎙️ Faceless Channel Studio":
         fc_bgm = st.selectbox("🎼 Background Music", bgm_options, key="fc_bgm")
         fc_bgm_vol = st.slider("🔊 BGM Volume", 1, 50, 8, key="fc_bgm_vol") / 100.0
 
-    # 👇 NEW: Manual Override Options inside the Main View
     st.markdown('<div class="setting-panel"><h4>🛠️ Manual Controls (Optional)</h4>', unsafe_allow_html=True)
     col_fc1, col_fc2 = st.columns(2)
     with col_fc1:
@@ -691,7 +697,6 @@ elif app_mode == "🎙️ Faceless Channel Studio":
             with st.spinner("⏳ [အဆင့် ၃/၅] Visuals များကို ပြင်ဆင်နေပါသည်..."):
                 pbar.progress(50, text="🎥 Visuals ပြင်ဆင်နေပါသည်...")
                 try:
-                    # 👇 FIX: Clean up old files first to prevent reusing them!
                     for old_idx in range(20):
                         for prefix in ["fc_clip_", "raw_fc_clip_", "fc_img_"]:
                             old_file = f"{prefix}{old_idx}.mp4" if "clip" in prefix else f"{prefix}{old_idx}.jpg"
@@ -699,7 +704,6 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     if os.path.exists("fc_concat.txt"): os.remove("fc_concat.txt")
 
                     generated_clips = []
-                    # Changed target_scale fallback to prevent ffmpeg parsing error with "720x-2"
                     target_scale = "720x1280" if "9:16" in fc_ratio else "1280x720"
                     
                     if "Upload" in fc_visual_mode:
@@ -707,18 +711,16 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                         for i, img_file in enumerate(fc_uploaded_images):
                             img_path = f"fc_img_{i}.jpg"
                             clip_path = f"fc_clip_{i}.mp4"
-                            img_file.seek(0) # Safety read for Streamlit file uploader
+                            img_file.seek(0)
                             with open(img_path, "wb") as f:
                                 f.write(img_file.read())
                             
                             pbar.progress(50 + int((i/len(fc_uploaded_images))*15), text=f"🎥 Upload ပုံများကို Animation သွင်းနေပါသည် ({i+1}/{len(fc_uploaded_images)})...")
-                            # 👇 FIX: Removed .replace('x', ':') inside zoompan which caused FFmpeg to crash
                             subprocess.run([FFMPEG_BINARY, "-y", "-loop", "1", "-i", img_path, "-t", str(clip_dur), "-vf", f"scale=-2:2000,zoompan=z='min(zoom+0.001,1.15)':d={int(clip_dur*25)}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={target_scale},fps=25", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "superfast", clip_path], capture_output=True)
                             if os.path.exists(clip_path):
                                 generated_clips.append(clip_path)
 
                     else:
-                        # Auto-Fetch Pexels Videos
                         search_keywords = []
                         last_err = ""
                         for key in keys_list:
@@ -796,39 +798,65 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     subprocess.run([FFMPEG_BINARY, "-y", "-stream_loop", "-1", "-f", "concat", "-safe", "0", "-i", "fc_concat.txt", "-t", str(fc_audio_dur), "-c", "copy", "fc_video_loop.mp4"], capture_output=True)
                 except Exception as e: st.error(f"Visual Error: {e}"); st.stop()
 
-            # STEP 4: SRT Sync
+            # 👇 FIX: STEP 4 - Dual Sync Engine (Groq Whisper + Gemini Formatter with Emoji)
             with st.spinner("⏳ [အဆင့် ၄/၅] စာတန်းထိုးများကို Alex Hormozi ပုံစံ ချိန်ညှိနေပါသည်..."):
                 pbar.progress(70, text="📝 Timeline ချိန်ညှိနေပါသည်...")
                 fc_parsed = None
                 last_err = ""
-                for key in keys_list:
+                groq_key_val = locals().get('groq_key_fc', '').strip()
+
+                if groq_key_val:
                     try:
-                        client = genai.Client(api_key=key)
-                        audio_upload = client.files.upload(file="fc_audio.wav")
-                        while "PROCESSING" in str(client.files.get(name=audio_upload.name).state): time.sleep(2)
+                        pbar.progress(72, text="📝 Whisper ဖြင့် အသံအား တိကျစွာ ဖြတ်တောက်နေပါသည်...")
+                        client_groq = Groq(api_key=groq_key_val)
+                        with open("fc_audio.wav", "rb") as file:
+                            raw_srt = client_groq.audio.transcriptions.create(
+                                file=("fc_audio.wav", file.read()),
+                                model="whisper-large-v3",
+                                response_format="srt",
+                            )
                         
-                        srt_prompt = "Listen to the audio. Output ONLY a valid SRT file in Burmese. CRITICAL RULE: Each subtitle block MUST contain ONLY 1 to 4 words maximum (fast-paced TikTok style). Ensure timestamps are precise. No markdown."
-                        srt_res = client.models.generate_content(model="gemini-2.5-flash", contents=[audio_upload, srt_prompt])
+                        pbar.progress(78, text="📝 AI ဖြင့် Emoji များ ထည့်သွင်းနေပါသည်...")
+                        client_gemini = genai.Client(api_key=keys_list[0])
+                        srt_prompt = f"Rewrite this Burmese SRT file into fast-paced TikTok style. CRITICAL RULES:\n1. Break down the subtitles into chunks of ONLY 1 to 4 words maximum per block.\n2. Interpolate the timestamps accurately to fit the original timeframe.\n3. Add ONE relevant emoji at the end of every subtitle block to make it engaging.\n4. Output ONLY valid SRT format without any markdown blocks.\n\nOriginal SRT:\n{raw_srt}"
+                        srt_res = client_gemini.models.generate_content(model="gemini-2.5-flash", contents=srt_prompt)
+                        fc_srt_text = srt_res.text.strip().replace("```srt", "").replace("```", "")
                         
-                        marker = chr(96) * 3
-                        fc_srt_text = srt_res.text.strip().replace(f"{marker}srt", "").replace(marker, "")
-                        
-                        fc_parsed, _ = parse_and_save_real_srt(fc_srt_text, "subtitles.srt")
-                        client.files.delete(name=audio_upload.name)
-                        break
+                        fc_parsed, _ = parse_and_save_real_srt(fc_srt_text, "subtitles.srt", use_fade=True) # use_fade=True triggers Pop-up animation now
                     except Exception as e:
                         last_err = str(e)
-                        continue
+                
+                # Fallback to Gemini alone if Groq fails or no key provided
+                if not fc_parsed:
+                    for key in keys_list:
+                        try:
+                            client = genai.Client(api_key=key)
+                            audio_upload = client.files.upload(file="fc_audio.wav")
+                            while "PROCESSING" in str(client.files.get(name=audio_upload.name).state): time.sleep(2)
+                            
+                            srt_prompt = "Listen to the audio. Output ONLY a valid SRT file in Burmese. CRITICAL RULE: Each subtitle block MUST contain ONLY 1 to 4 words maximum (fast-paced TikTok style). Add ONE relevant emoji at the end of every subtitle line to make it engaging. Ensure timestamps are precise. No markdown."
+                            srt_res = client.models.generate_content(model="gemini-2.5-flash", contents=[audio_upload, srt_prompt])
+                            
+                            marker = chr(96) * 3
+                            fc_srt_text = srt_res.text.strip().replace(f"{marker}srt", "").replace(marker, "")
+                            
+                            fc_parsed, _ = parse_and_save_real_srt(fc_srt_text, "subtitles.srt", use_fade=True) # use_fade=True triggers Pop-up animation now
+                            client.files.delete(name=audio_upload.name)
+                            break
+                        except Exception as e:
+                            last_err = str(e)
+                            continue
                         
                 if not fc_parsed:
-                    st.error(f"SRT Error: Key အားလုံး Limit ပြည့်နေပါသည်။ {last_err}")
+                    st.error(f"SRT Error: ကျေးဇူးပြု၍ API Limit သို့မဟုတ် Key မှန်ကန်မှု စစ်ဆေးပါ။ {last_err}")
                     st.stop()
 
             # STEP 5: Final Master Rendering
             with st.spinner("⏳ [အဆင့် ၅/၅] အားလုံးကိုပေါင်းစပ်ပြီး Master Video ထုတ်လုပ်နေပါသည်..."):
                 pbar.progress(85, text="🎬 Master Rendering အလုပ်လုပ်နေပါသည်...")
                 try:
-                    dyn_fc_style = f"FontName=Pyidaungsu,FontSize=22,PrimaryColour=&H0000FFFF,BackColour=&H90000000,BorderStyle=3,Outline=0,Shadow=1,Alignment=5,MarginV=80"
+                    # 👇 FIX: Pro-Level Subtitle Styling (Bold, Thick Outline, Drop Shadow, Center Alignment)
+                    dyn_fc_style = f"FontName=Pyidaungsu,FontSize=24,PrimaryColour=&H0000FFFF,BackColour=&H00000000,BorderStyle=1,Outline=2.5,Shadow=2,Bold=1,Alignment=5,MarginV=80"
                     
                     success, err_msg = render_premium_saas_video("fc_video_loop.mp4", "fc_audio.wav", fc_parsed, "FACELESS_FINAL.mp4", fc_ratio, use_bypass=True, subtitle_mode=fc_subtitle_mode, sub_style_str=dyn_fc_style)
                     
