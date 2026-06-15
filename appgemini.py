@@ -691,25 +691,34 @@ elif app_mode == "🎙️ Faceless Channel Studio":
             with st.spinner("⏳ [အဆင့် ၃/၅] Visuals များကို ပြင်ဆင်နေပါသည်..."):
                 pbar.progress(50, text="🎥 Visuals ပြင်ဆင်နေပါသည်...")
                 try:
+                    # 👇 FIX: Clean up old files first to prevent reusing them!
+                    for old_idx in range(20):
+                        for prefix in ["fc_clip_", "raw_fc_clip_", "fc_img_"]:
+                            old_file = f"{prefix}{old_idx}.mp4" if "clip" in prefix else f"{prefix}{old_idx}.jpg"
+                            if os.path.exists(old_file): os.remove(old_file)
+                    if os.path.exists("fc_concat.txt"): os.remove("fc_concat.txt")
+
                     generated_clips = []
-                    target_scale = "720x1280" if "9:16" in fc_ratio else ("1280x720" if "16:9" in fc_ratio else "720x-2")
+                    # Changed target_scale fallback to prevent ffmpeg parsing error with "720x-2"
+                    target_scale = "720x1280" if "9:16" in fc_ratio else "1280x720"
                     
                     if "Upload" in fc_visual_mode:
                         clip_dur = fc_audio_dur / len(fc_uploaded_images)
                         for i, img_file in enumerate(fc_uploaded_images):
                             img_path = f"fc_img_{i}.jpg"
                             clip_path = f"fc_clip_{i}.mp4"
+                            img_file.seek(0) # Safety read for Streamlit file uploader
                             with open(img_path, "wb") as f:
                                 f.write(img_file.read())
                             
                             pbar.progress(50 + int((i/len(fc_uploaded_images))*15), text=f"🎥 Upload ပုံများကို Animation သွင်းနေပါသည် ({i+1}/{len(fc_uploaded_images)})...")
-                            # Ken Burns Animation for manual images
-                            subprocess.run([FFMPEG_BINARY, "-y", "-loop", "1", "-i", img_path, "-t", str(clip_dur), "-vf", f"scale=-2:2000,zoompan=z='min(zoom+0.001,1.15)':d={int(clip_dur*25)}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={target_scale.replace('x', ':')},fps=25", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "superfast", clip_path], capture_output=True)
+                            # 👇 FIX: Removed .replace('x', ':') inside zoompan which caused FFmpeg to crash
+                            subprocess.run([FFMPEG_BINARY, "-y", "-loop", "1", "-i", img_path, "-t", str(clip_dur), "-vf", f"scale=-2:2000,zoompan=z='min(zoom+0.001,1.15)':d={int(clip_dur*25)}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={target_scale},fps=25", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "superfast", clip_path], capture_output=True)
                             if os.path.exists(clip_path):
                                 generated_clips.append(clip_path)
 
                     else:
-                        # Auto-Fetch Pexels Videos (Restored safe & fast working logic)
+                        # Auto-Fetch Pexels Videos
                         search_keywords = []
                         last_err = ""
                         for key in keys_list:
@@ -777,7 +786,7 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                         generated_clips = [f"fc_clip_{i}.mp4" for i in range(total_clips) if os.path.exists(f"fc_clip_{i}.mp4")]
 
                     if not generated_clips:
-                        st.error("❌ Visual Generation Failed. ပုံရိပ် သို့မဟုတ် ဗီဒီယို ပြင်ဆင်၍ မရပါ။")
+                        st.error("❌ Visual Generation Failed. Visual source ကို ပြင်ဆင်၍ မရပါ။")
                         st.stop()
                     
                     pbar.progress(65, text="🎞️ ဗီဒီယိုများကို ပေါင်းစပ်နေပါသည်...")
