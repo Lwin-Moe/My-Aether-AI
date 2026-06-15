@@ -193,43 +193,75 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
         finally:
             if os.path.exists(temp_out): os.remove(temp_out)
 
+# 👇 FIX: Totally Rewritten Robust SRT Parser to fix LLM Timestamp Hallucinations
 def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
     marker = chr(96) * 3
     clean_srt = raw_srt_text.replace(f"{marker}srt", "").replace(marker, "").strip()
-    with open(output_file, "w", encoding="utf-8-sig") as f: f.write(clean_srt)
     parsed_lines = []
     full_speech = []
-    matches = list(re.finditer(r'(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})', clean_srt))
+    
+    # Matches any sequence of numbers separated by colon/comma/dot (extremely robust against missing hours)
+    matches = list(re.finditer(r'(\d+(?:[:.,]\d+)+)\s*-->\s*(\d+(?:[:.,]\d+)+)', clean_srt))
     for i in range(len(matches)):
-        start_str = matches[i].group(1).replace('.', ',')
-        end_str = matches[i].group(2).replace('.', ',')
+        start_str = matches[i].group(1)
+        end_str = matches[i].group(2)
         text_start = matches[i].end()
         if i + 1 < len(matches):
             block = clean_srt[text_start:matches[i+1].start()].strip()
             lines = block.split('\n')
             if len(lines) > 0 and lines[-1].strip().isdigit(): lines.pop()
             block = " ".join(lines)
-        else: block = clean_srt[text_start:].strip().replace('\n', ' ')
+        else: 
+            block = clean_srt[text_start:].strip().replace('\n', ' ')
+        
         if block:
             try:
                 def to_sec(t):
-                    h, m, s_ms = t.split(':'); s, ms = s_ms.split(',')
+                    t = t.replace('.', ',')
+                    if ',' not in t and t.count(':') >= 2:
+                        t = ','.join(t.rsplit(':', 1))
+                    parts = t.split(':')
+                    if len(parts) == 2:
+                        h = 0
+                        m, s_ms = parts
+                    elif len(parts) == 3:
+                        h, m, s_ms = parts
+                    else:
+                        h, m, s_ms = parts[-3], parts[-2], parts[-1]
+                    if ',' in s_ms:
+                        s, ms = s_ms.split(',')
+                    else:
+                        s, ms = s_ms, '0'
                     return int(h)*3600 + int(m)*60 + int(s) + int(ms.ljust(3, '0'))/1000.0
+                    
                 text_content = block.strip()
-                # 👇 FIX: Changed simple fade to Pro Pop-up Animation for highly engaging subtitles!
-                if use_fade: 
+                # Clean up emotion tags before adding ASS tags so they don't appear on screen
+                text_content = re.sub(r'\[.*?\]', '', text_content)
+                text_content = re.sub(r'\{.*?\}', '', text_content).strip()
+                
+                # Alex Hormozi Pop-up Animation Effect
+                if use_fade and text_content: 
                     text_content = "{\\fscx0\\fscy0\\t(0,150,\\fscx100\\fscy100)}" + text_content
+                    
                 parsed_lines.append((to_sec(start_str), to_sec(end_str), text_content))
                 full_speech.append(block.strip())
             except: pass
+
     if not parsed_lines:
         text_only = re.sub(r'^\d+\s*$', '', clean_srt, flags=re.MULTILINE).strip()
         if text_only:
              parsed_lines.append((0.0, min(10.0, len(text_only)*0.1), text_only))
              full_speech.append(text_only)
         else:
-             parsed_lines.append((0.0, 10.0, "[pause=1.0] စာတန်းထိုး အပြောင်းအလဲလုပ်နေပါသည်။"))
-             full_speech.append("[pause=1.0] စာတန်းထိုး အပြောင်းအလဲလုပ်နေပါသည်။")
+             parsed_lines.append((0.0, 10.0, "စာတန်းထိုး အပြောင်းအလဲလုပ်နေပါသည်။"))
+             full_speech.append("စာတန်းထိုး အပြောင်းအလဲလုပ်နေပါသည်။")
+
+    # Safe write back with proper format
+    with open(output_file, "w", encoding="utf-8-sig") as f:
+        for i, (start, end, text) in enumerate(parsed_lines, start=1):
+            def fmt_t(s): return f"{int(s//3600):02d}:{int((s%3600)//60):02d}:{int(s%60):02d},{int((s-int(s))*1000):03d}"
+            f.write(f"{i}\n{fmt_t(start)} --> {fmt_t(end)}\n{text}\n\n")
+
     return parsed_lines, " ".join(full_speech)
 
 def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_bypass=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)", use_mirror=False, use_color=False, use_grain=False, use_fps=False, sub_style_str="", use_freeze=False, logo_path=None):
@@ -239,14 +271,13 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         safe_srt_path = os.path.abspath("subtitles.srt").replace('\\', '/')
         safe_srt_path_escaped = safe_srt_path.replace(':', '\\:')
         
+        # 👇 FIX: Stop stripping ASS tags during final overwrite
         with open("subtitles.srt", "w", encoding="utf-8-sig") as f:
             for i, (start, end, text) in enumerate(parsed_timestamps, start=1):
                 if start >= v_max_dur: continue
                 safe_end = min(end, v_max_dur)
                 def fmt_t(s): return f"{int(s//3600):02d}:{int((s%3600)//60):02d}:{int(s%60):02d},{int((s-int(s))*1000):03d}"
-                clean_text = re.sub(r'\[.*?\]', '', text)
-                clean_text = re.sub(r'\{.*?\}', '', clean_text).strip()
-                f.write(f"{i}\n{fmt_t(start)} --> {fmt_t(safe_end)}\n{clean_text}\n\n")
+                f.write(f"{i}\n{fmt_t(start)} --> {fmt_t(safe_end)}\n{text}\n\n")
         
         video = ffmpeg.input(in_v).video
         if use_bypass: video = ffmpeg.filter(video, 'scale', '2*trunc(iw*1.08/2)', '2*trunc(ih*1.08/2)').filter('crop', 'iw/1.08', 'ih/1.08')
@@ -311,7 +342,6 @@ with st.sidebar:
         pexels_key_input = st.text_input("Pexels API Key (Optional for SD Video)", type="password", value=saved_pexels)
         if pexels_key_input and pexels_key_input != saved_pexels: save_key(PEXELS_KEY_FILE, pexels_key_input)
         
-        # 👇 NEW: Added Groq API Key specifically for Whisper Accurate Sync in Faceless Studio
         saved_groq_fc = load_key(GROQ_KEY_FILE)
         groq_key_fc = st.text_input("Groq API Key (For Accurate Whisper Subtitle Sync)", type="password", value=saved_groq_fc)
         if groq_key_fc and groq_key_fc != saved_groq_fc: save_key(GROQ_KEY_FILE, groq_key_fc)
@@ -818,11 +848,12 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                         
                         pbar.progress(78, text="📝 AI ဖြင့် Emoji များ ထည့်သွင်းနေပါသည်...")
                         client_gemini = genai.Client(api_key=keys_list[0])
-                        srt_prompt = f"Rewrite this Burmese SRT file into fast-paced TikTok style. CRITICAL RULES:\n1. Break down the subtitles into chunks of ONLY 1 to 4 words maximum per block.\n2. Interpolate the timestamps accurately to fit the original timeframe.\n3. Add ONE relevant emoji at the end of every subtitle block to make it engaging.\n4. Output ONLY valid SRT format without any markdown blocks.\n\nOriginal SRT:\n{raw_srt}"
+                        srt_prompt = f"Rewrite this Burmese SRT file into fast-paced TikTok style. CRITICAL RULES:\n1. Break down the subtitles into chunks of ONLY 1 to 4 words maximum per block.\n2. Interpolate the timestamps accurately and ALWAYS use strict 'HH:MM:SS,mmm' format (do not omit the '00:' for hours).\n3. Add ONE relevant emoji at the end of every subtitle block to make it engaging.\n4. Output ONLY valid SRT format without any markdown blocks.\n\nOriginal SRT:\n{raw_srt}"
                         srt_res = client_gemini.models.generate_content(model="gemini-2.5-flash", contents=srt_prompt)
-                        fc_srt_text = srt_res.text.strip().replace("```srt", "").replace("```", "")
+                        fc_srt_text = srt_res.text.strip().replace("```srt", "").replace("
+```", "")
                         
-                        fc_parsed, _ = parse_and_save_real_srt(fc_srt_text, "subtitles.srt", use_fade=True) # use_fade=True triggers Pop-up animation now
+                        fc_parsed, _ = parse_and_save_real_srt(fc_srt_text, "subtitles.srt", use_fade=True)
                     except Exception as e:
                         last_err = str(e)
                 
@@ -834,13 +865,13 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                             audio_upload = client.files.upload(file="fc_audio.wav")
                             while "PROCESSING" in str(client.files.get(name=audio_upload.name).state): time.sleep(2)
                             
-                            srt_prompt = "Listen to the audio. Output ONLY a valid SRT file in Burmese. CRITICAL RULE: Each subtitle block MUST contain ONLY 1 to 4 words maximum (fast-paced TikTok style). Add ONE relevant emoji at the end of every subtitle line to make it engaging. Ensure timestamps are precise. No markdown."
+                            srt_prompt = "Listen to the audio. Output ONLY a valid SRT file in Burmese. CRITICAL RULE: Each subtitle block MUST contain ONLY 1 to 4 words maximum (fast-paced TikTok style). Add ONE relevant emoji at the end of every subtitle line to make it engaging. ALWAYS use strict 'HH:MM:SS,mmm' format. No markdown."
                             srt_res = client.models.generate_content(model="gemini-2.5-flash", contents=[audio_upload, srt_prompt])
                             
                             marker = chr(96) * 3
                             fc_srt_text = srt_res.text.strip().replace(f"{marker}srt", "").replace(marker, "")
                             
-                            fc_parsed, _ = parse_and_save_real_srt(fc_srt_text, "subtitles.srt", use_fade=True) # use_fade=True triggers Pop-up animation now
+                            fc_parsed, _ = parse_and_save_real_srt(fc_srt_text, "subtitles.srt", use_fade=True)
                             client.files.delete(name=audio_upload.name)
                             break
                         except Exception as e:
