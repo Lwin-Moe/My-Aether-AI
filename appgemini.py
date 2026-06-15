@@ -38,7 +38,7 @@ if not os.path.exists("Pyidaungsu.ttf"):
     try:
         # Fallback to Padauk (Google Fonts) which supports Myanmar Unicode perfectly, and save it as Pyidaungsu.ttf
         import urllib.request
-        urllib.request.urlretrieve("https://github.com/google/fonts/raw/main/ofl/padauk/Padauk-Regular.ttf", "Pyidaungsu.ttf")
+        urllib.request.urlretrieve("[https://github.com/google/fonts/raw/main/ofl/padauk/Padauk-Regular.ttf](https://github.com/google/fonts/raw/main/ofl/padauk/Padauk-Regular.ttf)", "Pyidaungsu.ttf")
     except:
         pass
 
@@ -69,7 +69,7 @@ st.set_page_config(page_title="AETHER STUDIO V52", layout="wide", page_icon="�
 
 st.markdown('''
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Montserrat:wght@500;700;800;900&display=swap');
+    @import url('[https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Montserrat:wght@500;700;800;900&display=swap](https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Montserrat:wght@500;700;800;900&display=swap)');
     .stApp { background-color: #0b0f19 !important; background-image: radial-gradient(circle at top, #161b2e 0%, #0b0f19 60%) !important; color: #cbd5e1 !important; font-family: 'Inter', sans-serif; }
     section[data-testid="stSidebar"] { background-color: #0d111c !important; border-right: 1px solid rgba(255, 255, 255, 0.05) !important; }
     h1, h2, h3, h4 { font-family: 'Montserrat', sans-serif !important; color: #f8fafc !important; font-weight: 700 !important; }
@@ -145,7 +145,7 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
         
         last_err = ""
         for idx, current_key in enumerate(keys_list):
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key={current_key}"
+            url = f"[https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key=){current_key}"
             try:
                 res = requests.post(url, json=payload, timeout=300)
                 if res.status_code == 200:
@@ -166,12 +166,12 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
         if not os.path.exists(temp_out): raise Exception(f"Keys Exhausted. {last_err}")
     elif "ElevenLabs" in engine:
         voice_id = custom_eleven_id.strip() if custom_eleven_id else ("21m00Tcm4TlvDq8ikWAM" if "Male" in voice_model else "AZnzlk1XvdvUeBnXmlld")
-        res = requests.post(f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}", json={"text": text, "model_id": "eleven_multilingual_v2"}, headers={"xi-api-key": eleven_key}, timeout=300)
+        res = requests.post(f"[https://api.elevenlabs.io/v1/text-to-speech/](https://api.elevenlabs.io/v1/text-to-speech/){voice_id}", json={"text": text, "model_id": "eleven_multilingual_v2"}, headers={"xi-api-key": eleven_key}, timeout=300)
         if res.status_code == 200:
             with open(temp_out, "wb") as f: f.write(res.content)
     elif "TTSMaker" in engine:
         voice_id = 781 if "Female" in voice_model else 780
-        res = requests.post("https://api.ttsmaker.com/v1/create-tts-order", json={"tts_api_key": ttsmaker_key, "tts_text": text, "voice_id": voice_id, "audio_format": "mp3"}, timeout=300).json()
+        res = requests.post("[https://api.ttsmaker.com/v1/create-tts-order](https://api.ttsmaker.com/v1/create-tts-order)", json={"tts_api_key": ttsmaker_key, "tts_text": text, "voice_id": voice_id, "audio_format": "mp3"}, timeout=300).json()
         if res.get("status") == "success":
             with open(temp_out, "wb") as f: f.write(requests.get(res["audio_file_url"]).content)
     else:
@@ -193,14 +193,13 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
         finally:
             if os.path.exists(temp_out): os.remove(temp_out)
 
-# 👇 FIX: Totally Rewritten Robust SRT Parser to fix LLM Timestamp Hallucinations
+# 👇 FIX: Robust SRT Parser to fix LLM Timestamp Hallucinations
 def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
     marker = chr(96) * 3
     clean_srt = raw_srt_text.replace(f"{marker}srt", "").replace(marker, "").strip()
     parsed_lines = []
     full_speech = []
     
-    # Matches any sequence of numbers separated by colon/comma/dot (extremely robust against missing hours)
     matches = list(re.finditer(r'(\d+(?:[:.,]\d+)+)\s*-->\s*(\d+(?:[:.,]\d+)+)', clean_srt))
     for i in range(len(matches)):
         start_str = matches[i].group(1)
@@ -235,7 +234,7 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
                     return int(h)*3600 + int(m)*60 + int(s) + int(ms.ljust(3, '0'))/1000.0
                     
                 text_content = block.strip()
-                # Clean up emotion tags before adding ASS tags so they don't appear on screen
+                # Clean up emotion tags before adding ASS tags
                 text_content = re.sub(r'\[.*?\]', '', text_content)
                 text_content = re.sub(r'\{.*?\}', '', text_content).strip()
                 
@@ -256,7 +255,6 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
              parsed_lines.append((0.0, 10.0, "စာတန်းထိုး အပြောင်းအလဲလုပ်နေပါသည်။"))
              full_speech.append("စာတန်းထိုး အပြောင်းအလဲလုပ်နေပါသည်။")
 
-    # Safe write back with proper format
     with open(output_file, "w", encoding="utf-8-sig") as f:
         for i, (start, end, text) in enumerate(parsed_lines, start=1):
             def fmt_t(s): return f"{int(s//3600):02d}:{int((s%3600)//60):02d}:{int(s%60):02d},{int((s-int(s))*1000):03d}"
@@ -271,7 +269,6 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         safe_srt_path = os.path.abspath("subtitles.srt").replace('\\', '/')
         safe_srt_path_escaped = safe_srt_path.replace(':', '\\:')
         
-        # 👇 FIX: Stop stripping ASS tags during final overwrite
         with open("subtitles.srt", "w", encoding="utf-8-sig") as f:
             for i, (start, end, text) in enumerate(parsed_timestamps, start=1):
                 if start >= v_max_dur: continue
@@ -779,17 +776,17 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                                 
                                 if pexels_api_key:
                                     headers = {"Authorization": pexels_api_key}
-                                    pexels_url = f"https://api.pexels.com/videos/search?query={clean_kw}&orientation={orientation}&per_page=1"
+                                    pexels_url = f"[https://api.pexels.com/videos/search?query=](https://api.pexels.com/videos/search?query=){clean_kw}&orientation={orientation}&per_page=1"
                                     res = requests.get(pexels_url, headers=headers, timeout=30)
                                     if res.status_code == 200 and res.json().get('videos'):
                                         video_files = res.json()['videos'][0]['video_files']
                                         sd_links = [vf['link'] for vf in video_files if vf['quality'] == 'sd']
                                         best_link = sd_links[0] if sd_links else video_files[0]['link']
                                 else:
-                                    search_url = f"https://www.pexels.com/search/videos/{clean_kw}/?orientation={orientation}"
+                                    search_url = f"[https://www.pexels.com/search/videos/](https://www.pexels.com/search/videos/){clean_kw}/?orientation={orientation}"
                                     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
                                     html_res = requests.get(search_url, headers=headers, timeout=30)
-                                    match = re.search(r'https://player.vimeo.com/external/[^\s"\'<>]+', html_res.text)
+                                    match = re.search(r'[https://player.vimeo.com/external/](https://player.vimeo.com/external/)[^\s"\'<>]+', html_res.text)
                                     if match: best_link = match.group(0)
                                 
                                 if best_link:
@@ -829,7 +826,7 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                 except Exception as e: st.error(f"Visual Error: {e}"); st.stop()
 
             # 👇 FIX: STEP 4 - Dual Sync Engine (Groq Whisper + Gemini Formatter with Emoji)
-            with st.spinner("⏳ [အဆင့် ၄/၅] စာတန်းထိုးများကို Alex Hormozi ပုံစံ ချိန်ညှိနေပါသည်..."):
+            with st.spinner("⏳ [အဆင့် ၄/၅] စာတန်းထိုးများကို ချိန်ညှိနေပါသည်..."):
                 pbar.progress(70, text="📝 Timeline ချိန်ညှိနေပါသည်...")
                 fc_parsed = None
                 last_err = ""
@@ -848,10 +845,11 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                         
                         pbar.progress(78, text="📝 AI ဖြင့် Emoji များ ထည့်သွင်းနေပါသည်...")
                         client_gemini = genai.Client(api_key=keys_list[0])
-                        srt_prompt = f"Rewrite this Burmese SRT file into fast-paced TikTok style. CRITICAL RULES:\n1. Break down the subtitles into chunks of ONLY 1 to 4 words maximum per block.\n2. Interpolate the timestamps accurately and ALWAYS use strict 'HH:MM:SS,mmm' format (do not omit the '00:' for hours).\n3. Add ONE relevant emoji at the end of every subtitle block to make it engaging.\n4. Output ONLY valid SRT format without any markdown blocks.\n\nOriginal SRT:\n{raw_srt}"
+                        srt_prompt = f"Rewrite this Burmese SRT file into fast-paced TikTok style. CRITICAL RULES:\n1. Break down the subtitles into chunks of ONLY 1 to 4 words maximum per block.\n2. Interpolate the timestamps accurately and ALWAYS use strict 'HH:MM:SS,mmm' format.\n3. Add ONE relevant emoji at the end of every subtitle block to make it engaging.\n4. Output ONLY valid SRT format without any markdown blocks.\n\nOriginal SRT:\n{raw_srt}"
                         srt_res = client_gemini.models.generate_content(model="gemini-2.5-flash", contents=srt_prompt)
-                        fc_srt_text = srt_res.text.strip().replace("```srt", "").replace("
-```", "")
+                        
+                        marker = chr(96) * 3
+                        fc_srt_text = srt_res.text.strip().replace(f"{marker}srt", "").replace(marker, "")
                         
                         fc_parsed, _ = parse_and_save_real_srt(fc_srt_text, "subtitles.srt", use_fade=True)
                     except Exception as e:
@@ -886,8 +884,8 @@ elif app_mode == "🎙️ Faceless Channel Studio":
             with st.spinner("⏳ [အဆင့် ၅/၅] အားလုံးကိုပေါင်းစပ်ပြီး Master Video ထုတ်လုပ်နေပါသည်..."):
                 pbar.progress(85, text="🎬 Master Rendering အလုပ်လုပ်နေပါသည်...")
                 try:
-                    # 👇 FIX: Pro-Level Subtitle Styling (Bold, Thick Outline, Drop Shadow, Center Alignment)
-                    dyn_fc_style = f"FontName=Pyidaungsu,FontSize=24,PrimaryColour=&H0000FFFF,BackColour=&H00000000,BorderStyle=1,Outline=2.5,Shadow=2,Bold=1,Alignment=5,MarginV=80"
+                    # 👇 FIX: FontSize 20 and Blood Red Color (&H000000FF)
+                    dyn_fc_style = f"FontName=Pyidaungsu,FontSize=20,PrimaryColour=&H000000FF,BackColour=&H00000000,BorderStyle=1,Outline=2.5,Shadow=2,Bold=1,Alignment=5,MarginV=80"
                     
                     success, err_msg = render_premium_saas_video("fc_video_loop.mp4", "fc_audio.wav", fc_parsed, "FACELESS_FINAL.mp4", fc_ratio, use_bypass=True, subtitle_mode=fc_subtitle_mode, sub_style_str=dyn_fc_style)
                     
