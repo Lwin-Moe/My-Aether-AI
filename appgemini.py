@@ -49,6 +49,7 @@ GROQ_KEY_FILE = "saved_groq_key.txt"
 OPENAI_KEY_FILE = "saved_openai_key.txt"
 ELEVEN_VOICE_ID_FILE = "saved_eleven_voice_id.txt"
 PEXELS_KEY_FILE = "saved_pexels_key.txt" 
+HF_KEY_FILE = "saved_hf_key.txt" # 👇 NEW: Hugging Face API Key File
 
 def load_key(file_path):
     if os.path.exists(file_path):
@@ -301,6 +302,18 @@ with st.sidebar:
         saved_openai = load_key(OPENAI_KEY_FILE)
         api_key_input = st.text_input("OpenAI API Key", type="password", value=saved_openai)
         if api_key_input and api_key_input != saved_openai: save_key(OPENAI_KEY_FILE, api_key_input)
+        
+    if app_mode == "🎙️ Faceless Channel Studio":
+        st.markdown("---")
+        st.markdown("### 🔑 Additional API Keys")
+        saved_pexels = load_key(PEXELS_KEY_FILE)
+        pexels_key_input = st.text_input("Pexels API Key (Optional)", type="password", value=saved_pexels)
+        if pexels_key_input and pexels_key_input != saved_pexels: save_key(PEXELS_KEY_FILE, pexels_key_input)
+        
+        # 👇 NEW: Added Hugging Face API Key input field
+        saved_hf = load_key(HF_KEY_FILE)
+        hf_key_input = st.text_input("Hugging Face API Key (FLUX Image AI)", type="password", value=saved_hf)
+        if hf_key_input and hf_key_input != saved_hf: save_key(HF_KEY_FILE, hf_key_input)
 
 # =====================================================================
 # 📌 MODE 1 - MOVIE DUBBING
@@ -656,8 +669,8 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     fc_audio_dur = get_file_duration("fc_audio.wav")
                 except Exception as e: st.error(f"Audio Error: {e}"); st.stop()
 
-            # STEP 3: Fallback Image/Video Generation (Image Generation + Cinematic Animation using FFmpeg Ken Burns)
-            with st.spinner("⏳ [အဆင့် ၃/၅] AI ဖြင့် ပုံများဖန်တီးပြီး Animation သွင်းနေပါသည်..."):
+            # 👇 FIX: STEP 3 (Image Generation + Cinematic Animation using Hugging Face FLUX API)
+            with st.spinner("⏳ [အဆင့် ၃/၅] AI (Hugging Face) ဖြင့် ပုံများဖန်တီးပြီး Animation သွင်းနေပါသည်..."):
                 pbar.progress(50, text="🎨 AI ပုံရိပ်များ ဖန်တီးနေပါသည်...")
                 try:
                     search_keywords = []
@@ -679,34 +692,35 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     generated_clips = []
                     clip_dur = fc_audio_dur / len(search_keywords)
                     target_scale = "720x1280" if "9:16" in fc_ratio else "1280x720"
-                    
-                    # Target width and height for Pollinations AI
-                    img_w, img_h = (720, 1280) if "9:16" in fc_ratio else (1280, 720)
+
+                    hf_api_key = locals().get('hf_key_input', '').strip()
+                    if not hf_api_key:
+                        st.error("⚠️ Hugging Face API Key လိုအပ်ပါသည်။ Sidebar တွင် ထည့်သွင်းပေးပါ။")
+                        st.stop()
+
+                    hf_headers = {"Authorization": f"Bearer {hf_api_key}"}
+                    hf_api_url = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell"
 
                     for i, img_prompt in enumerate(search_keywords):
                         clean_prompt = img_prompt.strip()
                         img_path = f"fc_img_{i}.jpg"
                         clip_path = f"fc_clip_{i}.mp4"
-                        last_err = "" # Reset error variable for image generation
+                        last_err = "" 
                         
                         img_downloaded = False
-                        encoded_prompt = urllib.parse.quote(f"{clean_prompt}, cinematic, masterpiece, 8k resolution, highly detailed")
                         
-                        # Added 3 Retries and User-Agent Headers to prevent Free API blocks
                         for attempt in range(3):
                             try:
-                                seed = random.randint(1, 100000)
-                                pollinations_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={img_w}&height={img_h}&nologo=true&seed={seed}"
-                                headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+                                payload = {"inputs": f"{clean_prompt}, cinematic, masterpiece, 8k resolution, highly detailed"}
+                                img_res = requests.post(hf_api_url, headers=hf_headers, json=payload, timeout=60)
                                 
-                                img_res = requests.get(pollinations_url, headers=headers, timeout=60)
-                                if img_res.status_code == 200 and len(img_res.content) > 5000: # Ensure valid image size
+                                if img_res.status_code == 200 and len(img_res.content) > 5000: 
                                     with open(img_path, "wb") as f:
                                         f.write(img_res.content)
                                     img_downloaded = True
                                     break
                                 else:
-                                    last_err = f"API Status: {img_res.status_code}"
+                                    last_err = f"API Status: {img_res.status_code} - {img_res.text[:100]}"
                                     time.sleep(2)
                             except Exception as img_err: 
                                 last_err = str(img_err)
@@ -714,13 +728,12 @@ elif app_mode == "🎙️ Faceless Channel Studio":
 
                         if img_downloaded and os.path.exists(img_path):
                             pbar.progress(50 + (i * 5), text=f"🎥 ပုံမှ ဗီဒီယိုသို့ ပြောင်းလဲနေပါသည် ({i+1}/{len(search_keywords)})...")
-                            # Apply Ken Burns Animation
                             subprocess.run([FFMPEG_BINARY, "-y", "-loop", "1", "-i", img_path, "-t", str(clip_dur), "-vf", f"scale=-2:2000,zoompan=z='min(zoom+0.001,1.15)':d={int(clip_dur*25)}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={target_scale},fps=25", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "superfast", clip_path], capture_output=True)
                             if os.path.exists(clip_path):
                                 generated_clips.append(clip_path)
 
                     if not generated_clips:
-                        st.error(f"❌ Image Generation Failed. AI Image service might be busy. Please try again. Error: {last_err}")
+                        st.error(f"❌ Image Generation Failed. Hugging Face API error: {last_err}")
                         st.stop()
                     
                     pbar.progress(65, text="🎞️ ဗီဒီယိုများကို ပေါင်းစပ်နေပါသည်...")
