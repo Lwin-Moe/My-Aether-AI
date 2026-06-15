@@ -38,7 +38,7 @@ if not os.path.exists("Pyidaungsu.ttf"):
     try:
         # Fallback to Padauk (Google Fonts) which supports Myanmar Unicode perfectly, and save it as Pyidaungsu.ttf
         import urllib.request
-        urllib.request.urlretrieve("[https://github.com/google/fonts/raw/main/ofl/padauk/Padauk-Regular.ttf](https://github.com/google/fonts/raw/main/ofl/padauk/Padauk-Regular.ttf)", "Pyidaungsu.ttf")
+        urllib.request.urlretrieve("https://github.com/google/fonts/raw/main/ofl/padauk/Padauk-Regular.ttf", "Pyidaungsu.ttf")
     except:
         pass
 
@@ -69,7 +69,7 @@ st.set_page_config(page_title="AETHER STUDIO V52", layout="wide", page_icon="�
 
 st.markdown('''
     <style>
-    @import url('[https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Montserrat:wght@500;700;800;900&display=swap](https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Montserrat:wght@500;700;800;900&display=swap)');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Montserrat:wght@500;700;800;900&display=swap');
     .stApp { background-color: #0b0f19 !important; background-image: radial-gradient(circle at top, #161b2e 0%, #0b0f19 60%) !important; color: #cbd5e1 !important; font-family: 'Inter', sans-serif; }
     section[data-testid="stSidebar"] { background-color: #0d111c !important; border-right: 1px solid rgba(255, 255, 255, 0.05) !important; }
     h1, h2, h3, h4 { font-family: 'Montserrat', sans-serif !important; color: #f8fafc !important; font-weight: 700 !important; }
@@ -145,7 +145,7 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
         
         last_err = ""
         for idx, current_key in enumerate(keys_list):
-            url = f"[https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key=){current_key}"
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key={current_key}"
             try:
                 res = requests.post(url, json=payload, timeout=300)
                 if res.status_code == 200:
@@ -166,12 +166,12 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
         if not os.path.exists(temp_out): raise Exception(f"Keys Exhausted. {last_err}")
     elif "ElevenLabs" in engine:
         voice_id = custom_eleven_id.strip() if custom_eleven_id else ("21m00Tcm4TlvDq8ikWAM" if "Male" in voice_model else "AZnzlk1XvdvUeBnXmlld")
-        res = requests.post(f"[https://api.elevenlabs.io/v1/text-to-speech/](https://api.elevenlabs.io/v1/text-to-speech/){voice_id}", json={"text": text, "model_id": "eleven_multilingual_v2"}, headers={"xi-api-key": eleven_key}, timeout=300)
+        res = requests.post(f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}", json={"text": text, "model_id": "eleven_multilingual_v2"}, headers={"xi-api-key": eleven_key}, timeout=300)
         if res.status_code == 200:
             with open(temp_out, "wb") as f: f.write(res.content)
     elif "TTSMaker" in engine:
         voice_id = 781 if "Female" in voice_model else 780
-        res = requests.post("[https://api.ttsmaker.com/v1/create-tts-order](https://api.ttsmaker.com/v1/create-tts-order)", json={"tts_api_key": ttsmaker_key, "tts_text": text, "voice_id": voice_id, "audio_format": "mp3"}, timeout=300).json()
+        res = requests.post("https://api.ttsmaker.com/v1/create-tts-order", json={"tts_api_key": ttsmaker_key, "tts_text": text, "voice_id": voice_id, "audio_format": "mp3"}, timeout=300).json()
         if res.get("status") == "success":
             with open(temp_out, "wb") as f: f.write(requests.get(res["audio_file_url"]).content)
     else:
@@ -193,7 +193,6 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
         finally:
             if os.path.exists(temp_out): os.remove(temp_out)
 
-# 👇 FIX: Robust SRT Parser to fix LLM Timestamp Hallucinations
 def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
     marker = chr(96) * 3
     clean_srt = raw_srt_text.replace(f"{marker}srt", "").replace(marker, "").strip()
@@ -234,11 +233,9 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
                     return int(h)*3600 + int(m)*60 + int(s) + int(ms.ljust(3, '0'))/1000.0
                     
                 text_content = block.strip()
-                # Clean up emotion tags before adding ASS tags
                 text_content = re.sub(r'\[.*?\]', '', text_content)
                 text_content = re.sub(r'\{.*?\}', '', text_content).strip()
                 
-                # Alex Hormozi Pop-up Animation Effect
                 if use_fade and text_content: 
                     text_content = "{\\fscx0\\fscy0\\t(0,150,\\fscx100\\fscy100)}" + text_content
                     
@@ -649,7 +646,9 @@ elif app_mode == "🎙️ Faceless Channel Studio":
         fc_duration = st.slider("⏱️ Story Duration (Minutes)", 1, 10, 3)
         st.caption("💡 Subtitles များသည် Viral ဖြစ်စေရန် (Alex Hormozi Style) အလယ်တည့်တည့်တွင် အကြီးကြီး အော်တိုချိန်ညှိပေးထားပါသည်။")
 
+        # 👇 FIX: Added Subtitle Font Selector here as requested
         fc_subtitle_mode = st.radio("Subtitle Output Mode", ["Both (Burn + SRT)", "Export SRT File Only", "Burn into Video"], key="fc_sub_mode")
+        fc_sub_font = st.selectbox("🅰️ Subtitle Font", ["Pyidaungsu", "NotoSans-Bold", "Myanmar3_2018", "Padauk"], key="fc_font")
 
         bgm_options = ["None (BGM မထည့်ပါ)"]
         bgm_files = [f for f in os.listdir("bgm_tracks") if f.endswith(".mp3")] if os.path.exists("bgm_tracks") else []
@@ -671,7 +670,8 @@ elif app_mode == "🎙️ Faceless Channel Studio":
         
     with col_fc2:
         st.markdown("<div class='sub-box'>", unsafe_allow_html=True)
-        fc_visual_mode = st.radio("🎥 Visuals Source", ["🌐 Auto-Fetch Pexels Videos", "🖼️ Upload Manual Images"])
+        # 👇 FIX: Added Pollinations AI cleanly to the Visual Source Selector
+        fc_visual_mode = st.radio("🎥 Visuals Source", ["🎨 AI Images (Pollinations)", "🌐 Auto-Fetch Pexels Videos", "🖼️ Upload Manual Images"])
         fc_uploaded_images = None
         if "Upload" in fc_visual_mode:
             fc_uploaded_images = st.file_uploader("🖼️ Upload Images (JPG/PNG)", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
@@ -720,7 +720,7 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     fc_audio_dur = get_file_duration("fc_audio.wav")
                 except Exception as e: st.error(f"Audio Error: {e}"); st.stop()
 
-            # STEP 3: Fallback Image/Video Generation (Pexels SD Video OR Manual Uploads)
+            # STEP 3: Fallback Image/Video Generation (Pollinations AI OR Pexels SD Video OR Manual Uploads)
             with st.spinner("⏳ [အဆင့် ၃/၅] Visuals များကို ပြင်ဆင်နေပါသည်..."):
                 pbar.progress(50, text="🎥 Visuals ပြင်ဆင်နေပါသည်...")
                 try:
@@ -746,6 +746,66 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                             subprocess.run([FFMPEG_BINARY, "-y", "-loop", "1", "-i", img_path, "-t", str(clip_dur), "-vf", f"scale=-2:2000,zoompan=z='min(zoom+0.001,1.15)':d={int(clip_dur*25)}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={target_scale},fps=25", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "superfast", clip_path], capture_output=True)
                             if os.path.exists(clip_path):
                                 generated_clips.append(clip_path)
+
+                    elif "Pollinations" in fc_visual_mode:
+                        # 👇 FIX: Robust Pollinations AI Implementation
+                        search_keywords = []
+                        last_err = ""
+                        for key in keys_list:
+                            try:
+                                client = genai.Client(api_key=key)
+                                prompt_req = client.models.generate_content(model="gemini-2.5-flash", contents=f"Based on this story, give me exactly THREE detailed image generation prompts in English describing the core scenes. Make them cinematic, highly detailed, and dark/moody. Do not include any violent or explicitly scary words. Format strictly separated by a pipe '|'. Story: {fc_story_text[:200]}")
+                                search_keywords = prompt_req.text.split('|')[:3]
+                                break
+                            except Exception as e:
+                                last_err = str(e)
+                                continue
+                                
+                        if not search_keywords:
+                            st.error(f"Keyword Error: Key အားလုံး Limit ပြည့်နေပါသည်။ {last_err}")
+                            st.stop()
+                        
+                        img_w, img_h = (720, 1280) if "9:16" in fc_ratio else (1280, 720)
+                        clip_dur = fc_audio_dur / len(search_keywords)
+
+                        for i, img_prompt in enumerate(search_keywords):
+                            clean_prompt = img_prompt.strip()
+                            img_path = f"fc_img_{i}.jpg"
+                            clip_path = f"fc_clip_{i}.mp4"
+                            last_err = ""
+                            img_downloaded = False
+                            
+                            encoded_prompt = urllib.parse.quote(f"{clean_prompt}, cinematic, masterpiece, 8k resolution, highly detailed")
+                            
+                            # Robust Retry System for Free Pollinations API
+                            for attempt in range(3):
+                                try:
+                                    seed = random.randint(1, 100000)
+                                    pollinations_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={img_w}&height={img_h}&nologo=true&seed={seed}"
+                                    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'}
+                                    
+                                    img_res = requests.get(pollinations_url, headers=headers, timeout=60)
+                                    if img_res.status_code == 200 and len(img_res.content) > 5000:
+                                        with open(img_path, "wb") as f:
+                                            f.write(img_res.content)
+                                        img_downloaded = True
+                                        break
+                                    else:
+                                        last_err = f"API Status: {img_res.status_code}"
+                                        time.sleep(2)
+                                except Exception as img_err: 
+                                    last_err = str(img_err)
+                                    time.sleep(2)
+
+                            if img_downloaded and os.path.exists(img_path):
+                                pbar.progress(50 + int((i/len(search_keywords))*15), text=f"🎥 AI ပုံမှ ဗီဒီယိုသို့ ပြောင်းလဲနေပါသည် ({i+1}/{len(search_keywords)})...")
+                                subprocess.run([FFMPEG_BINARY, "-y", "-loop", "1", "-i", img_path, "-t", str(clip_dur), "-vf", f"scale=-2:2000,zoompan=z='min(zoom+0.001,1.15)':d={int(clip_dur*25)}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={target_scale},fps=25", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "superfast", clip_path], capture_output=True)
+                                if os.path.exists(clip_path):
+                                    generated_clips.append(clip_path)
+
+                        if not generated_clips:
+                            st.error(f"❌ AI Image Generation Failed. Error: {last_err}")
+                            st.stop()
 
                     else:
                         search_keywords = []
@@ -776,17 +836,17 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                                 
                                 if pexels_api_key:
                                     headers = {"Authorization": pexels_api_key}
-                                    pexels_url = f"[https://api.pexels.com/videos/search?query=](https://api.pexels.com/videos/search?query=){clean_kw}&orientation={orientation}&per_page=1"
+                                    pexels_url = f"https://api.pexels.com/videos/search?query={clean_kw}&orientation={orientation}&per_page=1"
                                     res = requests.get(pexels_url, headers=headers, timeout=30)
                                     if res.status_code == 200 and res.json().get('videos'):
                                         video_files = res.json()['videos'][0]['video_files']
                                         sd_links = [vf['link'] for vf in video_files if vf['quality'] == 'sd']
                                         best_link = sd_links[0] if sd_links else video_files[0]['link']
                                 else:
-                                    search_url = f"[https://www.pexels.com/search/videos/](https://www.pexels.com/search/videos/){clean_kw}/?orientation={orientation}"
+                                    search_url = f"https://www.pexels.com/search/videos/{clean_kw}/?orientation={orientation}"
                                     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
                                     html_res = requests.get(search_url, headers=headers, timeout=30)
-                                    match = re.search(r'[https://player.vimeo.com/external/](https://player.vimeo.com/external/)[^\s"\'<>]+', html_res.text)
+                                    match = re.search(r'https://player.vimeo.com/external/[^\s"\'<>]+', html_res.text)
                                     if match: best_link = match.group(0)
                                 
                                 if best_link:
@@ -825,7 +885,7 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     subprocess.run([FFMPEG_BINARY, "-y", "-stream_loop", "-1", "-f", "concat", "-safe", "0", "-i", "fc_concat.txt", "-t", str(fc_audio_dur), "-c", "copy", "fc_video_loop.mp4"], capture_output=True)
                 except Exception as e: st.error(f"Visual Error: {e}"); st.stop()
 
-            # 👇 FIX: STEP 4 - Dual Sync Engine (Groq Whisper + Gemini Formatter with Emoji)
+            # STEP 4: SRT Sync
             with st.spinner("⏳ [အဆင့် ၄/၅] စာတန်းထိုးများကို ချိန်ညှိနေပါသည်..."):
                 pbar.progress(70, text="📝 Timeline ချိန်ညှိနေပါသည်...")
                 fc_parsed = None
@@ -855,7 +915,6 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     except Exception as e:
                         last_err = str(e)
                 
-                # Fallback to Gemini alone if Groq fails or no key provided
                 if not fc_parsed:
                     for key in keys_list:
                         try:
@@ -884,8 +943,9 @@ elif app_mode == "🎙️ Faceless Channel Studio":
             with st.spinner("⏳ [အဆင့် ၅/၅] အားလုံးကိုပေါင်းစပ်ပြီး Master Video ထုတ်လုပ်နေပါသည်..."):
                 pbar.progress(85, text="🎬 Master Rendering အလုပ်လုပ်နေပါသည်...")
                 try:
-                    # 👇 FIX: FontSize 20 and Blood Red Color (&H000000FF)
-                    dyn_fc_style = f"FontName=Pyidaungsu,FontSize=20,PrimaryColour=&H000000FF,BackColour=&H00000000,BorderStyle=1,Outline=2.5,Shadow=2,Bold=1,Alignment=5,MarginV=80"
+                    # 👇 FIX: Dynamically apply user selected Font from Sidebar (fc_sub_font)
+                    selected_font = fc_sub_font.split()[0]
+                    dyn_fc_style = f"FontName={selected_font},FontSize=20,PrimaryColour=&H000000FF,BackColour=&H00000000,BorderStyle=1,Outline=2.5,Shadow=2,Bold=1,Alignment=5,MarginV=80"
                     
                     success, err_msg = render_premium_saas_video("fc_video_loop.mp4", "fc_audio.wav", fc_parsed, "FACELESS_FINAL.mp4", fc_ratio, use_bypass=True, subtitle_mode=fc_subtitle_mode, sub_style_str=dyn_fc_style)
                     
