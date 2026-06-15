@@ -27,20 +27,24 @@ import textwrap
 import urllib.parse 
 import concurrent.futures 
 
-# 👇 FIX: Prioritize system FFmpeg (which supports Burmese Text Shaping) over imageio_ffmpeg
+# 👇 FIX: Prioritize system FFmpeg
 if shutil.which("ffmpeg"):
     FFMPEG_BINARY = "ffmpeg"
 else:
     FFMPEG_BINARY = imageio_ffmpeg.get_ffmpeg_exe()
 
-# 👇 NEW: Auto-Font Downloader to prevent Tofu boxes in Cloud environments
+# 👇 FIX: Robust Auto-Font Downloader (Ensure proper font file names to fix Tofu blocks)
+if not os.path.exists("Padauk.ttf"):
+    try:
+        import urllib.request
+        urllib.request.urlretrieve("https://github.com/google/fonts/raw/main/ofl/padauk/Padauk-Regular.ttf", "Padauk.ttf")
+    except: pass
 if not os.path.exists("Pyidaungsu.ttf"):
     try:
-        # Fallback to Padauk (Google Fonts) which supports Myanmar Unicode perfectly, and save it as Pyidaungsu.ttf
+        # Fallback to Padauk named as Pyidaungsu if original is missing to prevent crash
         import urllib.request
         urllib.request.urlretrieve("https://github.com/google/fonts/raw/main/ofl/padauk/Padauk-Regular.ttf", "Pyidaungsu.ttf")
-    except:
-        pass
+    except: pass
 
 # --- Key Save Files ---
 API_KEY_FILE = "saved_api_key.txt"
@@ -538,7 +542,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     
                     try:
                         thumb_time = min(get_file_duration(v_input)/3, 15)
-                        font_path = "Pyidaungsu.ttf"
+                        font_path = "Padauk.ttf" if os.path.exists("Padauk.ttf") else "Pyidaungsu.ttf"
                         
                         try:
                             stream = ffmpeg.input(v_input, ss=thumb_time)
@@ -652,7 +656,8 @@ elif app_mode == "🎙️ Faceless Channel Studio":
         st.caption("💡 Subtitles များသည် Viral ဖြစ်စေရန် (Alex Hormozi Style) အလယ်တည့်တည့်တွင် အကြီးကြီး အော်တိုချိန်ညှိပေးထားပါသည်။")
 
         fc_subtitle_mode = st.radio("Subtitle Output Mode", ["Both (Burn + SRT)", "Export SRT File Only", "Burn into Video"], key="fc_sub_mode")
-        fc_sub_font = st.selectbox("🅰️ Subtitle Font", ["Pyidaungsu", "NotoSans-Bold", "Myanmar3_2018", "Padauk"], key="fc_font")
+        # 👇 FIX: Changed Default font to Padauk to guarantee rendering
+        fc_sub_font = st.selectbox("🅰️ Subtitle Font", ["Padauk", "Pyidaungsu", "NotoSans-Bold", "Myanmar3_2018"], key="fc_font")
 
         bgm_options = ["None (BGM မထည့်ပါ)"]
         bgm_files = [f for f in os.listdir("bgm_tracks") if f.endswith(".mp3")] if os.path.exists("bgm_tracks") else []
@@ -954,7 +959,7 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     subprocess.run([FFMPEG_BINARY, "-y", "-stream_loop", "-1", "-f", "concat", "-safe", "0", "-i", "fc_concat.txt", "-t", str(fc_audio_dur), "-c", "copy", "fc_video_loop.mp4"], capture_output=True)
                 except Exception as e: st.error(f"Visual Error: {e}"); st.stop()
 
-            # STEP 4: SRT Sync
+            # 👇 FIX: STEP 4 - Dual Sync Engine WITHOUT Emojis to prevent Tofu Blocks
             with st.spinner("⏳ [အဆင့် ၄/၅] စာတန်းထိုးများကို ချိန်ညှိနေပါသည်..."):
                 pbar.progress(70, text="📝 Timeline ချိန်ညှိနေပါသည်...")
                 fc_parsed = None
@@ -972,9 +977,10 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                                 response_format="srt",
                             )
                         
-                        pbar.progress(78, text="📝 AI ဖြင့် Emoji များ ထည့်သွင်းနေပါသည်...")
+                        pbar.progress(78, text="📝 AI ဖြင့် စာသားများ ချိန်ညှိနေပါသည်...")
                         client_gemini = genai.Client(api_key=keys_list[0])
-                        srt_prompt = f"Rewrite this Burmese SRT file into fast-paced TikTok style. CRITICAL RULES:\n1. Break down the subtitles into chunks of ONLY 1 to 4 words maximum per block.\n2. Interpolate the timestamps accurately and ALWAYS use strict 'HH:MM:SS,mmm' format.\n3. Add ONE relevant emoji at the end of every subtitle block to make it engaging.\n4. Output ONLY valid SRT format without any markdown blocks.\n\nOriginal SRT:\n{raw_srt}"
+                        # Emoji Instruction Removed Completely
+                        srt_prompt = f"Rewrite this Burmese SRT file into fast-paced TikTok style. CRITICAL RULES:\n1. Break down the subtitles into chunks of ONLY 1 to 4 words maximum per block.\n2. Interpolate the timestamps accurately and ALWAYS use strict 'HH:MM:SS,mmm' format.\n3. Output ONLY valid SRT format without any markdown blocks.\n\nOriginal SRT:\n{raw_srt}"
                         srt_res = client_gemini.models.generate_content(model="gemini-2.5-flash", contents=srt_prompt)
                         
                         marker = chr(96) * 3
@@ -991,7 +997,8 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                             audio_upload = client.files.upload(file="fc_audio.wav")
                             while "PROCESSING" in str(client.files.get(name=audio_upload.name).state): time.sleep(2)
                             
-                            srt_prompt = "Listen to the audio. Output ONLY a valid SRT file in Burmese. CRITICAL RULE: Each subtitle block MUST contain ONLY 1 to 4 words maximum (fast-paced TikTok style). Add ONE relevant emoji at the end of every subtitle line to make it engaging. ALWAYS use strict 'HH:MM:SS,mmm' format. No markdown."
+                            # Emoji Instruction Removed Completely
+                            srt_prompt = "Listen to the audio. Output ONLY a valid SRT file in Burmese. CRITICAL RULE: Each subtitle block MUST contain ONLY 1 to 4 words maximum (fast-paced TikTok style). ALWAYS use strict 'HH:MM:SS,mmm' format. No markdown."
                             srt_res = client.models.generate_content(model="gemini-2.5-flash", contents=[audio_upload, srt_prompt])
                             
                             marker = chr(96) * 3
