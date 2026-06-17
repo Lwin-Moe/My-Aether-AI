@@ -1,5 +1,5 @@
 # =====================================================================
-# 📌 AETHER FILMWORKS AI // STUDIO V52 (SAAS EDITION + BUG FIXES)
+# 📌 AETHER FILMWORKS AI // STUDIO V52 (SAAS EDITION + BULLETPROOF FIXES)
 # =====================================================================
 
 import streamlit as st
@@ -33,11 +33,23 @@ if shutil.which("ffmpeg"):
 else:
     FFMPEG_BINARY = imageio_ffmpeg.get_ffmpeg_exe()
 
-# 👇 FIX: Font Download & Metadata Alignment (Using Padauk consistently)
-if not os.path.exists("Padauk.ttf"):
+# 👇 FIX: Bulletproof Font Installation for Streamlit Cloud (libass Tofu Box Fix)
+local_font_path = "Padauk.ttf"
+if not os.path.exists(local_font_path):
     try:
         import urllib.request
-        urllib.request.urlretrieve("https://github.com/google/fonts/raw/main/ofl/padauk/Padauk-Regular.ttf", "Padauk.ttf")
+        urllib.request.urlretrieve("https://github.com/google/fonts/raw/main/ofl/padauk/Padauk-Regular.ttf", local_font_path)
+    except:
+        pass
+
+# Force font cache update so FFmpeg's libass can find 'Padauk' on Cloud Servers
+_fonts_dir = os.path.expanduser("~/.fonts")
+os.makedirs(_fonts_dir, exist_ok=True)
+_sys_font = os.path.join(_fonts_dir, "Padauk.ttf")
+if not os.path.exists(_sys_font) and os.path.exists(local_font_path):
+    try:
+        shutil.copy(local_font_path, _sys_font)
+        subprocess.run(["fc-cache", "-f", "-v"], capture_output=True)
     except:
         pass
 
@@ -280,10 +292,9 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
             full_speech.append(text_only)
     return parsed_lines, " ".join(full_speech)
 
-# 👇 FIX: Font Meta-Data Alignment (Padauk matches internal font engine expectations)
 def create_custom_ass(parsed_timestamps, output_file, style_dict, video_w=720, video_h=1280):
-    font_name = "Padauk" # Hardcoded correct internal font name
-    font_size = style_dict.get('FontSize', '24')
+    font_name = "Padauk" 
+    font_size = style_dict.get('FontSize', '26') # Ensure new font size works here
     pri_color = style_dict.get('PrimaryColour', '&H0000FFFF')
     bg_color = style_dict.get('BackColour', '&H00000000')
     outline = style_dict.get('Outline', '2')
@@ -347,15 +358,13 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
             logo = ffmpeg.filter(logo, 'scale', -1, 80)
             video = ffmpeg.overlay(video, logo, x='W-w-20', y=20)
 
-        # 👇 FIX: Bulletproof ASS Subtitle Rendering Strategy for Streamlit Cloud
+        # Bulletproof ASS Subtitle Rendering
         if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"] and os.path.exists("subtitles.srt"):
             ass_path = "subtitles.ass"
             style_dict = dict(item.split('=') for item in sub_style_str.split(','))
             v_w, v_h = (720, 1280) if "9:16" in ratio else (1280, 720)
             
             create_custom_ass(parsed_timestamps, ass_path, style_dict, v_w, v_h)
-            
-            # Note: We pass the .ass file into the 'subtitles' filter because 'subtitles' allows 'fontsdir'
             video = ffmpeg.filter(video, 'subtitles', ass_path, fontsdir='.', charenc='UTF-8')
 
         out = ffmpeg.output(video, audio, out_v, vcodec='libx264', pix_fmt='yuv420p', acodec='aac', preset='fast', crf=21, t=v_max_dur)
@@ -372,7 +381,6 @@ with st.sidebar:
     app_mode = st.radio("Select Studio Mode:", ["🎙️ Movie Dubbing Studio", "🎙️ Faceless Channel Studio", "🎥 Veo Video Studio", "🎵 Lyria Music Studio"])
     st.markdown("---")
     
-    # 👇 NEW: Project Save/Load System (Grok Tier 1 Feature)
     st.markdown("### 💾 Project Save & Load")
     if st.button("Save Current Project"):
         proj_data = {
@@ -498,7 +506,8 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         if subtitle_mode in ["Both (Burn + SRT)", "Burn into Video"]:
             sub_position = st.selectbox("📍 Position", ["Bottom", "Center", "Top"])
             sub_color = st.selectbox("🎨 Color", ["Yellow Text + Black Outline", "White Text + Black Outline", "Neon Green Text + Black Outline", "Red Text + Black Outline", "Gold Text + Black Outline"])
-            sub_size = st.slider("🔠 Font Size", 16, 40, 22)
+            # 👇 FIX: Changed Default Size from 22 to 24
+            sub_size = st.slider("🔠 Font Size", 16, 40, 24)
             sub_thickness = st.slider("✒️ Outline Thickness", 1.0, 5.0, 2.5)
             col_s1, col_s2 = st.columns(2)
             with col_s1:
@@ -508,7 +517,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                 sub_fade = st.checkbox("✨ Cinematic Pop-Up")
         else:
             st.info("💡 Burn into Video ရွေးထားမှ ချိန်ညှိနိုင်ပါမည်။")
-            sub_position, sub_color, sub_size, sub_thickness, sub_bg, sub_short, sub_fade = "Bottom", "Yellow", 22, 2.5, False, False, False
+            sub_position, sub_color, sub_size, sub_thickness, sub_bg, sub_short, sub_fade = "Bottom", "Yellow", 24, 2.5, False, False, False
         st.markdown("</div>", unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -590,20 +599,24 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                         comp = client.chat.completions.create(model="llama-3.3-70b-versatile" if "Groq" in ai_provider else ("gpt-5.5-pro" if "5.5" in ai_provider else "gpt-4o"), messages=[{"role": "user", "content": f"{base_prompt} --- SRT --- {tsrt}"}])
                         raw_output_text = comp.choices[0].message.content
 
-                    title_match = re.search(r'\[TITLE:\s*(.*?)\]', raw_output_text)
-                    tags_match = re.search(r'\[TAGS:\s*(.*?)\]', raw_output_text)
-                    st.session_state.viral_title = title_match.group(1).strip() if title_match else "Viral Movie Recap"
-                    st.session_state.viral_tags = tags_match.group(1).strip() if tags_match else "#movierecap #myanmar"
+                    # 👇 FIX: Title & Tags Regex Extraction
+                    title_match = re.search(r'\[TITLE:\s*(.*?)\]', raw_output_text, re.IGNORECASE)
+                    tags_match = re.search(r'\[TAGS:\s*(.*?)\]', raw_output_text, re.IGNORECASE)
                     
-                    clean_raw_srt = re.sub(r'\[TITLE:.*?\]', '', raw_output_text)
-                    clean_raw_srt = re.sub(r'\[TAGS:.*?\]', '', clean_raw_srt)
+                    if title_match: st.session_state.viral_title = title_match.group(1).strip()
+                    else: st.session_state.viral_title = "Viral Movie Recap"
+                    
+                    if tags_match: st.session_state.viral_tags = tags_match.group(1).strip()
+                    else: st.session_state.viral_tags = "#movierecap #myanmar"
+                    
+                    clean_raw_srt = re.sub(r'\[TITLE:.*?\]', '', raw_output_text, flags=re.IGNORECASE)
+                    clean_raw_srt = re.sub(r'\[TAGS:.*?\]', '', clean_raw_srt, flags=re.IGNORECASE).strip()
                     
                     parsed_timestamps, speech_text = parse_and_save_real_srt(clean_raw_srt, srt_final, use_fade=sub_fade)
                     st.session_state.generated_script = clean_raw_srt
                     
                     try:
                         font_path = "Padauk.ttf"
-                        # Generate A/B Thumbnails
                         t_A = min(get_file_duration(v_input)*0.2, 10)
                         t_B = min(get_file_duration(v_input)*0.5, 20)
                         
@@ -800,6 +813,16 @@ At the absolute end, include these two lines:
                     if not fc_story_text:
                         st.error(f"Story Error: Key အားလုံး Limit ပြည့်နေပါသည်။ {last_err}"); st.stop()
 
+            # 👇 FIX: Proper Title Extraction logic
+            title_match = re.search(r'\[TITLE:\s*(.*?)\]', fc_story_text, re.IGNORECASE)
+            tags_match = re.search(r'\[TAGS:\s*(.*?)\]', fc_story_text, re.IGNORECASE)
+            
+            if title_match: st.session_state.viral_title = title_match.group(1).strip()
+            if tags_match: st.session_state.viral_tags = tags_match.group(1).strip()
+            
+            fc_story_text = re.sub(r'\[TITLE:.*?\]', '', fc_story_text, flags=re.IGNORECASE)
+            fc_story_text = re.sub(r'\[TAGS:.*?\]', '', fc_story_text, flags=re.IGNORECASE).strip()
+
             with st.spinner("⏳ [အဆင့်၂/၅] AI သရုပ်ဆောင်ဖြင့် အသံဖန်တီးနေပါသည်..."):
                 pbar.progress(30, text="🎙️ အသံဖန်တီးနေပါသည်...")
                 try:
@@ -825,7 +848,6 @@ At the absolute end, include these two lines:
                             with open(img_path, "wb") as f: f.write(img_file.read())
                             
                             pbar.progress(50 + int((i/len(fc_uploaded_images))*15), text=f"🎥 Upload ပုံများကို Animation သွင်းနေပါသည် ({i+1}/{len(fc_uploaded_images)})...")
-                            # Zoompan limit fixed by restricting to precise duration frames
                             subprocess.run([FFMPEG_BINARY, "-y", "-loop", "1", "-framerate", "25", "-i", img_path, "-t", str(clip_dur), "-vf", f"scale=-2:2000,zoompan=z='min(zoom+0.001,1.15)':d={int(clip_dur*25)}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=720x1280,fps=25", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "superfast", clip_path], capture_output=True)
                             if os.path.exists(clip_path): generated_clips.append(clip_path)
 
@@ -937,7 +959,8 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
                     elif "Red" in fc_sub_color: prim_fc = "&H000000FF"
                     elif "Gold" in fc_sub_color: prim_fc = "&H0000D7FF"
  
-                    dyn_fc_style = f"FontName=Padauk,FontSize=24,PrimaryColour={prim_fc},BackColour=&H00000000,BorderStyle=1,Outline=2.5,Shadow=2,Bold=1,Alignment={align_fc},MarginV=80"
+                    # 👇 FIX: Changed Default FontSize to 26
+                    dyn_fc_style = f"FontName=Padauk,FontSize=26,PrimaryColour={prim_fc},BackColour=&H00000000,BorderStyle=1,Outline=2.5,Shadow=2,Bold=1,Alignment={align_fc},MarginV=80"
                     
                     success, err_msg = render_premium_saas_video("fc_video_loop.mp4", "fc_audio.wav", fc_parsed, "FACELESS_FINAL.mp4", fc_ratio, use_bypass=True, subtitle_mode=fc_subtitle_mode, sub_style_str=dyn_fc_style)
                     
@@ -951,7 +974,6 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
                                 shutil.move("temp_faceless.mp4", "FACELESS_FINAL.mp4")
                             except: pass
                     
-                    # 👇 NEW: Generate A/B Thumbnails for Faceless
                     try:
                         t_A = min(fc_audio_dur * 0.2, 10)
                         t_B = min(fc_audio_dur * 0.5, 20)
@@ -973,7 +995,6 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
                     st.balloons()
                     st.success("🎉 Faceless Video ထုတ်လုပ်မှု အောင်မြင်စွာ ပြီးစီးပါပြီ!")
                     
-                    # 👇 NEW: AI Viral Score Predictor (Grok Tier-2 Feature)
                     try:
                         client_viral = genai.Client(api_key=keys_list[0])
                         v_prompt = f"Analyze this short video for TikTok virality. Title: {st.session_state.viral_title}. Hook: {fc_story_text[:150]}. Reply strictly in this format: \nScore: [1-100]\nReason: [1 short sentence in Burmese]"
