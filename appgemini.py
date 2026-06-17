@@ -1,5 +1,5 @@
 # =====================================================================
-# 📌 AETHER FILMWORKS AI // STUDIO V52 (CACHE BUSTER & NEW VOICE FX)
+# 📌 AETHER FILMWORKS AI // STUDIO V52 (ERROR-FREE & BULLETPROOF OVERLAY)
 # =====================================================================
 
 import streamlit as st
@@ -106,11 +106,8 @@ if "viral_score" not in st.session_state: st.session_state.viral_score = ""
 if "final_video_path" not in st.session_state: st.session_state.final_video_path = ""
 
 # --- 2. CORE AUTOMATION FLOW ENGINES ---
-# 👇 FIX: Total Wipeout for old files to prevent Caching/Mixing Bugs
+# 👇 FIX: Cleanup strictly targets disk files, completely leaves Session State alone
 def cleanup_temp_files():
-    st.session_state.thumb_path_A = None
-    st.session_state.thumb_path_B = None
-    st.session_state.final_video_path = ""
     for f in os.listdir("."):
         if f.startswith(("fc_clip_", "fc_img_", "raw_fc_clip_", "temp_", "subtitles.", "thumb_A_", "thumb_B_", "FACELESS_FINAL_", "AETHER_RECAP_FINAL_", "fc_audio.wav", "fc_video_loop.mp4")):
             try: os.remove(f)
@@ -245,7 +242,6 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS", ttsmak
             factor = 1.0 + (pitch / 100.0) 
             audio = audio.filter('asetrate', int(44100 * factor)).filter('atempo', 1.0 / factor)
         
-        # 👇 FIX: Added New Motivation & Horror specific Voice FX
         if "Epic" in voice_fx: audio = audio.filter('bass', g=12, f=120)
         elif "Walkie-Talkie" in voice_fx: audio = audio.filter('highpass', f=400).filter('lowpass', f=3000).filter('volume', 1.5)
         elif "Reverb" in voice_fx: audio = audio.filter('aecho', 0.8, 0.88, 60, 0.4)
@@ -255,8 +251,8 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS", ttsmak
         elif "Telephone" in voice_fx: audio = audio.filter('highpass', f=300).filter('lowpass', f=2500).filter('compand', attacks='0', decays='0.2', points='-70/-70|-20/-20|0/-10')
         elif "Cave" in voice_fx: audio = audio.filter('aecho', 0.8, 0.9, 1000, 0.3)
         elif "Underwater" in voice_fx: audio = audio.filter('lowpass', f=400).filter('volume', 1.5)
-        elif "Deep & Energetic" in voice_fx: audio = audio.filter('bass', g=10, f=150).filter('treble', g=5, f=3000).filter('volume', 1.5)
-        elif "Deep & Chilling" in voice_fx: audio = audio.filter('bass', g=15, f=80).filter('aecho', 0.8, 0.85, 60, 0.3).filter('volume', 1.2)
+        elif "Deep & Energetic (Motivation)" in voice_fx: audio = audio.filter('bass', g=10, f=150).filter('treble', g=5, f=3000).filter('volume', 1.5)
+        elif "Deep & Chilling (Horror)" in voice_fx: audio = audio.filter('bass', g=15, f=80).filter('aecho', 0.8, 0.85, 60, 0.3).filter('volume', 1.2)
 
         try: 
             (audio.output(output_file, acodec='pcm_s16le', ac=1, ar='44100').overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True))
@@ -276,6 +272,7 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
         if not line: continue
         if line.isdigit() and len(line) < 5: continue 
         
+        # Lenient timestamp extraction
         if "-->" in line:
             if current_text:
                 parsed_lines.append((current_start, current_end, " ".join(current_text)))
@@ -508,8 +505,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         dynamic_options = ["Synergy Puck (Male)", "Synergy Aoede (Female)", "Synergy Charon (Male - Deep)"] if "Synergy" in audio_engine_choice else (["Adam (Male Deep)", "Rachel (Female)"] if "ElevenLabs" in audio_engine_choice else (["TTSMaker Male", "TTSMaker Female"] if "TTSMaker" in audio_engine_choice else ["ဇော်ဇော် (Male)", "အောင်အောင် (Deep)", "နှင်းနှင်း (Female)"]))
         voice_char = st.selectbox("Select Character Voice", dynamic_options, index=0)
         pitch_level = st.slider("🎙️ Voice Pitch (Frequency Adjust)", min_value=-30, max_value=30, value=0, step=5)
-        
-        # 👇 FIX: Added New Voice FX options for both Studios
         fx_level = st.selectbox("🎧 Cinematic Voice FX", [
             "None", "🎙️ Epic Trailer Voice", "📻 Walkie-Talkie", 
             "🏛️ Cinematic Reverb", "👹 Demon / Monster", "🤫 ASMR / Whisper",
@@ -539,8 +534,8 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         elif not uploaded_file and not video_url: st.error("⚠️ ဗီဒီယိုဖိုင်သို့မဟုတ် Link ထည့်ပေးပါ။")
         else:
             st.session_state.render_success = False
+            cleanup_temp_files()
             
-            # 👇 FIX: Dynamic Cache Buster variables
             run_id = str(int(time.time()))
             v_final = f"AETHER_RECAP_FINAL_{run_id}.mp4"
             st.session_state.final_video_path = v_final
@@ -548,7 +543,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
             v_input, a_extracted, a_generated, srt_final = "input_temp.mp4", "temp_extracted.mp3", "voice_temp.wav", "subtitles.srt"
 
             pbar = st.progress(0, text="🚀 အလုပ်စတင်နေပါပြီ...")
-            cleanup_temp_files()
 
             with st.spinner("⏳ [အဆင့်၁/၆] ဗီဒီယို ဖိုင်အားစနစ်ထဲသို့ ဆွဲသွင်းနေပါသည်..."):
                 pbar.progress(10, text="📥 [အဆင့် ၁/၆] ဗီဒီယိုဆွဲယူနေပါသည်...")
@@ -617,6 +611,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                         comp = client.chat.completions.create(model="llama-3.3-70b-versatile" if "Groq" in ai_provider else ("gpt-5.5-pro" if "5.5" in ai_provider else "gpt-4o"), messages=[{"role": "user", "content": f"{base_prompt} --- SRT --- {tsrt}"}])
                         raw_output_text = comp.choices[0].message.content
 
+                    # Regex Extraction & Syntax fix integration
                     title_match = re.search(r'\[TITLE:\s*(.*?)\]', raw_output_text, re.IGNORECASE)
                     tags_match = re.search(r'\[TAGS:\s*(.*?)\]', raw_output_text, re.IGNORECASE)
                     
@@ -639,8 +634,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                         t_A = min(get_file_duration(v_input)*0.2, 10)
                         t_B = min(get_file_duration(v_input)*0.5, 20)
                         
-                        for thumb_suffix, t_val in [("A", t_A), ("B", t_B)]:
-                            thumb_name = f"thumb_{thumb_suffix}_{run_id}.jpg"
+                        for thumb_name, t_val in [("thumb_A.jpg", t_A), ("thumb_B.jpg", t_B)]:
                             try:
                                 stream = ffmpeg.input(v_input, ss=t_val)
                                 if cb_thumb_text:
@@ -651,8 +645,8 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                                 ffmpeg.output(stream, thumb_name, vframes=1).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
                             except: pass
                             
-                            if thumb_suffix == "A" and os.path.exists(thumb_name): st.session_state.thumb_path_A = thumb_name
-                            elif thumb_suffix == "B" and os.path.exists(thumb_name): st.session_state.thumb_path_B = thumb_name
+                        st.session_state.thumb_path_A = "thumb_A.jpg" if os.path.exists("thumb_A.jpg") else None
+                        st.session_state.thumb_path_B = "thumb_B.jpg" if os.path.exists("thumb_B.jpg") else None
                     except: pass
 
                 except Exception as e: st.error(f"Logic Error: {e}"); st.stop()
@@ -704,9 +698,13 @@ if app_mode == "🎙️ Movie Dubbing Studio":
             st.markdown('<div class="setting-panel"><h3>📝 Scripts & Assets</h3>', unsafe_allow_html=True)
             col_t1, col_t2 = st.columns(2)
             if st.session_state.thumb_path_A and os.path.exists(st.session_state.thumb_path_A):
-                with col_t1: st.image(st.session_state.thumb_path_A, caption="Thumbnail (A)", use_column_width=True); st.markdown(get_download_link(st.session_state.thumb_path_A, "Thumb_A.jpg", "Download A"), unsafe_allow_html=True)
+                with col_t1: 
+                    st.image(st.session_state.thumb_path_A, caption="Thumbnail (A)", use_column_width=True)
+                    st.markdown(get_download_link(st.session_state.thumb_path_A, "Thumb_A.jpg", "Download A"), unsafe_allow_html=True)
             if st.session_state.thumb_path_B and os.path.exists(st.session_state.thumb_path_B):
-                with col_t2: st.image(st.session_state.thumb_path_B, caption="Thumbnail (B)", use_column_width=True); st.markdown(get_download_link(st.session_state.thumb_path_B, "Thumb_B.jpg", "Download B"), unsafe_allow_html=True)
+                with col_t2: 
+                    st.image(st.session_state.thumb_path_B, caption="Thumbnail (B)", use_column_width=True)
+                    st.markdown(get_download_link(st.session_state.thumb_path_B, "Thumb_B.jpg", "Download B"), unsafe_allow_html=True)
             
             with st.expander("👁️ Original Transcript", expanded=False):
                 st.text_area("မူရင်းစာသား:", value=st.session_state.original_transcript, height=150, disabled=True)
@@ -778,15 +776,14 @@ elif app_mode == "🎙️ Faceless Channel Studio":
         elif "Upload" in fc_visual_mode and not fc_uploaded_images: st.error("⚠️ အနည်းဆုံးပုံ (၁) ပုံ Upload တင်ပေးပါ။")
         else:
             st.session_state.render_success = False
+            cleanup_temp_files()
             
-            # 👇 FIX: Dynamic Cache Buster
             run_id = str(int(time.time()))
             v_final = f"FACELESS_FINAL_{run_id}.mp4"
             st.session_state.final_video_path = v_final
             
             pbar = st.progress(0, text="🚀 အလိုအလျောက် ဖန်တီးမှုစတင်နေပါပြီ...")
             keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
-            cleanup_temp_files()
 
             fc_story_text = ""
             if "Manual" in fc_script_mode:
@@ -824,7 +821,6 @@ At the absolute end, include these two lines:
                     if not fc_story_text:
                         st.error(f"Story Error: Key အားလုံး Limit ပြည့်နေပါသည်။ {last_err}"); st.stop()
 
-            # Robust Title Parsing
             title_match = re.search(r'\[TITLE:\s*(.*?)\]', fc_story_text, re.IGNORECASE)
             tags_match = re.search(r'\[TAGS:\s*(.*?)\]', fc_story_text, re.IGNORECASE)
             
