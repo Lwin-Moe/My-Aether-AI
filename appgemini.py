@@ -1,5 +1,5 @@
 # =====================================================================
-# 📌 AETHER FILMWORKS AI // STUDIO V52 (SAAS EDITION + BULLETPROOF FIXES)
+# 📌 AETHER FILMWORKS AI // STUDIO V52 (BULLETPROOF DRAWTEXT OVERLAY)
 # =====================================================================
 
 import streamlit as st
@@ -33,7 +33,7 @@ if shutil.which("ffmpeg"):
 else:
     FFMPEG_BINARY = imageio_ffmpeg.get_ffmpeg_exe()
 
-# 👇 FIX: Bulletproof Font Installation for Streamlit Cloud (libass Tofu Box Fix)
+# 👇 FIX: Font Download for Drawtext filter
 local_font_path = "Padauk.ttf"
 if not os.path.exists(local_font_path):
     try:
@@ -42,7 +42,7 @@ if not os.path.exists(local_font_path):
     except:
         pass
 
-# Force font cache update so FFmpeg's libass can find 'Padauk' on Cloud Servers
+# Force font cache update just in case
 _fonts_dir = os.path.expanduser("~/.fonts")
 os.makedirs(_fonts_dir, exist_ok=True)
 _sys_font = os.path.join(_fonts_dir, "Padauk.ttf")
@@ -245,89 +245,63 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS", ttsmak
         finally:
             if os.path.exists(temp_out): os.remove(temp_out)
 
+# 👇 FIX: 1. Completely rewritten robust SRT parser to fix Timestamp Parsing Bug
 def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
-    marker = chr(96) * 3
-    clean_srt = raw_srt_text.replace(f"{marker}srt", "").replace(marker, "").strip()
-    with open(output_file, "w", encoding="utf-8-sig") as f: f.write(clean_srt)
+    lines = raw_srt_text.strip().split('\n')
     parsed_lines = []
-    full_speech = []
-    matches = list(re.finditer(r'(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})', clean_srt))
+    current_start, current_end = 0.0, 0.0
+    current_text = []
     
-    prev_end_sec = 0.0
-    for i in range(len(matches)):
-        start_str = matches[i].group(1).replace('.', ',')
-        end_str = matches[i].group(2).replace('.', ',')
-        text_start = matches[i].end()
-        if i + 1 < len(matches):
-            block = clean_srt[text_start:matches[i+1].start()].strip()
-            lines = block.split('\n')
-            if len(lines) > 0 and lines[-1].strip().isdigit(): lines.pop()
-            block = " ".join(lines)
-        else: block = clean_srt[text_start:].strip().replace('\n', ' ')
+    for line in lines:
+        line = line.strip()
+        if not line: continue
+        if line.isdigit() and len(line) < 5: continue # Skip index numbers
         
-        if block:
-            try:
-                def to_sec(t):
-                    h, m, s_ms = t.split(':'); s, ms = s_ms.split(',')
-                    return int(h)*3600 + int(m)*60 + int(s) + int(ms.ljust(3, '0'))/1000.0
-                
-                start_sec = to_sec(start_str)
-                end_sec = to_sec(end_str)
-                
-                if start_sec < prev_end_sec: start_sec = prev_end_sec + 0.1
-                if end_sec - start_sec < 0.8: end_sec = start_sec + 0.8
-                prev_end_sec = end_sec
-
-                text_content = block.strip()
-                if use_fade: 
-                    text_content = "{\\fscx0\\fscy0\\t(0,150,\\fscx100\\fscy100)}" + text_content
-                parsed_lines.append((start_sec, end_sec, text_content))
-                full_speech.append(block.strip())
-            except: pass
+        time_match = re.search(r'(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})', line)
+        if time_match:
+            if current_text:
+                parsed_lines.append((current_start, current_end, " ".join(current_text)))
+                current_text = []
             
-    if not parsed_lines:
-        text_only = re.sub(r'^\d+\s*$', '', clean_srt, flags=re.MULTILINE).strip()
-        if text_only:
-            parsed_lines.append((0.0, min(10.0, len(text_only)*0.1), text_only))
-            full_speech.append(text_only)
-    return parsed_lines, " ".join(full_speech)
-
-def create_custom_ass(parsed_timestamps, output_file, style_dict, video_w=720, video_h=1280):
-    font_name = "Padauk" 
-    font_size = style_dict.get('FontSize', '26') # Ensure new font size works here
-    pri_color = style_dict.get('PrimaryColour', '&H0000FFFF')
-    bg_color = style_dict.get('BackColour', '&H00000000')
-    outline = style_dict.get('Outline', '2')
-    shadow = style_dict.get('Shadow', '2')
-    align = style_dict.get('Alignment', '5')
-    margin_v = style_dict.get('MarginV', '80')
-    bold = style_dict.get('Bold', '1')
+            def to_sec(t_str):
+                t_str = t_str.replace(',', '.')
+                parts = t_str.split(':')
+                return int(parts[0])*3600 + int(parts[1])*60 + float(parts[2])
+                
+            current_start = to_sec(time_match.group(1))
+            current_end = to_sec(time_match.group(2))
+        else:
+            if not re.match(r'^\[.*?\]$', line): # ignore leftover tags
+                current_text.append(line)
+                
+    if current_text:
+        parsed_lines.append((current_start, current_end, " ".join(current_text)))
+        
+    final_parsed = []
+    prev_end = 0.0
+    full_speech = []
     
-    header = f"""[Script Info]
-ScriptType: v4.00+
-PlayResX: {video_w}
-PlayResY: {video_h}
+    for start, end, txt in parsed_lines:
+        if start < prev_end: start = prev_end + 0.1
+        if end - start < 0.8: end = start + 0.8
+        prev_end = end
+        
+        # Cleanup emojis for TTS text
+        clean_speech_text = re.sub(r'[^\w\s\u1000-\u109F]', '', txt)
+        full_speech.append(clean_speech_text)
+        
+        final_parsed.append((start, end, txt))
+        
+    with open(output_file, "w", encoding="utf-8-sig") as f:
+        for i, (s, e, t) in enumerate(final_parsed, 1):
+            def fmt(sec):
+                return f"{int(sec//3600):02d}:{int((sec%3600)//60):02d}:{int(sec%60):02d},{int((sec%1)*1000):03d}"
+            f.write(f"{i}\n{fmt(s)} --> {fmt(e)}\n{t}\n\n")
+            
+    return final_parsed, " ".join(full_speech)
 
-[V4+ Styles]
-Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,{font_name},{font_size},{pri_color},&H000000FF,&H00000000,{bg_color},{bold},0,0,0,100,100,0,0,1,{outline},{shadow},{align},10,10,{margin_v},1
-
-[Events]
-Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-"""
-    with open(output_file, 'w', encoding='utf-8') as f:
-        f.write(header)
-        for start, end, text in parsed_timestamps:
-            def fmt_ass_time(sec):
-                h = int(sec // 3600)
-                m = int((sec % 3600) // 60)
-                s = int(sec % 60)
-                cs = int((sec - int(sec)) * 100)
-                return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
-            clean_text = text.replace('\n', '\\N')
-            f.write(f"Dialogue: 0,{fmt_ass_time(start)},{fmt_ass_time(end)},Default,,0,0,0,,{clean_text}\n")
-
-def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_bypass=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)", use_mirror=False, use_color=False, use_grain=False, use_fps=False, sub_style_str="", use_freeze=False, logo_path=None):
+# 👇 FIX: 2. Changed render function to use exact Drawtext Overlay parameters instead of buggy ASS
+def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_bypass=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)", use_mirror=False, use_color=False, use_grain=False, use_fps=False, sub_position="Bottom", sub_color="Yellow", sub_size=26, sub_thickness=2.5, use_freeze=False, logo_path=None):
     try:
         a_dur = get_file_duration(in_a)
         v_max_dur = get_file_duration(in_v)
@@ -358,14 +332,25 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
             logo = ffmpeg.filter(logo, 'scale', -1, 80)
             video = ffmpeg.overlay(video, logo, x='W-w-20', y=20)
 
-        # Bulletproof ASS Subtitle Rendering
-        if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"] and os.path.exists("subtitles.srt"):
-            ass_path = "subtitles.ass"
-            style_dict = dict(item.split('=') for item in sub_style_str.split(','))
-            v_w, v_h = (720, 1280) if "9:16" in ratio else (1280, 720)
-            
-            create_custom_ass(parsed_timestamps, ass_path, style_dict, v_w, v_h)
-            video = ffmpeg.filter(video, 'subtitles', ass_path, fontsdir='.', charenc='UTF-8')
+        # 👇 FIX 2 & 3: Direct Drawtext Filter Injection for perfect text shaping & Vertical Middle positioning
+        if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"] and parsed_timestamps:
+            for start, end, text in parsed_timestamps:
+                # Escape characters required for drawtext
+                safe_text = text.replace("'", "\u2019").replace(":", "\\:").replace("\n", " ").strip()
+                
+                # Vertical Middle logic included here
+                if "Center" in sub_position: y_expr = "(h-text_h)/2"
+                elif "Top" in sub_position: y_expr = "100"
+                else: y_expr = "h-text_h-100"
+                
+                # Color mapping
+                c_str = "yellow"
+                if "White" in sub_color: c_str = "white"
+                elif "Green" in sub_color: c_str = "green"
+                elif "Red" in sub_color: c_str = "red"
+                elif "Gold" in sub_color: c_str = "gold"
+
+                video = ffmpeg.filter(video, 'drawtext', fontfile='Padauk.ttf', text=safe_text, fontsize=sub_size, fontcolor=c_str, bordercolor='black', borderw=sub_thickness, x='(w-text_w)/2', y=y_expr, enable=f'between(t,{start},{end})')
 
         out = ffmpeg.output(video, audio, out_v, vcodec='libx264', pix_fmt='yuv420p', acodec='aac', preset='fast', crf=21, t=v_max_dur)
         out.run(cmd=FFMPEG_BINARY, overwrite_output=True, capture_stdout=True, capture_stderr=True)
@@ -505,19 +490,15 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         st.markdown("<p style='font-weight: bold; color: #818cf8; font-size: 16px;'>📝 Subtitle Pro Settings</p>", unsafe_allow_html=True)
         if subtitle_mode in ["Both (Burn + SRT)", "Burn into Video"]:
             sub_position = st.selectbox("📍 Position", ["Bottom", "Center", "Top"])
-            sub_color = st.selectbox("🎨 Color", ["Yellow Text + Black Outline", "White Text + Black Outline", "Neon Green Text + Black Outline", "Red Text + Black Outline", "Gold Text + Black Outline"])
-            # 👇 FIX: Changed Default Size from 22 to 24
+            sub_color = st.selectbox("🎨 Color", ["Yellow Text", "White Text", "Neon Green Text", "Red Text", "Gold Text"])
             sub_size = st.slider("🔠 Font Size", 16, 40, 24)
             sub_thickness = st.slider("✒️ Outline Thickness", 1.0, 5.0, 2.5)
             col_s1, col_s2 = st.columns(2)
             with col_s1:
-                sub_bg = st.checkbox("🔲 Background Box")
                 sub_short = st.checkbox("✂️ Short & Punchy (Hormozi)")
-            with col_s2:
-                sub_fade = st.checkbox("✨ Cinematic Pop-Up")
         else:
             st.info("💡 Burn into Video ရွေးထားမှ ချိန်ညှိနိုင်ပါမည်။")
-            sub_position, sub_color, sub_size, sub_thickness, sub_bg, sub_short, sub_fade = "Bottom", "Yellow", 24, 2.5, False, False, False
+            sub_position, sub_color, sub_size, sub_thickness, sub_short = "Bottom", "Yellow", 24, 2.5, False
         st.markdown("</div>", unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -576,8 +557,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                                     gemini_prompt = f"Listen to the audio. Translate and adapt the text into highly engaging, natural spoken Burmese. STRICT RULES: 1. Include Synergy Audio Tags like [pause=1.0], [excited]. 2. NO ENGLISH TRANSLITERATION. 3. Output ONLY valid SRT format matching original timestamps.{extra_rules}{hormozi_rule}"
                                 
                                 response = client.models.generate_content(model="gemini-2.5-flash", contents=[media_file, gemini_prompt])
-                                marker = chr(96) * 3
-                                raw_output_text = response.text.strip().replace(f"{marker}srt", "").replace(marker, "")
+                                raw_output_text = response.text.strip()
                                 client.files.delete(name=media_file.name)
                                 success_gemini = True
                                 break 
@@ -611,8 +591,9 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     
                     clean_raw_srt = re.sub(r'\[TITLE:.*?\]', '', raw_output_text, flags=re.IGNORECASE)
                     clean_raw_srt = re.sub(r'\[TAGS:.*?\]', '', clean_raw_srt, flags=re.IGNORECASE).strip()
+                    clean_raw_srt = clean_raw_srt.replace('```srt', '').replace('```', '')
                     
-                    parsed_timestamps, speech_text = parse_and_save_real_srt(clean_raw_srt, srt_final, use_fade=sub_fade)
+                    parsed_timestamps, speech_text = parse_and_save_real_srt(clean_raw_srt, srt_final, use_fade=False)
                     st.session_state.generated_script = clean_raw_srt
                     
                     try:
@@ -627,7 +608,8 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                                     with open("thumb_text.txt", "w", encoding="utf-8") as tf:
                                         tf.write(textwrap.fill(st.session_state.viral_title, width=25))
                                     if os.path.exists(font_path):
-                                        stream = ffmpeg.filter(stream.video, 'drawtext', textfile='thumb_text.txt', fontfile=font_path, fontcolor='white', fontsize=65, x='(w-text_w)/2', y='h-text_h-100', box=1, boxcolor='red@0.9', boxborderw=20, borderw=3, bordercolor='black', line_spacing=15)
+                                        # 👇 FIX 3: Vertical Middle Thumbnail Text y='(h-text_h)/2'
+                                        stream = ffmpeg.filter(stream.video, 'drawtext', textfile='thumb_text.txt', fontfile=font_path, fontcolor='white', fontsize=65, x='(w-text_w)/2', y='(h-text_h)/2', box=1, boxcolor='red@0.9', boxborderw=20, borderw=3, bordercolor='black', line_spacing=15)
                                 ffmpeg.output(stream, thumb_name, vframes=1).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
                             except: pass
                             
@@ -640,29 +622,13 @@ if app_mode == "🎙️ Movie Dubbing Studio":
             with st.spinner(f"⏳ [အဆင့်၄/၆] AI Voice Over ထုတ်လုပ်နေပါသည်..."):
                 pbar.progress(60, text="🎙️ [အဆင့် ၄/၆] အသံသရုပ်ဆောင်ဖန်တီးနေပါသည်...")
                 try:
-                    raw_speech = " ".join([t for _,_,t in parsed_timestamps])
-                    clean_speech = re.sub(r'\{.*?\}', '', raw_speech)
-                    asyncio.run(generate_tts(clean_speech, voice_char, a_generated, engine=audio_engine_choice, ttsmaker_key=key_ttsmaker, eleven_key=locals().get('eleven_key_input', ''), custom_eleven_id=locals().get('custom_eleven_id', ''), gemini_key=locals().get('synergy_key', api_key_input), pitch=pitch_level, voice_fx=fx_level))
+                    asyncio.run(generate_tts(speech_text, voice_char, a_generated, engine=audio_engine_choice, ttsmaker_key=key_ttsmaker, eleven_key=locals().get('eleven_key_input', ''), custom_eleven_id=locals().get('custom_eleven_id', ''), gemini_key=locals().get('synergy_key', api_key_input), pitch=pitch_level, voice_fx=fx_level))
                 except Exception as e: st.error(f"အသံထုတ်လုပ်ခြင်းမအောင်မြင်ပါ: {e}"); st.stop()
 
             with st.spinner("⏳ [အဆင့်၅/၆] ဗီဒီယိုနှင့် စာတန်းထိုးပေါင်းစပ်နေပါသည်..."):
                 pbar.progress(80, text="🎬 [အဆင့် ၅/၆] ဗီဒီယိုနှင့်စာတန်းထိုး ပေါင်းစပ်နေပါသည်...")
-                align_val = 2 if "Bottom" in sub_position else (5 if "Center" in sub_position else 8)
                 
-                prim_c = "&H0000FFFF"
-                if "White" in sub_color: prim_c = "&H00FFFFFF"
-                elif "Green" in sub_color: prim_c = "&H0000FF00"
-                elif "Red" in sub_color: prim_c = "&H000000FF"
-                elif "Gold" in sub_color: prim_c = "&H0000D7FF"
-                
-                dyn_style = f"FontName=Padauk,FontSize={sub_size},PrimaryColour={prim_c},BackColour={'&H80000000' if sub_bg else '&H00000000'},BorderStyle={3 if sub_bg else 1},Outline={0 if sub_bg else sub_thickness},Alignment={align_val},MarginV=60"
-                
-                logo_file_path = None
-                if uploaded_logo and not use_text_watermark:
-                    logo_file_path = "temp_logo.png"
-                    with open(logo_file_path, "wb") as f: f.write(uploaded_logo.read())
-
-                success, err_msg = render_premium_saas_video(v_input, a_generated, parsed_timestamps, v_final, video_ratio, cb_bypass, cb_blur, watermark_text, subtitle_mode, cb_mirror, cb_color, cb_grain, cb_fps, dyn_style, cb_freeze, logo_file_path)
+                success, err_msg = render_premium_saas_video(v_input, a_generated, parsed_timestamps, v_final, video_ratio, cb_bypass, cb_blur, watermark_text, subtitle_mode, cb_mirror, cb_color, cb_grain, cb_fps, sub_position=sub_position, sub_color=sub_color, sub_size=sub_size, sub_thickness=sub_thickness, use_freeze=cb_freeze, logo_path=logo_file_path)
                 if not success: st.error(f"Sync Failure: {err_msg}")
 
             if success and selected_bgm not in ["None (BGM မထည့်ပါ)"]:
@@ -927,7 +893,7 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
                         
                         marker = chr(96) * 3
                         fc_srt_text = srt_res.text.strip().replace(f"{marker}srt", "").replace(marker, "")
-                        fc_parsed, _ = parse_and_save_real_srt(fc_srt_text, "subtitles.srt", use_fade=True)
+                        fc_parsed, _ = parse_and_save_real_srt(fc_srt_text, "subtitles.srt", use_fade=False)
                     except Exception as e: last_err = str(e)
                 
                 if not fc_parsed:
@@ -942,7 +908,7 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
                             
                             marker = chr(96) * 3
                             fc_srt_text = srt_res.text.strip().replace(f"{marker}srt", "").replace(marker, "")
-                            fc_parsed, _ = parse_and_save_real_srt(fc_srt_text, "subtitles.srt", use_fade=True) 
+                            fc_parsed, _ = parse_and_save_real_srt(fc_srt_text, "subtitles.srt", use_fade=False) 
                             client.files.delete(name=audio_upload.name)
                             break
                         except Exception as e: last_err = str(e); continue
@@ -952,17 +918,8 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
             with st.spinner("⏳ [အဆင့်၅/၅] အားလုံးကိုပေါင်းစပ်ပြီး Master Video ထုတ်လုပ်နေပါသည်..."):
                 pbar.progress(85, text="🎬 Master Rendering အလုပ်လုပ်နေပါသည်...")
                 try:
-                    align_fc = 5 if "Center" in fc_sub_position else (2 if "Bottom" in fc_sub_position else 8)
-                    prim_fc = "&H0000FFFF"
-                    if "White" in fc_sub_color: prim_fc = "&H00FFFFFF"
-                    elif "Green" in fc_sub_color: prim_fc = "&H0000FF00"
-                    elif "Red" in fc_sub_color: prim_fc = "&H000000FF"
-                    elif "Gold" in fc_sub_color: prim_fc = "&H0000D7FF"
- 
-                    # 👇 FIX: Changed Default FontSize to 26
-                    dyn_fc_style = f"FontName=Padauk,FontSize=26,PrimaryColour={prim_fc},BackColour=&H00000000,BorderStyle=1,Outline=2.5,Shadow=2,Bold=1,Alignment={align_fc},MarginV=80"
-                    
-                    success, err_msg = render_premium_saas_video("fc_video_loop.mp4", "fc_audio.wav", fc_parsed, "FACELESS_FINAL.mp4", fc_ratio, use_bypass=True, subtitle_mode=fc_subtitle_mode, sub_style_str=dyn_fc_style)
+                    # 👇 Passed sub_size=26 default explicitly
+                    success, err_msg = render_premium_saas_video("fc_video_loop.mp4", "fc_audio.wav", fc_parsed, "FACELESS_FINAL.mp4", fc_ratio, use_bypass=True, subtitle_mode=fc_subtitle_mode, sub_position=fc_sub_position, sub_color=fc_sub_color, sub_size=26, sub_thickness=2.5)
                     
                     if success and fc_bgm not in ["None (BGM မထည့်ပါ)"]:
                         bgm_path = os.path.join("bgm_tracks", random.choice(bgm_files) if "Auto" in fc_bgm else fc_bgm)
@@ -984,7 +941,8 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
                                     title_text = st.session_state.viral_title if st.session_state.viral_title else "Viral Video"
                                     tf.write(textwrap.fill(title_text, width=25))
                                 if os.path.exists("Padauk.ttf"):
-                                    stream = ffmpeg.filter(stream.video, 'drawtext', textfile='thumb_text.txt', fontfile='Padauk.ttf', fontcolor='white', fontsize=65, x='(w-text_w)/2', y='h-text_h-100', box=1, boxcolor='red@0.9', boxborderw=20, borderw=3, bordercolor='black', line_spacing=15)
+                                    # 👇 FIX 3: Vertical Middle Thumbnail Text y='(h-text_h)/2'
+                                    stream = ffmpeg.filter(stream.video, 'drawtext', textfile='thumb_text.txt', fontfile='Padauk.ttf', fontcolor='white', fontsize=65, x='(w-text_w)/2', y='(h-text_h)/2', box=1, boxcolor='red@0.9', boxborderw=20, borderw=3, bordercolor='black', line_spacing=15)
                                 ffmpeg.output(stream, thumb_name, vframes=1).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
                             except: pass
                         st.session_state.thumb_path_A = "thumb_A.jpg" if os.path.exists("thumb_A.jpg") else None
