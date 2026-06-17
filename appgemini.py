@@ -1,5 +1,5 @@
 # =====================================================================
-# 📌 AETHER FILMWORKS AI // STUDIO V52 (MOVIE DUBBING SUBTITLE FIX)
+# 📌 AETHER FILMWORKS AI // STUDIO V52 (BULLETPROOF TEXTWRAP & OVERLAY)
 # =====================================================================
 
 import streamlit as st
@@ -38,7 +38,7 @@ local_font_path = "Padauk.ttf"
 if not os.path.exists(local_font_path):
     try:
         import urllib.request
-        urllib.request.urlretrieve("https://github.com/google/fonts/raw/main/ofl/padauk/Padauk-Regular.ttf", local_font_path)
+        urllib.request.urlretrieve("[https://github.com/google/fonts/raw/main/ofl/padauk/Padauk-Regular.ttf](https://github.com/google/fonts/raw/main/ofl/padauk/Padauk-Regular.ttf)", local_font_path)
     except:
         pass
 
@@ -79,7 +79,7 @@ st.set_page_config(page_title="AETHER STUDIO V52", layout="wide", page_icon="�
 
 st.markdown('''
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Montserrat:wght@500;700;800;900&display=swap');
+    @import url('[https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Montserrat:wght@500;700;800;900&display=swap](https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Montserrat:wght@500;700;800;900&display=swap)');
     .stApp { background-color: #0b0f19 !important; background-image: radial-gradient(circle at top, #161b2e 0%, #0b0f19 60%) !important; color: #cbd5e1 !important; font-family: 'Inter', sans-serif; }
     section[data-testid="stSidebar"] { background-color: #0d111c !important; border-right: 1px solid rgba(255, 255, 255, 0.05) !important; }
     h1, h2, h3, h4 { font-family: 'Montserrat', sans-serif !important; color: #f8fafc !important; font-weight: 700 !important; }
@@ -186,7 +186,7 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS", ttsmak
             payload = {"contents": [{"parts": [{"text": prompt_text}]}], "safetySettings": [{"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"}], "generationConfig": {"responseModalities": ["AUDIO"], "speechConfig": { "voiceConfig": { "prebuiltVoiceConfig": { "voiceName": voice_name } } }}}
             success = False
             for current_key in keys_list:
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key={current_key}"
+                url = f"[https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key=){current_key}"
                 try:
                     res = requests.post(url, json=payload, timeout=60)
                     if res.status_code == 200:
@@ -201,7 +201,7 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS", ttsmak
             if not success: continue 
         elif "ElevenLabs" in engine:
             voice_id = custom_eleven_id.strip() if custom_eleven_id else ("21m00Tcm4TlvDq8ikWAM" if "Male" in voice_model else "AZnzlk1XvdvUeBnXmlld")
-            res = requests.post(f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}", json={"text": chunk_text, "model_id": "eleven_multilingual_v2"}, headers={"xi-api-key": eleven_key}, timeout=60)
+            res = requests.post(f"[https://api.elevenlabs.io/v1/text-to-speech/](https://api.elevenlabs.io/v1/text-to-speech/){voice_id}", json={"text": chunk_text, "model_id": "eleven_multilingual_v2"}, headers={"xi-api-key": eleven_key}, timeout=60)
             if res.status_code == 200:
                 with open(c_out, "wb") as f: f.write(res.content)
         else:
@@ -245,7 +245,7 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS", ttsmak
         finally:
             if os.path.exists(temp_out): os.remove(temp_out)
 
-# 👇 FIX: Bulletproof Lenient Subtitle Parser to catch messed up AI Timestamps
+# 👇 FIX: Bulletproof Lenient Subtitle Parser to catch messy AI Timestamps for BOTH studios
 def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
     lines = raw_srt_text.strip().split('\n')
     parsed_lines = []
@@ -257,7 +257,6 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
         if not line: continue
         if line.isdigit() and len(line) < 5: continue 
         
-        # Extremely lenient parser for AI's messy timestamps
         if "-->" in line:
             if current_text:
                 parsed_lines.append((current_start, current_end, " ".join(current_text)))
@@ -270,9 +269,9 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
                     if ',' not in t_str: t_str += ",000"
                     main_t, ms = t_str.split(',')
                     tp = main_t.split(':')
-                    if len(tp) == 1: return int(tp[0]) + int(ms.ljust(3,'0'))/1000.0
-                    elif len(tp) == 2: return int(tp[0])*60 + int(tp[1]) + int(ms.ljust(3,'0'))/1000.0
-                    else: return int(tp[0])*3600 + int(tp[1])*60 + int(tp[2]) + int(ms.ljust(3,'0'))/1000.0
+                    if len(tp) == 1: return int(tp[0]) + float(ms.ljust(3, '0'))/1000.0
+                    elif len(tp) == 2: return int(tp[0])*60 + int(tp[1]) + float(ms.ljust(3, '0'))/1000.0
+                    else: return int(tp[0])*3600 + int(tp[1])*60 + int(tp[2]) + float(ms.ljust(3, '0'))/1000.0
                     
                 current_start = parse_lenient(parts[0])
                 current_end = parse_lenient(parts[1])
@@ -307,7 +306,7 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
             
     return final_parsed, " ".join(full_speech)
 
-# 👇 FIX: Render video function includes background Box and text wrapping fixes
+# 👇 FIX: Render video function includes background Box and text wrapping at exactly 25 characters
 def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_bypass=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)", use_mirror=False, use_color=False, use_grain=False, use_fps=False, sub_position="Bottom", sub_color="Yellow", sub_size=26, sub_thickness=2.5, sub_bg=False, use_freeze=False, logo_path=None):
     try:
         a_dur = get_file_duration(in_a)
@@ -339,10 +338,9 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
             logo = ffmpeg.filter(logo, 'scale', -1, 80)
             video = ffmpeg.overlay(video, logo, x='W-w-20', y=20)
 
-        # Apply robust Drawtext Overlay directly (Fixes Tofu and Font placement issues)
+        # Apply robust Drawtext Overlay directly with 25 characters wrap width for both
         if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"] and parsed_timestamps:
-            # Dynamically set wrap width based on aspect ratio
-            wrap_width = 22 if "9:16" in ratio else 45
+            wrap_width = 25 if "9:16" in ratio else 45
             
             for i, (start, end, text) in enumerate(parsed_timestamps):
                 wrapped_text = textwrap.fill(text, width=wrap_width)
@@ -350,7 +348,6 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
                 with open(txt_filename, "w", encoding="utf-8") as tf:
                     tf.write(wrapped_text)
                 
-                # Perfect Vertical Placement
                 if "Center" in sub_position: y_expr = "(h-text_h)/2"
                 elif "Top" in sub_position: y_expr = "150"
                 else: y_expr = "h-text_h-150"
@@ -511,11 +508,9 @@ if app_mode == "🎙️ Movie Dubbing Studio":
             with col_s1:
                 sub_bg = st.checkbox("🔲 Background Box")
                 sub_short = st.checkbox("✂️ Short & Punchy (Hormozi)")
-            with col_s2:
-                sub_fade = st.checkbox("✨ Cinematic Pop-Up")
         else:
             st.info("💡 Burn into Video ရွေးထားမှ ချိန်ညှိနိုင်ပါမည်။")
-            sub_position, sub_color, sub_size, sub_thickness, sub_bg, sub_short, sub_fade = "Bottom", "Yellow", 24, 2.5, False, False, False
+            sub_position, sub_color, sub_size, sub_thickness, sub_bg, sub_short = "Bottom", "Yellow", 24, 2.5, False, False
         st.markdown("</div>", unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -596,6 +591,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                         comp = client.chat.completions.create(model="llama-3.3-70b-versatile" if "Groq" in ai_provider else ("gpt-5.5-pro" if "5.5" in ai_provider else "gpt-4o"), messages=[{"role": "user", "content": f"{base_prompt} --- SRT --- {tsrt}"}])
                         raw_output_text = comp.choices[0].message.content
 
+                    # Regex Extraction & Syntax fix integration
                     title_match = re.search(r'\[TITLE:\s*(.*?)\]', raw_output_text, re.IGNORECASE)
                     tags_match = re.search(r'\[TAGS:\s*(.*?)\]', raw_output_text, re.IGNORECASE)
                     
@@ -607,8 +603,8 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     
                     clean_raw_srt = re.sub(r'\[TITLE:.*?\]', '', raw_output_text, flags=re.IGNORECASE)
                     clean_raw_srt = re.sub(r'\[TAGS:.*?\]', '', clean_raw_srt, flags=re.IGNORECASE).strip()
-                    clean_raw_srt = clean_raw_srt.replace('```srt', '').replace('
-```', '')
+                    marker = chr(96) * 3
+                    clean_raw_srt = clean_raw_srt.replace(f"{marker}srt", "").replace(marker, "")
                     
                     parsed_timestamps, speech_text = parse_and_save_real_srt(clean_raw_srt, srt_final, use_fade=False)
                     st.session_state.generated_script = clean_raw_srt
@@ -798,8 +794,10 @@ At the absolute end, include these two lines:
             title_match = re.search(r'\[TITLE:\s*(.*?)\]', fc_story_text, re.IGNORECASE)
             tags_match = re.search(r'\[TAGS:\s*(.*?)\]', fc_story_text, re.IGNORECASE)
             
-            if title_match: st.session_state.viral_title = re.sub(r'[\[\]]', '', title_match.group(1)).strip()
-            if tags_match: st.session_state.viral_tags = tags_match.group(1).strip()
+            if title_match: 
+                st.session_state.viral_title = re.sub(r'[\[\]]', '', title_match.group(1)).strip()
+            if tags_match: 
+                st.session_state.viral_tags = tags_match.group(1).strip()
             
             fc_story_text = re.sub(r'\[TITLE:.*?\]', '', fc_story_text, flags=re.IGNORECASE)
             fc_story_text = re.sub(r'\[TAGS:.*?\]', '', fc_story_text, flags=re.IGNORECASE).strip()
@@ -858,7 +856,7 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
                         def generate_pollinations_image(prompt_text, idx):
                             try:
                                 encoded_prompt = urllib.parse.quote(prompt_text.strip())
-                                url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={tg_width}&height={tg_height}&nologo=true"
+                                url = f"[https://image.pollinations.ai/prompt/](https://image.pollinations.ai/prompt/){encoded_prompt}?width={tg_width}&height={tg_height}&nologo=true"
                                 res = requests.get(url, timeout=60)
                                 if res.status_code == 200:
                                     img_path = f"fc_img_{idx}.jpg"
