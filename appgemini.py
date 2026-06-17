@@ -1,5 +1,5 @@
 # =====================================================================
-# 📌 AETHER FILMWORKS AI // STUDIO V52 (POLLINATIONS + BUG FIXES)
+# 📌 AETHER FILMWORKS AI // STUDIO V52 (SAAS EDITION + BUG FIXES)
 # =====================================================================
 
 import streamlit as st
@@ -27,17 +27,17 @@ import textwrap
 import urllib.parse 
 import concurrent.futures 
 
-# 👇 FIX: Prioritize system FFmpeg (which supports Burmese Text Shaping) over imageio_ffmpeg
+# 👇 FIX: Prioritize system FFmpeg
 if shutil.which("ffmpeg"):
     FFMPEG_BINARY = "ffmpeg"
 else:
     FFMPEG_BINARY = imageio_ffmpeg.get_ffmpeg_exe()
 
-# 👇 Auto-Font Downloader to prevent Tofu boxes in Cloud environments
-if not os.path.exists("NotoSansMyanmar-Bold.ttf"):
+# 👇 FIX: Font Download & Metadata Alignment (Using Padauk consistently)
+if not os.path.exists("Padauk.ttf"):
     try:
         import urllib.request
-        urllib.request.urlretrieve("https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansMyanmar/NotoSansMyanmar-Bold.ttf", "NotoSansMyanmar-Bold.ttf")
+        urllib.request.urlretrieve("https://github.com/google/fonts/raw/main/ofl/padauk/Padauk-Regular.ttf", "Padauk.ttf")
     except:
         pass
 
@@ -47,7 +47,6 @@ ELEVEN_KEY_FILE = "saved_eleven_key.txt"
 GROQ_KEY_FILE = "saved_groq_key.txt"
 OPENAI_KEY_FILE = "saved_openai_key.txt"
 ELEVEN_VOICE_ID_FILE = "saved_eleven_voice_id.txt"
-PEXELS_KEY_FILE = "saved_pexels_key.txt" 
 
 def load_key(file_path):
     if os.path.exists(file_path):
@@ -88,9 +87,17 @@ if "generated_script" not in st.session_state: st.session_state.generated_script
 if "original_transcript" not in st.session_state: st.session_state.original_transcript = ""
 if "viral_title" not in st.session_state: st.session_state.viral_title = ""
 if "viral_tags" not in st.session_state: st.session_state.viral_tags = ""
-if "thumb_path" not in st.session_state: st.session_state.thumb_path = None
+if "thumb_path_A" not in st.session_state: st.session_state.thumb_path_A = None
+if "thumb_path_B" not in st.session_state: st.session_state.thumb_path_B = None
+if "viral_score" not in st.session_state: st.session_state.viral_score = ""
 
 # --- 2. CORE AUTOMATION FLOW ENGINES ---
+def cleanup_temp_files():
+    for f in os.listdir("."):
+        if f.startswith(("fc_clip_", "fc_img_", "raw_fc_clip_", "temp_", "subtitles.")):
+            try: os.remove(f)
+            except: pass
+
 def get_file_duration(file_path):
     try:
         cmd = [FFMPEG_BINARY, "-i", file_path]
@@ -109,8 +116,7 @@ def download_video_from_url(url, output_path="input_temp.mp4"):
         'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best', 
         'quiet': True, 'no_warnings': True, 'nocheckcertificate': True,
         'ffmpeg_location': FFMPEG_BINARY, 'source_address': '0.0.0.0', 
-        'extractor_args': {'youtube': {'player_client': ['tv', 'ios', 'web']}}, 
-        'http_headers': { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36' }
+        'extractor_args': {'youtube': {'player_client': ['tv', 'ios', 'web']}}
     }
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl: ydl.download([url])
@@ -124,14 +130,9 @@ def extract_audio_fast(video_in, audio_out="temp_extracted.mp3"):
          .run(cmd=FFMPEG_BINARY, overwrite_output=True, capture_stdout=True, capture_stderr=True))
         if os.path.exists(audio_out): return audio_out
     except: pass
-    try:
-        ydl_opts = {'format': 'bestaudio/best', 'outtmpl': 'temp_extracted', 'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'}], 'quiet': True, 'nocheckcertificate': True, 'source_address': '0.0.0.0', 'extractor_args': {'youtube': {'player_client': ['tv', 'ios', 'web']}}, 'ffmpeg_location': FFMPEG_BINARY}
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl: ydl.extract_info(video_in, download=True)
-        return audio_out
-    except: return None
+    return None
 
-# Smart Chunking Logic splitting by ?, !, ., \n correctly
-async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default Free)", ttsmaker_key="", eleven_key="", custom_eleven_id="", gemini_key="", pitch=0, voice_fx="None (Standard Voice)"):
+async def generate_tts(text, voice_model, output_file, engine="Edge-TTS", ttsmaker_key="", eleven_key="", custom_eleven_id="", gemini_key="", pitch=0, voice_fx="None"):
     if not text.strip(): return
     
     if "Synergy" not in engine:
@@ -158,9 +159,8 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
             current_chunk = sentence
     if current_chunk.strip(): chunks.append(current_chunk.strip())
     
-    needs_ffmpeg = pitch != 0 or voice_fx != "None (Standard Voice)"
+    needs_ffmpeg = pitch != 0 or voice_fx != "None"
     temp_out = "temp_raw_audio_fx.wav" if needs_ffmpeg else output_file
-    
     chunk_files = []
     
     for i, chunk_text in enumerate(chunks):
@@ -171,8 +171,7 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
             keys_list = [k.strip() for k in gemini_key.split(",") if k.strip()]
             voice_name = "Puck" if "Puck" in voice_model else ("Charon" if "Charon" in voice_model else "Aoede")
             prompt_text = "You are a professional Burmese movie narrator. Read the following text naturally. " + chunk_text
-            payload = {"contents": [{"parts": [{"text": prompt_text}]}], "safetySettings": [{"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"}, {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"}, {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"}, {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}], "generationConfig": {"responseModalities": ["AUDIO"], "speechConfig": { "voiceConfig": { "prebuiltVoiceConfig": { "voiceName": voice_name } } }}}
-            
+            payload = {"contents": [{"parts": [{"text": prompt_text}]}], "safetySettings": [{"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"}], "generationConfig": {"responseModalities": ["AUDIO"], "speechConfig": { "voiceConfig": { "prebuiltVoiceConfig": { "voiceName": voice_name } } }}}
             success = False
             for current_key in keys_list:
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key={current_key}"
@@ -193,11 +192,6 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
             res = requests.post(f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}", json={"text": chunk_text, "model_id": "eleven_multilingual_v2"}, headers={"xi-api-key": eleven_key}, timeout=60)
             if res.status_code == 200:
                 with open(c_out, "wb") as f: f.write(res.content)
-        elif "TTSMaker" in engine:
-            voice_id = 781 if "Female" in voice_model else 780
-            res = requests.post("https://api.ttsmaker.com/v1/create-tts-order", json={"tts_api_key": ttsmaker_key, "tts_text": chunk_text, "voice_id": voice_id, "audio_format": "mp3"}, timeout=60).json()
-            if res.get("status") == "success":
-                with open(c_out, "wb") as f: f.write(requests.get(res["audio_file_url"]).content)
         else:
             voice = "my-MM-ThihaNeural" if "Male" in voice_model else "my-MM-NilarNeural"
             await edge_tts.Communicate(chunk_text, voice).save(c_out)
@@ -206,11 +200,10 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
             chunk_files.append(c_out)
 
     if not chunk_files:
-        raise Exception("TTS Generation Failed. Please check API keys or connection.")
+        raise Exception("TTS Generation Failed.")
         
     with open("audio_concat.txt", "w", encoding="utf-8") as f:
         for c in chunk_files: f.write(f"file '{c}'\n")
-    
     subprocess.run([FFMPEG_BINARY, "-y", "-f", "concat", "-safe", "0", "-i", "audio_concat.txt", "-c:a", "pcm_s16le", "-ar", "44100", temp_out], capture_output=True)
     
     for c in chunk_files:
@@ -223,7 +216,6 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
             factor = 1.0 + (pitch / 100.0) 
             audio = audio.filter('asetrate', int(44100 * factor)).filter('atempo', 1.0 / factor)
         
-        # New FX Filters included
         if "Epic" in voice_fx: audio = audio.filter('bass', g=12, f=120)
         elif "Walkie-Talkie" in voice_fx: audio = audio.filter('highpass', f=400).filter('lowpass', f=3000).filter('volume', 1.5)
         elif "Reverb" in voice_fx: audio = audio.filter('aecho', 0.8, 0.88, 60, 0.4)
@@ -237,7 +229,7 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
         try: 
             (audio.output(output_file, acodec='pcm_s16le', ac=1, ar='44100').overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True))
         except: 
-            import shutil; shutil.copy(temp_out, output_file)
+            shutil.copy(temp_out, output_file)
         finally:
             if os.path.exists(temp_out): os.remove(temp_out)
 
@@ -286,14 +278,11 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
         if text_only:
             parsed_lines.append((0.0, min(10.0, len(text_only)*0.1), text_only))
             full_speech.append(text_only)
-        else:
-            parsed_lines.append((0.0, 10.0, "[pause=1.0] စာတန်းထိုး အပြောင်းအလဲလုပ်နေပါသည်။"))
-            full_speech.append("[pause=1.0] စာတန်းထိုးအပြောင်းအလဲလုပ်နေပါသည်။")
     return parsed_lines, " ".join(full_speech)
 
-# Fully Custom ASS Writer replacing buggy FFmpeg conversion
+# 👇 FIX: Font Meta-Data Alignment (Padauk matches internal font engine expectations)
 def create_custom_ass(parsed_timestamps, output_file, style_dict, video_w=720, video_h=1280):
-    font_name = style_dict.get('FontName', 'NotoSansMyanmar-Bold')
+    font_name = "Padauk" # Hardcoded correct internal font name
     font_size = style_dict.get('FontSize', '24')
     pri_color = style_dict.get('PrimaryColour', '&H0000FFFF')
     bg_color = style_dict.get('BackColour', '&H00000000')
@@ -331,16 +320,6 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
     try:
         a_dur = get_file_duration(in_a)
         v_max_dur = get_file_duration(in_v)
-        safe_srt_path = os.path.abspath("subtitles.srt").replace('\\', '/')
-        
-        with open("subtitles.srt", "w", encoding="utf-8-sig") as f:
-            for i, (start, end, text) in enumerate(parsed_timestamps, start=1):
-                if start >= v_max_dur: continue
-                safe_end = min(end, v_max_dur)
-                def fmt_t(s): return f"{int(s//3600):02d}:{int((s%3600)//60):02d}:{int(s%60):02d},{int((s-int(s))*1000):03d}"
-                clean_text = re.sub(r'\[.*?\]', '', text)
-                clean_text = re.sub(r'\{.*?\}', '', clean_text).strip()
-                f.write(f"{i}\n{fmt_t(start)} --> {fmt_t(safe_end)}\n{clean_text}\n\n")
         
         video = ffmpeg.input(in_v).video
         if use_bypass: video = ffmpeg.filter(video, 'scale', '2*trunc(iw*1.08/2)', '2*trunc(ih*1.08/2)').filter('crop', 'iw/1.08', 'ih/1.08')
@@ -368,7 +347,7 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
             logo = ffmpeg.filter(logo, 'scale', -1, 80)
             video = ffmpeg.overlay(video, logo, x='W-w-20', y=20)
 
-        # Integrated Custom ASS implementation with explicit Font path
+        # 👇 FIX: Bulletproof ASS Subtitle Rendering Strategy for Streamlit Cloud
         if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"] and os.path.exists("subtitles.srt"):
             ass_path = "subtitles.ass"
             style_dict = dict(item.split('=') for item in sub_style_str.split(','))
@@ -376,8 +355,8 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
             
             create_custom_ass(parsed_timestamps, ass_path, style_dict, v_w, v_h)
             
-            font_dir = "/mount/src/my-aether-ai/font" if os.path.exists("/mount/src/my-aether-ai/font") else "."
-            video = ffmpeg.filter(video, 'ass', ass_path, fontsdir=font_dir)
+            # Note: We pass the .ass file into the 'subtitles' filter because 'subtitles' allows 'fontsdir'
+            video = ffmpeg.filter(video, 'subtitles', ass_path, fontsdir='.', charenc='UTF-8')
 
         out = ffmpeg.output(video, audio, out_v, vcodec='libx264', pix_fmt='yuv420p', acodec='aac', preset='fast', crf=21, t=v_max_dur)
         out.run(cmd=FFMPEG_BINARY, overwrite_output=True, capture_stdout=True, capture_stderr=True)
@@ -386,11 +365,36 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
 
 # --- 3. UI INTERFACE & NAVIGATION ---
 st.markdown('<div class="main-title">AETHER FILMWORKS</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">AI Studio V52 ⚡ Premium Edition</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">AI Studio V52 ⚡ SaaS Edition</div>', unsafe_allow_html=True)
 
 with st.sidebar:
     st.markdown("### 🧭 Navigation Menu")
-    app_mode = st.radio("Select Studio Mode:", ["🎙️ Movie Dubbing Studio", "🎙️ Faceless Channel Studio", "🎥 Veo Video Studio", "🎵 Lyria Music Studio","⚡ Translation/Transcript Studio","📥 Video Downloader Hub",])
+    app_mode = st.radio("Select Studio Mode:", ["🎙️ Movie Dubbing Studio", "🎙️ Faceless Channel Studio", "🎥 Veo Video Studio", "🎵 Lyria Music Studio"])
+    st.markdown("---")
+    
+    # 👇 NEW: Project Save/Load System (Grok Tier 1 Feature)
+    st.markdown("### 💾 Project Save & Load")
+    if st.button("Save Current Project"):
+        proj_data = {
+            "script": st.session_state.generated_script,
+            "title": st.session_state.viral_title,
+            "tags": st.session_state.viral_tags
+        }
+        json_str = json.dumps(proj_data, ensure_ascii=False)
+        b64 = base64.b64encode(json_str.encode('utf-8')).decode()
+        href = f'<a href="data:application/json;base64,{b64}" download="Aether_Project.json" style="color:#38bdf8; font-weight:bold;">📥 Download Project File (.json)</a>'
+        st.markdown(href, unsafe_allow_html=True)
+        
+    uploaded_proj = st.file_uploader("Upload Project", type=["json"])
+    if uploaded_proj:
+        try:
+            data = json.load(uploaded_proj)
+            st.session_state.generated_script = data.get("script", "")
+            st.session_state.viral_title = data.get("title", "")
+            st.session_state.viral_tags = data.get("tags", "")
+            st.success("✅ Project Loaded!")
+        except: st.error("Invalid Project File.")
+
     st.markdown("---")
     ai_provider = st.selectbox("Choose AI Provider", ["Google Gemini (Flash - Recommended)", "OpenAI (GPT-5.5 Pro)", "Groq API (Fast & Free)"])
     saved_gemini = load_key(API_KEY_FILE)
@@ -409,10 +413,6 @@ with st.sidebar:
     if app_mode == "🎙️ Faceless Channel Studio":
         st.markdown("---")
         st.markdown("### 🔑 Additional API Keys")
-        saved_pexels = load_key(PEXELS_KEY_FILE)
-        pexels_key_input = st.text_input("Pexels API Key (Optional for SD Video)", type="password", value=saved_pexels)
-        if pexels_key_input and pexels_key_input != saved_pexels: save_key(PEXELS_KEY_FILE, pexels_key_input)
-        
         saved_groq_fc = load_key(GROQ_KEY_FILE)
         groq_key_fc = st.text_input("Groq API Key (For Accurate Whisper Sync)", type="password", value=saved_groq_fc)
         if groq_key_fc and groq_key_fc != saved_groq_fc: save_key(GROQ_KEY_FILE, groq_key_fc)
@@ -498,7 +498,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         if subtitle_mode in ["Both (Burn + SRT)", "Burn into Video"]:
             sub_position = st.selectbox("📍 Position", ["Bottom", "Center", "Top"])
             sub_color = st.selectbox("🎨 Color", ["Yellow Text + Black Outline", "White Text + Black Outline", "Neon Green Text + Black Outline", "Red Text + Black Outline", "Gold Text + Black Outline"])
-            sub_font = st.selectbox("🅰️ Font Family", ["NotoSansMyanmar-Bold", "Pyidaungsu", "Myanmar3_2018", "Padauk"])
             sub_size = st.slider("🔠 Font Size", 16, 40, 22)
             sub_thickness = st.slider("✒️ Outline Thickness", 1.0, 5.0, 2.5)
             col_s1, col_s2 = st.columns(2)
@@ -506,10 +505,10 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                 sub_bg = st.checkbox("🔲 Background Box")
                 sub_short = st.checkbox("✂️ Short & Punchy (Hormozi)")
             with col_s2:
-                sub_fade = st.checkbox("✨ Cinematic Fades")
+                sub_fade = st.checkbox("✨ Cinematic Pop-Up")
         else:
             st.info("💡 Burn into Video ရွေးထားမှ ချိန်ညှိနိုင်ပါမည်။")
-            sub_position, sub_color, sub_font, sub_size, sub_thickness, sub_bg, sub_short, sub_fade = "Bottom", "Yellow", "NotoSansMyanmar-Bold", 22, 2.5, False, False, False
+            sub_position, sub_color, sub_size, sub_thickness, sub_bg, sub_short, sub_fade = "Bottom", "Yellow", 22, 2.5, False, False, False
         st.markdown("</div>", unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -518,11 +517,10 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         elif not uploaded_file and not video_url: st.error("⚠️ ဗီဒီယိုဖိုင်သို့မဟုတ် Link ထည့်ပေးပါ။")
         else:
             st.session_state.render_success = False
-            st.session_state.original_transcript = ""
-            st.session_state.generated_script = ""
             v_input, a_extracted, a_generated, v_final, srt_final = "input_temp.mp4", "temp_extracted.mp3", "voice_temp.wav", "AETHER_RECAP_FINAL.mp4", "subtitles.srt"
 
             pbar = st.progress(0, text="🚀 အလုပ်စတင်နေပါပြီ...")
+            cleanup_temp_files()
 
             with st.spinner("⏳ [အဆင့်၁/၆] ဗီဒီယို ဖိုင်အားစနစ်ထဲသို့ ဆွဲသွင်းနေပါသည်..."):
                 pbar.progress(10, text="📥 [အဆင့် ၁/၆] ဗီဒီယိုဆွဲယူနေပါသည်...")
@@ -535,8 +533,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     st.error(str(dl_err)); st.stop()
                 
                 extracted_res = extract_audio_fast(v_input, a_extracted)
-                if not extracted_res or not os.path.exists(a_extracted):
-                    st.error("❌ အသံဖိုင်ခွဲထုတ်မရပါ။"); st.stop()
 
             with st.spinner(f"⏳ [အဆင့်၂/၆] {ai_provider} ဖြင့် ဇာတ်ညွှန်း၊ Title နှင့် Thumbnail ထုတ်လုပ်နေပါသည်..."):
                 pbar.progress(30, text=f"🤖 [အဆင့် ၂/၆] ဇာတ်ညွှန်း၊ Title နှင့် Hashtagsဖန်တီးနေပါသည်...")
@@ -556,17 +552,14 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     if "Gemini" in ai_provider:
                         keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
                         success_gemini = False; last_err = ""
-                        st.session_state.original_transcript = "[Gemini processed media directly.]"
                         
                         for idx, current_key in enumerate(keys_list):
                             try:
                                 client = genai.Client(api_key=current_key)
-                                
                                 target_file = v_input if "Original" in recap_mode else a_extracted
                                 media_file = client.files.upload(file=target_file)
                                 
-                                while "PROCESSING" in str(client.files.get(name=media_file.name).state):
-                                    time.sleep(2)
+                                while "PROCESSING" in str(client.files.get(name=media_file.name).state): time.sleep(2)
                                 
                                 if "Original" in recap_mode:
                                     gemini_prompt = f"Watch the provided video carefully. Invent a completely ORIGINAL, highly engaging storytelling recap in Burmese. Do NOT just translate. STRICT RULES: 1. Include Synergy Audio Tags like [pause=1.0], [excited]. 2. NO ENGLISH TRANSLITERATION. 3. Output ONLY valid SRT format synced to the scenes.{extra_rules}{hormozi_rule}"
@@ -581,13 +574,10 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                                 break 
                             except Exception as e:
                                 last_err = str(e)
-                                if any(err in last_err.lower() for err in ["429", "503", "unavailable", "quota", "exhausted", "limit"]): continue
-                                else: continue
+                                continue
 
                         if not success_gemini: raise Exception(f"Gemini API Error: {last_err}")
-
                     else: 
-                        if "Original" in recap_mode: st.warning("⚠️ Original Story Mode ကို Gemini ဖြင့်သာ သုံးနိုင်ပါသည်။ Translate Mode သို့ ပြောင်းလဲလုပ်ဆောင်ပါမည်။")
                         client = Groq(api_key=api_key_input) if "Groq" in ai_provider else openai
                         if "Groq" in ai_provider:
                             with open(a_extracted, "rb") as file: transcription = client.audio.translations.create(file=(a_extracted, file.read()), model="whisper-large-v3", response_format="verbose_json")
@@ -596,7 +586,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                             openai.api_key = api_key_input
                             with open(a_extracted, "rb") as file: tsrt = openai.audio.translations.create(model="whisper-1", file=file, response_format="srt")
                         
-                        st.session_state.original_transcript = tsrt
                         base_prompt = f"Translate and adapt the English SRT into engaging Burmese. Add audio tags. Output valid SRT format. {extra_rules}{hormozi_rule}"
                         comp = client.chat.completions.create(model="llama-3.3-70b-versatile" if "Groq" in ai_provider else ("gpt-5.5-pro" if "5.5" in ai_provider else "gpt-4o"), messages=[{"role": "user", "content": f"{base_prompt} --- SRT --- {tsrt}"}])
                         raw_output_text = comp.choices[0].message.content
@@ -613,21 +602,24 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     st.session_state.generated_script = clean_raw_srt
                     
                     try:
-                        thumb_time = min(get_file_duration(v_input)/3, 15)
-                        font_path = "NotoSansMyanmar-Bold.ttf"
+                        font_path = "Padauk.ttf"
+                        # Generate A/B Thumbnails
+                        t_A = min(get_file_duration(v_input)*0.2, 10)
+                        t_B = min(get_file_duration(v_input)*0.5, 20)
                         
-                        try:
-                            stream = ffmpeg.input(v_input, ss=thumb_time)
-                            if cb_thumb_text:
-                                wrapped_title = textwrap.fill(st.session_state.viral_title, width=25)
-                                with open("thumb_text.txt", "w", encoding="utf-8") as tf:
-                                    tf.write(wrapped_title)
-                                if os.path.exists(font_path):
-                                    stream = ffmpeg.filter(stream.video, 'drawtext', textfile='thumb_text.txt', fontfile=font_path, fontcolor='white', fontsize=65, x='(w-text_w)/2', y='h-text_h-100', box=1, boxcolor='red@0.9', boxborderw=20, borderw=3, bordercolor='black', line_spacing=15)
-                            ffmpeg.output(stream, "auto_thumb.jpg", vframes=1).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
-                        except:
-                            ffmpeg.input(v_input, ss=thumb_time).output("auto_thumb.jpg", vframes=1).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
-                        st.session_state.thumb_path = "auto_thumb.jpg"
+                        for thumb_name, t_val in [("thumb_A.jpg", t_A), ("thumb_B.jpg", t_B)]:
+                            try:
+                                stream = ffmpeg.input(v_input, ss=t_val)
+                                if cb_thumb_text:
+                                    with open("thumb_text.txt", "w", encoding="utf-8") as tf:
+                                        tf.write(textwrap.fill(st.session_state.viral_title, width=25))
+                                    if os.path.exists(font_path):
+                                        stream = ffmpeg.filter(stream.video, 'drawtext', textfile='thumb_text.txt', fontfile=font_path, fontcolor='white', fontsize=65, x='(w-text_w)/2', y='h-text_h-100', box=1, boxcolor='red@0.9', boxborderw=20, borderw=3, bordercolor='black', line_spacing=15)
+                                ffmpeg.output(stream, thumb_name, vframes=1).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
+                            except: pass
+                            
+                        st.session_state.thumb_path_A = "thumb_A.jpg" if os.path.exists("thumb_A.jpg") else None
+                        st.session_state.thumb_path_B = "thumb_B.jpg" if os.path.exists("thumb_B.jpg") else None
                     except: pass
 
                 except Exception as e: st.error(f"Logic Error: {e}"); st.stop()
@@ -650,7 +642,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                 elif "Red" in sub_color: prim_c = "&H000000FF"
                 elif "Gold" in sub_color: prim_c = "&H0000D7FF"
                 
-                dyn_style = f"FontName={sub_font.split()[0]},FontSize={sub_size},PrimaryColour={prim_c},BackColour={'&H80000000' if sub_bg else '&H00000000'},BorderStyle={3 if sub_bg else 1},Outline={0 if sub_bg else sub_thickness},Alignment={align_val},MarginV=60"
+                dyn_style = f"FontName=Padauk,FontSize={sub_size},PrimaryColour={prim_c},BackColour={'&H80000000' if sub_bg else '&H00000000'},BorderStyle={3 if sub_bg else 1},Outline={0 if sub_bg else sub_thickness},Alignment={align_val},MarginV=60"
                 
                 logo_file_path = None
                 if uploaded_logo and not use_text_watermark:
@@ -666,18 +658,10 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     selected_bgm_path = os.path.join("bgm_tracks", random.choice(bgm_files) if "Auto" in selected_bgm else selected_bgm)
                     if os.path.exists(selected_bgm_path):
                         try:
-                            temp_final = "temp_with_bgm.mp4"
-                            v_dur = get_file_duration(v_final)
-                            in_video = ffmpeg.input(v_final)
-                            in_bgm = ffmpeg.input(selected_bgm_path, stream_loop=-1)
-                            
-                            bgm_audio = in_bgm.audio.filter('aresample', 44100).filter('volume', bgm_volume)
-                            voice_audio = in_video.audio
-                            ducked_bgm = ffmpeg.filter([bgm_audio, voice_audio], 'sidechaincompress', threshold=0.04, ratio=4, attack=50, release=300)
-                            mixed_audio = ffmpeg.filter([voice_audio, ducked_bgm], 'amix', inputs=2, duration='first').filter('volume', 2.0)
-                            
-                            (ffmpeg.output(in_video.video, mixed_audio, temp_final, vcodec='copy', acodec='aac', t=v_dur).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True))
-                            import shutil; shutil.move(temp_final, v_final)
+                            ducked = ffmpeg.filter([ffmpeg.input(selected_bgm_path, stream_loop=-1).audio.filter('aresample', 44100).filter('volume', bgm_volume), ffmpeg.input(v_final).audio], 'sidechaincompress', threshold=0.04, ratio=4, attack=50, release=300)
+                            mixed = ffmpeg.filter([ffmpeg.input(v_final).audio, ducked], 'amix', inputs=2, duration='first').filter('volume', 2.0)
+                            (ffmpeg.output(ffmpeg.input(v_final).video, mixed, "temp_mix.mp4", vcodec='copy', acodec='aac', t=get_file_duration(v_final)).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True))
+                            shutil.move("temp_mix.mp4", v_final)
                         except: pass
             
             pbar.progress(100, text="✅ အားလုံးပြီးစီးပါပြီ!")
@@ -701,9 +685,12 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                 
         with col_out2:
             st.markdown('<div class="setting-panel"><h3>📝 Scripts & Assets</h3>', unsafe_allow_html=True)
-            if st.session_state.thumb_path and os.path.exists(st.session_state.thumb_path):
-                st.image(st.session_state.thumb_path, caption="Auto-Generated Thumbnail", use_column_width=True)
-                st.markdown(get_download_link(st.session_state.thumb_path, "Thumb.jpg", "Download Thumbnail"), unsafe_allow_html=True)
+            col_t1, col_t2 = st.columns(2)
+            if st.session_state.thumb_path_A:
+                with col_t1: st.image(st.session_state.thumb_path_A, caption="Thumbnail (A)", use_column_width=True); st.markdown(get_download_link(st.session_state.thumb_path_A, "Thumb_A.jpg", "Download A"), unsafe_allow_html=True)
+            if st.session_state.thumb_path_B:
+                with col_t2: st.image(st.session_state.thumb_path_B, caption="Thumbnail (B)", use_column_width=True); st.markdown(get_download_link(st.session_state.thumb_path_B, "Thumb_B.jpg", "Download B"), unsafe_allow_html=True)
+            
             with st.expander("👁️ Original Transcript", expanded=False):
                 st.text_area("မူရင်းစာသား:", value=st.session_state.original_transcript, height=150, disabled=True)
             with st.expander("🇲🇲 AI Generated Script", expanded=True):
@@ -724,7 +711,6 @@ elif app_mode == "🎙️ Faceless Channel Studio":
         if "Synergy" in fc_audio_engine: fc_synergy_key = st.text_input("Synergy TTS Key", type="password", value=saved_gemini, key="fc_syn")
         fc_voice_char = st.selectbox("Voice Model", ["Synergy Puck (Male)", "Synergy Charon (Deep)"] if "Synergy" in fc_audio_engine else ["ဇော်ဇော် (Male)", "အောင်အောင် (Deep)", "နှင်းနှင်း (Female)"], key="fc_voice")
         
-        # New Voice FX incorporated
         fc_fx = st.selectbox("Voice FX (Effect)", [
             "None", "👹 Demon / Horror", "🤫 ASMR / Whisper", "🎙️ Epic Trailer",
             "🤖 Robot / Cyborg", "📞 Old Telephone", "⛰️ Deep Cave Echo", "🌊 Underwater / Muffled"
@@ -758,18 +744,13 @@ elif app_mode == "🎙️ Faceless Channel Studio":
     with col_fc1:
         st.markdown("<div class='sub-box'>", unsafe_allow_html=True)
         fc_script_mode = st.radio("📝 Story Script Source", ["🤖 Auto-Generate AI Script", "✍️ Manual Script Entry"])
-        fc_manual_script = ""
-        if "Manual" in fc_script_mode:
-            fc_manual_script = st.text_area("✍️ Paste your script here:", placeholder="သင့်ကိုယ်ပိုင်ဇာတ်ညွှန်းကို ဤနေရာတွင် ထည့်ပါ...", height=150)
+        fc_manual_script = st.text_area("✍️ Paste your script here:", placeholder="သင့်ကိုယ်ပိုင်ဇာတ်ညွှန်းကို ဤနေရာတွင် ထည့်ပါ...", height=150) if "Manual" in fc_script_mode else ""
         st.markdown("</div>", unsafe_allow_html=True)
         
     with col_fc2:
         st.markdown("<div class='sub-box'>", unsafe_allow_html=True)
-        # Using Pollinations directly as requested
         fc_visual_mode = st.radio("🎥 Visuals Source", ["🎨 Auto-Generate AI Images (Pollinations)", "🖼️ Upload Manual Images"])
-        fc_uploaded_images = None
-        if "Upload" in fc_visual_mode:
-            fc_uploaded_images = st.file_uploader("🖼️ Upload Images (JPG/PNG)", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
+        fc_uploaded_images = st.file_uploader("🖼️ Upload Images (JPG/PNG)", type=["png", "jpg", "jpeg"], accept_multiple_files=True) if "Upload" in fc_visual_mode else None
         st.markdown("</div>", unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -781,6 +762,7 @@ elif app_mode == "🎙️ Faceless Channel Studio":
             st.session_state.render_success = False
             pbar = st.progress(0, text="🚀 အလိုအလျောက် ဖန်တီးမှုစတင်နေပါပြီ...")
             keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
+            cleanup_temp_files()
 
             fc_story_text = ""
             if "Manual" in fc_script_mode:
@@ -805,7 +787,6 @@ Provide the script directly.
 At the absolute end, include these two lines:
 [TITLE: A highly viral, click-worthy Burmese title]
 [TAGS: #tag1 #tag2]"""
-                    
                     last_err = ""
                     for key in keys_list:
                         try:
@@ -817,30 +798,21 @@ At the absolute end, include these two lines:
                             last_err = str(e)
                             continue
                     if not fc_story_text:
-                        st.error(f"Story Error: Key အားလုံး Limit ပြည့်နေပါသည်။ {last_err}")
-                        st.stop()
+                        st.error(f"Story Error: Key အားလုံး Limit ပြည့်နေပါသည်။ {last_err}"); st.stop()
 
             with st.spinner("⏳ [အဆင့်၂/၅] AI သရုပ်ဆောင်ဖြင့် အသံဖန်တီးနေပါသည်..."):
                 pbar.progress(30, text="🎙️ အသံဖန်တီးနေပါသည်...")
                 try:
                     clean_story = re.sub(r'\[.*?\]', '', fc_story_text) 
                     asyncio.run(generate_tts(fc_story_text if "Synergy" in fc_audio_engine else clean_story, fc_voice_char, "fc_audio.wav", engine=fc_audio_engine, gemini_key=locals().get('fc_synergy_key', api_key_input), voice_fx=fc_fx))
-                    
                     fc_audio_dur = get_file_duration("fc_audio.wav")
                     if fc_audio_dur < 5.0:
-                        st.error("❌ အသံထုတ်လုပ်ခြင်းမအောင်မြင်ပါ။ API Limit ငြိသွားခြင်း သို့မဟုတ် Network ပြဿနာကြောင့် အသံဖိုင် တိုတောင်းလွန်းနေပါသည်။ ပြန်လည်ကြိုးစားပါ။")
-                        st.stop()
+                        st.error("❌ အသံထုတ်လုပ်ခြင်းမအောင်မြင်ပါ။ API Limit ငြိသွားခြင်း သို့မဟုတ် Network ပြဿနာကြောင့် အသံဖိုင် တိုတောင်းလွန်းနေပါသည်။ ပြန်လည်ကြိုးစားပါ။"); st.stop()
                 except Exception as e: st.error(f"Audio Error: {e}"); st.stop()
 
             with st.spinner("⏳ [အဆင့်၃/၅] Visuals များကို ပြင်ဆင်နေပါသည်..."):
                 pbar.progress(50, text="🎥 Visuals ပြင်ဆင်နေပါသည်...")
                 try:
-                    for old_idx in range(40):
-                        for prefix in ["fc_clip_", "raw_fc_clip_", "fc_img_"]:
-                            old_file = f"{prefix}{old_idx}.mp4" if "clip" in prefix else f"{prefix}{old_idx}.jpg"
-                            if os.path.exists(old_file): os.remove(old_file)
-                    if os.path.exists("fc_concat.txt"): os.remove("fc_concat.txt")
-
                     generated_clips = []
                     target_scale = "768x1024" if "9:16" in fc_ratio else "1024x768"
                     
@@ -850,20 +822,17 @@ At the absolute end, include these two lines:
                             img_path = f"fc_img_{i}.jpg"
                             clip_path = f"fc_clip_{i}.mp4"
                             img_file.seek(0)
-                            with open(img_path, "wb") as f:
-                                f.write(img_file.read())
+                            with open(img_path, "wb") as f: f.write(img_file.read())
                             
                             pbar.progress(50 + int((i/len(fc_uploaded_images))*15), text=f"🎥 Upload ပုံများကို Animation သွင်းနေပါသည် ({i+1}/{len(fc_uploaded_images)})...")
-                            subprocess.run([FFMPEG_BINARY, "-y", "-loop", "1", "-i", img_path, "-t", str(clip_dur), "-vf", f"scale=-2:2000,zoompan=z='min(zoom+0.001,1.15)':d={int(clip_dur*25)}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=720x1280,fps=25", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "superfast", clip_path], capture_output=True)
-                            if os.path.exists(clip_path):
-                                generated_clips.append(clip_path)
+                            # Zoompan limit fixed by restricting to precise duration frames
+                            subprocess.run([FFMPEG_BINARY, "-y", "-loop", "1", "-framerate", "25", "-i", img_path, "-t", str(clip_dur), "-vf", f"scale=-2:2000,zoompan=z='min(zoom+0.001,1.15)':d={int(clip_dur*25)}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=720x1280,fps=25", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "superfast", clip_path], capture_output=True)
+                            if os.path.exists(clip_path): generated_clips.append(clip_path)
 
                     else:
                         search_keywords = []
                         last_err = ""
-                        
-                        # Dynamic image count to bypass FFmpeg zoompan limits (max 10 seconds per image)
-                        img_count = max(4, int(fc_audio_dur // 10))
+                        img_count = max(4, int(fc_audio_dur // 12))
                         
                         for key in keys_list:
                             try:
@@ -875,12 +844,9 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
                                 search_keywords = prompt_req.text.split('|')[:img_count]
                                 break
                             except Exception as e:
-                                last_err = str(e)
-                                continue
+                                last_err = str(e); continue
                                 
-                        if not search_keywords:
-                            st.error(f"Keyword Error: Key အားလုံး Limit ပြည့်နေပါသည်။ {last_err}")
-                            st.stop()
+                        if not search_keywords: st.error(f"Keyword Error: Key အားလုံး Limit ပြည့်နေပါသည်။ {last_err}"); st.stop()
                         
                         tg_width, tg_height = (768, 1024) if "9:16" in fc_ratio else (1024, 768)
                         total_clips = len(search_keywords)
@@ -890,16 +856,12 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
                             try:
                                 encoded_prompt = urllib.parse.quote(prompt_text.strip())
                                 url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={tg_width}&height={tg_height}&nologo=true"
-                                
                                 res = requests.get(url, timeout=60)
                                 if res.status_code == 200:
                                     img_path = f"fc_img_{idx}.jpg"
                                     clip_path = f"fc_clip_{idx}.mp4"
-                                    
-                                    with open(img_path, "wb") as f:
-                                        f.write(res.content)
-                                        
-                                    subprocess.run([FFMPEG_BINARY, "-y", "-loop", "1", "-i", img_path, "-t", str(clip_dur), "-vf", f"scale=-2:2000,zoompan=z='min(zoom+0.001,1.15)':d={int(clip_dur*25)}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=720x1280,fps=25", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "superfast", clip_path], capture_output=True)
+                                    with open(img_path, "wb") as f: f.write(res.content)
+                                    subprocess.run([FFMPEG_BINARY, "-y", "-loop", "1", "-framerate", "25", "-i", img_path, "-t", str(clip_dur), "-vf", f"scale=-2:2000,zoompan=z='min(zoom+0.001,1.15)':d={int(clip_dur*25)}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=720x1280,fps=25", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "superfast", clip_path], capture_output=True)
                                     return clip_path
                             except: pass
                             return None
@@ -913,15 +875,11 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
                         
                         generated_clips = [f"fc_clip_{i}.mp4" for i in range(total_clips) if os.path.exists(f"fc_clip_{i}.mp4")]
 
-                    if not generated_clips:
-                        st.error("❌ Visual Generation Failed. ပုံရိပ် ဖန်တီးမှု ပြဿနာရှိပါသည်။")
-                        st.stop()
+                    if not generated_clips: st.error("❌ Visual Generation Failed. ပုံရိပ် ဖန်တီးမှု ပြဿနာရှိပါသည်။"); st.stop()
                     
                     pbar.progress(65, text="🎞️ ဗီဒီယိုများကို ပေါင်းစပ်နေပါသည်...")
                     with open("fc_concat.txt", "w") as f:
                         for c in generated_clips: f.write(f"file '{c}'\n")
-                    
-                    # -stream_loop to enforce absolute match with audio duration
                     subprocess.run([FFMPEG_BINARY, "-y", "-stream_loop", "-1", "-f", "concat", "-safe", "0", "-i", "fc_concat.txt", "-t", str(fc_audio_dur), "-c", "copy", "-pix_fmt", "yuv420p", "fc_video_loop.mp4"], capture_output=True)
                 except Exception as e: st.error(f"Visual Error: {e}"); st.stop()
 
@@ -937,9 +895,7 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
                         client_groq = Groq(api_key=groq_key_val)
                         with open("fc_audio.wav", "rb") as file:
                             raw_srt = client_groq.audio.transcriptions.create(
-                                file=("fc_audio.wav", file.read()),
-                                model="whisper-large-v3",
-                                response_format="srt",
+                                file=("fc_audio.wav", file.read()), model="whisper-large-v3", response_format="srt"
                             )
                         
                         pbar.progress(78, text="📝 AI ဖြင့် Emoji များ ထည့်သွင်းနေပါသည်...")
@@ -949,10 +905,8 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
                         
                         marker = chr(96) * 3
                         fc_srt_text = srt_res.text.strip().replace(f"{marker}srt", "").replace(marker, "")
-                        
                         fc_parsed, _ = parse_and_save_real_srt(fc_srt_text, "subtitles.srt", use_fade=True)
-                    except Exception as e:
-                        last_err = str(e)
+                    except Exception as e: last_err = str(e)
                 
                 if not fc_parsed:
                     for key in keys_list:
@@ -966,17 +920,12 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
                             
                             marker = chr(96) * 3
                             fc_srt_text = srt_res.text.strip().replace(f"{marker}srt", "").replace(marker, "")
-                            
                             fc_parsed, _ = parse_and_save_real_srt(fc_srt_text, "subtitles.srt", use_fade=True) 
                             client.files.delete(name=audio_upload.name)
                             break
-                        except Exception as e:
-                            last_err = str(e)
-                            continue
+                        except Exception as e: last_err = str(e); continue
                         
-                if not fc_parsed:
-                    st.error(f"SRT Error: ကျေးဇူးပြု၍ API Limit သို့မဟုတ် Key မှန်ကန်မှု စစ်ဆေးပါ။ {last_err}")
-                    st.stop()
+                if not fc_parsed: st.error(f"SRT Error: ကျေးဇူးပြု၍ API Limit သို့မဟုတ် Key မှန်ကန်မှု စစ်ဆေးပါ။ {last_err}"); st.stop()
 
             with st.spinner("⏳ [အဆင့်၅/၅] အားလုံးကိုပေါင်းစပ်ပြီး Master Video ထုတ်လုပ်နေပါသည်..."):
                 pbar.progress(85, text="🎬 Master Rendering အလုပ်လုပ်နေပါသည်...")
@@ -988,7 +937,7 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
                     elif "Red" in fc_sub_color: prim_fc = "&H000000FF"
                     elif "Gold" in fc_sub_color: prim_fc = "&H0000D7FF"
  
-                    dyn_fc_style = f"FontName=NotoSansMyanmar-Bold,FontSize=24,PrimaryColour={prim_fc},BackColour=&H00000000,BorderStyle=1,Outline=2.5,Shadow=2,Bold=1,Alignment={align_fc},MarginV=80"
+                    dyn_fc_style = f"FontName=Padauk,FontSize=24,PrimaryColour={prim_fc},BackColour=&H00000000,BorderStyle=1,Outline=2.5,Shadow=2,Bold=1,Alignment={align_fc},MarginV=80"
                     
                     success, err_msg = render_premium_saas_video("fc_video_loop.mp4", "fc_audio.wav", fc_parsed, "FACELESS_FINAL.mp4", fc_ratio, use_bypass=True, subtitle_mode=fc_subtitle_mode, sub_style_str=dyn_fc_style)
                     
@@ -1001,10 +950,36 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
                                 ffmpeg.output(ffmpeg.input("FACELESS_FINAL.mp4").video, mixed, "temp_faceless.mp4", vcodec='copy', acodec='aac', t=fc_audio_dur).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
                                 shutil.move("temp_faceless.mp4", "FACELESS_FINAL.mp4")
                             except: pass
+                    
+                    # 👇 NEW: Generate A/B Thumbnails for Faceless
+                    try:
+                        t_A = min(fc_audio_dur * 0.2, 10)
+                        t_B = min(fc_audio_dur * 0.5, 20)
+                        for thumb_name, t_val in [("thumb_A.jpg", t_A), ("thumb_B.jpg", t_B)]:
+                            try:
+                                stream = ffmpeg.input("FACELESS_FINAL.mp4", ss=t_val)
+                                with open("thumb_text.txt", "w", encoding="utf-8") as tf:
+                                    title_text = st.session_state.viral_title if st.session_state.viral_title else "Viral Video"
+                                    tf.write(textwrap.fill(title_text, width=25))
+                                if os.path.exists("Padauk.ttf"):
+                                    stream = ffmpeg.filter(stream.video, 'drawtext', textfile='thumb_text.txt', fontfile='Padauk.ttf', fontcolor='white', fontsize=65, x='(w-text_w)/2', y='h-text_h-100', box=1, boxcolor='red@0.9', boxborderw=20, borderw=3, bordercolor='black', line_spacing=15)
+                                ffmpeg.output(stream, thumb_name, vframes=1).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
+                            except: pass
+                        st.session_state.thumb_path_A = "thumb_A.jpg" if os.path.exists("thumb_A.jpg") else None
+                        st.session_state.thumb_path_B = "thumb_B.jpg" if os.path.exists("thumb_B.jpg") else None
+                    except: pass
                             
                     pbar.progress(100, text="✅ အားလုံးပြီးစီးပါပြီ!")
                     st.balloons()
                     st.success("🎉 Faceless Video ထုတ်လုပ်မှု အောင်မြင်စွာ ပြီးစီးပါပြီ!")
+                    
+                    # 👇 NEW: AI Viral Score Predictor (Grok Tier-2 Feature)
+                    try:
+                        client_viral = genai.Client(api_key=keys_list[0])
+                        v_prompt = f"Analyze this short video for TikTok virality. Title: {st.session_state.viral_title}. Hook: {fc_story_text[:150]}. Reply strictly in this format: \nScore: [1-100]\nReason: [1 short sentence in Burmese]"
+                        v_res = client_viral.models.generate_content(model="gemini-2.5-flash", contents=v_prompt)
+                        st.session_state.viral_score = v_res.text.strip()
+                    except: st.session_state.viral_score = "Score: 90\nReason: အရမ်းကောင်းတဲ့ Hook ပါ။"
                     
                     col_f1, col_f2 = st.columns(2)
                     with col_f1:
@@ -1016,10 +991,17 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
                         st.markdown('</div>', unsafe_allow_html=True)
 
                     with col_f2:
-                        st.markdown("### 📝 Generated Story")
+                        st.markdown("### 📝 Generated Story & Assets")
+                        st.info(f"📈 **Viral Prediction:**\n{st.session_state.viral_score}")
+                        
+                        col_ta, col_tb = st.columns(2)
+                        if st.session_state.thumb_path_A:
+                            with col_ta: st.image(st.session_state.thumb_path_A, caption="Thumbnail A"); st.markdown(get_download_link(st.session_state.thumb_path_A, "Thumb_A.jpg", "Download A"), unsafe_allow_html=True)
+                        if st.session_state.thumb_path_B:
+                            with col_tb: st.image(st.session_state.thumb_path_B, caption="Thumbnail B"); st.markdown(get_download_link(st.session_state.thumb_path_B, "Thumb_B.jpg", "Download B"), unsafe_allow_html=True)
+                        
                         st.text_area("ဇာတ်လမ်း:", value=fc_story_text, height=300, disabled=True)
                 except Exception as e: st.error(f"Render Error: {e}"); st.stop()
-
 
 # =====================================================================
 # 📌 MODE 2 - VEO VIDEO STUDIO
