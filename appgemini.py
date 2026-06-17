@@ -1,5 +1,5 @@
 # =====================================================================
-# 📌 AETHER FILMWORKS AI // STUDIO V52 (BULLETPROOF TEXTWRAP & OVERLAY)
+# 📌 AETHER FILMWORKS AI // STUDIO V52 (MOVIE DUBBING SUBTITLE FIX)
 # =====================================================================
 
 import streamlit as st
@@ -245,7 +245,7 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS", ttsmak
         finally:
             if os.path.exists(temp_out): os.remove(temp_out)
 
-# 👇 FIX: Bulletproof Subtitle Parser (No more timestamp bleeding)
+# 👇 FIX: Bulletproof Lenient Subtitle Parser to catch messed up AI Timestamps
 def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
     lines = raw_srt_text.strip().split('\n')
     parsed_lines = []
@@ -255,25 +255,30 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
     for line in lines:
         line = line.strip()
         if not line: continue
-        if line.isdigit() and len(line) < 5: continue # Skip index numbers
+        if line.isdigit() and len(line) < 5: continue 
         
-        # Stricter time match to ignore messy SRT formats
-        time_match = re.search(r'(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})', line)
-        if time_match:
+        # Extremely lenient parser for AI's messy timestamps
+        if "-->" in line:
             if current_text:
                 parsed_lines.append((current_start, current_end, " ".join(current_text)))
                 current_text = []
             
-            def to_sec(t_str):
-                t_str = t_str.replace(',', '.')
-                parts = t_str.split(':')
-                return int(parts[0])*3600 + int(parts[1])*60 + float(parts[2])
-                
-            current_start = to_sec(time_match.group(1))
-            current_end = to_sec(time_match.group(2))
+            parts = line.split("-->")
+            try:
+                def parse_lenient(t_str):
+                    t_str = t_str.strip().replace('.', ',')
+                    if ',' not in t_str: t_str += ",000"
+                    main_t, ms = t_str.split(',')
+                    tp = main_t.split(':')
+                    if len(tp) == 1: return int(tp[0]) + int(ms.ljust(3,'0'))/1000.0
+                    elif len(tp) == 2: return int(tp[0])*60 + int(tp[1]) + int(ms.ljust(3,'0'))/1000.0
+                    else: return int(tp[0])*3600 + int(tp[1])*60 + int(tp[2]) + int(ms.ljust(3,'0'))/1000.0
+                    
+                current_start = parse_lenient(parts[0])
+                current_end = parse_lenient(parts[1])
+            except: pass
         else:
-            # Check to ensure this isn't a broken timestamp line
-            if not re.search(r'\d{1,2}:\d{2}:\d{2}', line) and not re.match(r'^\[.*?\]$', line):
+            if not re.match(r'^\[.*?\]$', line):
                 current_text.append(line)
                 
     if current_text:
@@ -302,8 +307,8 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
             
     return final_parsed, " ".join(full_speech)
 
-# 👇 FIX: Integrated Drawtext Overlay system replacing the buggy ASS Engine
-def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_bypass=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)", use_mirror=False, use_color=False, use_grain=False, use_fps=False, sub_position="Bottom", sub_color="Yellow", sub_size=26, sub_thickness=2.5, use_freeze=False, logo_path=None):
+# 👇 FIX: Render video function includes background Box and text wrapping fixes
+def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_bypass=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)", use_mirror=False, use_color=False, use_grain=False, use_fps=False, sub_position="Bottom", sub_color="Yellow", sub_size=26, sub_thickness=2.5, sub_bg=False, use_freeze=False, logo_path=None):
     try:
         a_dur = get_file_duration(in_a)
         v_max_dur = get_file_duration(in_v)
@@ -334,16 +339,18 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
             logo = ffmpeg.filter(logo, 'scale', -1, 80)
             video = ffmpeg.overlay(video, logo, x='W-w-20', y=20)
 
-        # 👇 FIX: Textwrap and Vertical Middle positioning applied directly through robust Drawtext
+        # Apply robust Drawtext Overlay directly (Fixes Tofu and Font placement issues)
         if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"] and parsed_timestamps:
+            # Dynamically set wrap width based on aspect ratio
+            wrap_width = 22 if "9:16" in ratio else 45
+            
             for i, (start, end, text) in enumerate(parsed_timestamps):
-                # Wrap text at 22 characters so it never spills out of bounds
-                wrapped_text = textwrap.fill(text, width=22)
+                wrapped_text = textwrap.fill(text, width=wrap_width)
                 txt_filename = f"temp_sub_{i}.txt"
                 with open(txt_filename, "w", encoding="utf-8") as tf:
                     tf.write(wrapped_text)
                 
-                # Vertical Positioning Logic
+                # Perfect Vertical Placement
                 if "Center" in sub_position: y_expr = "(h-text_h)/2"
                 elif "Top" in sub_position: y_expr = "150"
                 else: y_expr = "h-text_h-150"
@@ -354,7 +361,10 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
                 elif "Red" in sub_color: c_str = "red"
                 elif "Gold" in sub_color: c_str = "gold"
 
-                video = ffmpeg.filter(video, 'drawtext', textfile=txt_filename, fontfile='Padauk.ttf', fontcolor=c_str, fontsize=sub_size, bordercolor='black', borderw=sub_thickness, x='(w-text_w)/2', y=y_expr, line_spacing=20, enable=f'between(t,{start},{end})')
+                box_str = 1 if sub_bg else 0
+                box_color = 'black@0.6' if sub_bg else 'none'
+
+                video = ffmpeg.filter(video, 'drawtext', textfile=txt_filename, fontfile='Padauk.ttf', fontcolor=c_str, fontsize=sub_size, bordercolor='black', borderw=sub_thickness, box=box_str, boxcolor=box_color, boxborderw=10, x='(w-text_w)/2', y=y_expr, line_spacing=20, enable=f'between(t,{start},{end})')
 
         out = ffmpeg.output(video, audio, out_v, vcodec='libx264', pix_fmt='yuv420p', acodec='aac', preset='fast', crf=21, t=v_max_dur)
         out.run(cmd=FFMPEG_BINARY, overwrite_output=True, capture_stdout=True, capture_stderr=True)
@@ -499,10 +509,13 @@ if app_mode == "🎙️ Movie Dubbing Studio":
             sub_thickness = st.slider("✒️ Outline Thickness", 1.0, 5.0, 2.5)
             col_s1, col_s2 = st.columns(2)
             with col_s1:
+                sub_bg = st.checkbox("🔲 Background Box")
                 sub_short = st.checkbox("✂️ Short & Punchy (Hormozi)")
+            with col_s2:
+                sub_fade = st.checkbox("✨ Cinematic Pop-Up")
         else:
             st.info("💡 Burn into Video ရွေးထားမှ ချိန်ညှိနိုင်ပါမည်။")
-            sub_position, sub_color, sub_size, sub_thickness, sub_short = "Bottom", "Yellow", 24, 2.5, False
+            sub_position, sub_color, sub_size, sub_thickness, sub_bg, sub_short, sub_fade = "Bottom", "Yellow", 24, 2.5, False, False, False
         st.markdown("</div>", unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -583,21 +596,19 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                         comp = client.chat.completions.create(model="llama-3.3-70b-versatile" if "Groq" in ai_provider else ("gpt-5.5-pro" if "5.5" in ai_provider else "gpt-4o"), messages=[{"role": "user", "content": f"{base_prompt} --- SRT --- {tsrt}"}])
                         raw_output_text = comp.choices[0].message.content
 
-                    # 👇 FIX: Title Bracket Cleanup during extraction
                     title_match = re.search(r'\[TITLE:\s*(.*?)\]', raw_output_text, re.IGNORECASE)
                     tags_match = re.search(r'\[TAGS:\s*(.*?)\]', raw_output_text, re.IGNORECASE)
                     
-                    if title_match: 
-                        st.session_state.viral_title = re.sub(r'[\[\]]', '', title_match.group(1)).strip()
-                    else: 
-                        st.session_state.viral_title = "Viral Movie Recap"
+                    if title_match: st.session_state.viral_title = re.sub(r'[\[\]]', '', title_match.group(1)).strip()
+                    else: st.session_state.viral_title = "Viral Movie Recap"
                     
                     if tags_match: st.session_state.viral_tags = tags_match.group(1).strip()
                     else: st.session_state.viral_tags = "#movierecap #myanmar"
                     
                     clean_raw_srt = re.sub(r'\[TITLE:.*?\]', '', raw_output_text, flags=re.IGNORECASE)
                     clean_raw_srt = re.sub(r'\[TAGS:.*?\]', '', clean_raw_srt, flags=re.IGNORECASE).strip()
-                    clean_raw_srt = clean_raw_srt.replace('```srt', '').replace('```', '')
+                    clean_raw_srt = clean_raw_srt.replace('```srt', '').replace('
+```', '')
                     
                     parsed_timestamps, speech_text = parse_and_save_real_srt(clean_raw_srt, srt_final, use_fade=False)
                     st.session_state.generated_script = clean_raw_srt
@@ -614,7 +625,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                                     with open("thumb_text.txt", "w", encoding="utf-8") as tf:
                                         tf.write(textwrap.fill(st.session_state.viral_title, width=25))
                                     if os.path.exists(font_path):
-                                        # Vertical Middle properly calculated
                                         stream = ffmpeg.filter(stream.video, 'drawtext', textfile='thumb_text.txt', fontfile=font_path, fontcolor='white', fontsize=65, x='(w-text_w)/2', y='(h-text_h)/2', box=1, boxcolor='red@0.9', boxborderw=20, borderw=3, bordercolor='black', line_spacing=15)
                                 ffmpeg.output(stream, thumb_name, vframes=1).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
                             except: pass
@@ -634,7 +644,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
             with st.spinner("⏳ [အဆင့်၅/၆] ဗီဒီယိုနှင့် စာတန်းထိုးပေါင်းစပ်နေပါသည်..."):
                 pbar.progress(80, text="🎬 [အဆင့် ၅/၆] ဗီဒီယိုနှင့်စာတန်းထိုး ပေါင်းစပ်နေပါသည်...")
                 
-                success, err_msg = render_premium_saas_video(v_input, a_generated, parsed_timestamps, v_final, video_ratio, cb_bypass, cb_blur, watermark_text, subtitle_mode, cb_mirror, cb_color, cb_grain, cb_fps, sub_position=sub_position, sub_color=sub_color, sub_size=sub_size, sub_thickness=sub_thickness, use_freeze=cb_freeze, logo_path=logo_file_path)
+                success, err_msg = render_premium_saas_video(v_input, a_generated, parsed_timestamps, v_final, video_ratio, cb_bypass, cb_blur, watermark_text, subtitle_mode, cb_mirror, cb_color, cb_grain, cb_fps, sub_position=sub_position, sub_color=sub_color, sub_size=sub_size, sub_thickness=sub_thickness, sub_bg=sub_bg, use_freeze=cb_freeze, logo_path=logo_file_path)
                 if not success: st.error(f"Sync Failure: {err_msg}")
 
             if success and selected_bgm not in ["None (BGM မထည့်ပါ)"]:
@@ -785,14 +795,11 @@ At the absolute end, include these two lines:
                     if not fc_story_text:
                         st.error(f"Story Error: Key အားလုံး Limit ပြည့်နေပါသည်။ {last_err}"); st.stop()
 
-            # 👇 FIX: Title Brackets Cleaned Up
             title_match = re.search(r'\[TITLE:\s*(.*?)\]', fc_story_text, re.IGNORECASE)
             tags_match = re.search(r'\[TAGS:\s*(.*?)\]', fc_story_text, re.IGNORECASE)
             
-            if title_match: 
-                st.session_state.viral_title = re.sub(r'[\[\]]', '', title_match.group(1)).strip()
-            if tags_match: 
-                st.session_state.viral_tags = tags_match.group(1).strip()
+            if title_match: st.session_state.viral_title = re.sub(r'[\[\]]', '', title_match.group(1)).strip()
+            if tags_match: st.session_state.viral_tags = tags_match.group(1).strip()
             
             fc_story_text = re.sub(r'\[TITLE:.*?\]', '', fc_story_text, flags=re.IGNORECASE)
             fc_story_text = re.sub(r'\[TAGS:.*?\]', '', fc_story_text, flags=re.IGNORECASE).strip()
@@ -926,7 +933,7 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
             with st.spinner("⏳ [အဆင့်၅/၅] အားလုံးကိုပေါင်းစပ်ပြီး Master Video ထုတ်လုပ်နေပါသည်..."):
                 pbar.progress(85, text="🎬 Master Rendering အလုပ်လုပ်နေပါသည်...")
                 try:
-                    success, err_msg = render_premium_saas_video("fc_video_loop.mp4", "fc_audio.wav", fc_parsed, "FACELESS_FINAL.mp4", fc_ratio, use_bypass=True, subtitle_mode=fc_subtitle_mode, sub_position=fc_sub_position, sub_color=fc_sub_color, sub_size=26, sub_thickness=2.5)
+                    success, err_msg = render_premium_saas_video("fc_video_loop.mp4", "fc_audio.wav", fc_parsed, "FACELESS_FINAL.mp4", fc_ratio, use_bypass=True, subtitle_mode=fc_subtitle_mode, sub_position=fc_sub_position, sub_color=fc_sub_color, sub_size=26, sub_thickness=2.5, sub_bg=False)
                     
                     if success and fc_bgm not in ["None (BGM မထည့်ပါ)"]:
                         bgm_path = os.path.join("bgm_tracks", random.choice(bgm_files) if "Auto" in fc_bgm else fc_bgm)
@@ -948,7 +955,6 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
                                     title_text = st.session_state.viral_title if st.session_state.viral_title else "Viral Video"
                                     tf.write(textwrap.fill(title_text, width=25))
                                 if os.path.exists("Padauk.ttf"):
-                                    # 👇 FIX: Vertical Middle Thumbnail Text y='(h-text_h)/2'
                                     stream = ffmpeg.filter(stream.video, 'drawtext', textfile='thumb_text.txt', fontfile='Padauk.ttf', fontcolor='white', fontsize=65, x='(w-text_w)/2', y='(h-text_h)/2', box=1, boxcolor='red@0.9', boxborderw=20, borderw=3, bordercolor='black', line_spacing=15)
                                 ffmpeg.output(stream, thumb_name, vframes=1).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
                             except: pass
