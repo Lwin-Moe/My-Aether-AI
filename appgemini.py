@@ -298,7 +298,6 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
         if line.isdigit() and len(line) < 5: 
             continue 
         
-        # Lenient timestamp extraction
         if "-->" in line:
             if current_text:
                 parsed_lines.append((current_start, current_end, " ".join(current_text)))
@@ -361,11 +360,9 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         
         video = ffmpeg.input(in_v).video
         
-        # 1. Force exact resolution strictly first to prevent downstream crashes
         v_w, v_h = (720, 1280) if "9:16" in ratio else (1280, 720)
         video = ffmpeg.filter(video, 'scale', v_w, v_h, force_original_aspect_ratio='increase').filter('crop', v_w, v_h)
         
-        # 2. Apply Bypass/Copyright Filters securely
         if use_bypass: 
             video = ffmpeg.filter(video, 'scale', '2*trunc(iw*1.08/2)', '2*trunc(ih*1.08/2)').filter('crop', 'iw/1.08', 'ih/1.08')
         if use_mirror: 
@@ -390,7 +387,6 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
             logo = ffmpeg.filter(logo, 'scale', -1, 80)
             video = ffmpeg.overlay(video, logo, x='W-w-20', y=20)
 
-        # 3. Apply robust Drawtext Overlay directly with 25 characters wrap width for 9:16 and middle positioning
         if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"] and parsed_timestamps:
             wrap_width = 25 if "9:16" in ratio else 45
             
@@ -413,12 +409,12 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
                 elif "Red" in sub_color: c_str = "red"
                 elif "Gold" in sub_color: c_str = "gold"
 
+                # 👇 FIX: Fixed boxcolor invalid argument 'none' crash
                 box_str = 1 if sub_bg else 0
-                box_color = 'black@0.6' if sub_bg else 'none'
+                box_color = 'black@0.6' if sub_bg else 'black'
 
                 video = ffmpeg.filter(video, 'drawtext', textfile=txt_filename, fontfile='Padauk.ttf', fontcolor=c_str, fontsize=sub_size, bordercolor='black', borderw=sub_thickness, box=box_str, boxcolor=box_color, boxborderw=10, x='(w-text_w)/2', y=y_expr, line_spacing=20, enable=f'between(t,{start},{end})')
 
-        # 4. Strictly Encode and cut to Audio Duration exactly
         out = ffmpeg.output(video, audio, out_v, vcodec='libx264', pix_fmt='yuv420p', acodec='aac', preset='superfast', crf=23, t=a_dur)
         out.run(cmd=FFMPEG_BINARY, overwrite_output=True, capture_stdout=True, capture_stderr=True)
         return True, "Success"
