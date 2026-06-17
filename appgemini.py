@@ -1,5 +1,5 @@
 # =====================================================================
-# 📌 AETHER FILMWORKS AI // STUDIO V52 (TOGETHER AI + MASTER PROMPT)
+# 📌 AETHER FILMWORKS AI // STUDIO V52 (TOGETHER AI + MASTER PROMPT + BUG FIX)
 # =====================================================================
 
 import streamlit as st
@@ -37,7 +37,7 @@ else:
 if not os.path.exists("Pyidaungsu.ttf"):
     try:
         import urllib.request
-        urllib.request.urlretrieve("https://github.com/google/fonts/raw/main/ofl/padauk/Padauk-Regular.ttf", "Pyidaungsu.ttf")
+        urllib.request.urlretrieve("[https://github.com/google/fonts/raw/main/ofl/padauk/Padauk-Regular.ttf](https://github.com/google/fonts/raw/main/ofl/padauk/Padauk-Regular.ttf)", "Pyidaungsu.ttf")
     except:
         pass
 
@@ -47,7 +47,7 @@ ELEVEN_KEY_FILE = "saved_eleven_key.txt"
 GROQ_KEY_FILE = "saved_groq_key.txt"
 OPENAI_KEY_FILE = "saved_openai_key.txt"
 ELEVEN_VOICE_ID_FILE = "saved_eleven_voice_id.txt"
-TOGETHER_KEY_FILE = "saved_together_key.txt" # 👈 NEW: Together AI Key
+TOGETHER_KEY_FILE = "saved_together_key.txt" 
 
 def load_key(file_path):
     if os.path.exists(file_path):
@@ -68,7 +68,7 @@ st.set_page_config(page_title="AETHER STUDIO V52", layout="wide", page_icon="�
 
 st.markdown('''
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Montserrat:wght@500;700;800;900&display=swap');
+    @import url('[https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Montserrat:wght@500;700;800;900&display=swap](https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Montserrat:wght@500;700;800;900&display=swap)');
     .stApp { background-color: #0b0f19 !important; background-image: radial-gradient(circle at top, #161b2e 0%, #0b0f19 60%) !important; color: #cbd5e1 !important; font-family: 'Inter', sans-serif; }
     section[data-testid="stSidebar"] { background-color: #0d111c !important; border-right: 1px solid rgba(255, 255, 255, 0.05) !important; }
     h1, h2, h3, h4 { font-family: 'Montserrat', sans-serif !important; color: #f8fafc !important; font-weight: 700 !important; }
@@ -144,7 +144,7 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
         
         last_err = ""
         for idx, current_key in enumerate(keys_list):
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key={current_key}"
+            url = f"[https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key=){current_key}"
             try:
                 res = requests.post(url, json=payload, timeout=300)
                 if res.status_code == 200:
@@ -165,12 +165,12 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
         if not os.path.exists(temp_out): raise Exception(f"Keys Exhausted. {last_err}")
     elif "ElevenLabs" in engine:
         voice_id = custom_eleven_id.strip() if custom_eleven_id else ("21m00Tcm4TlvDq8ikWAM" if "Male" in voice_model else "AZnzlk1XvdvUeBnXmlld")
-        res = requests.post(f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}", json={"text": text, "model_id": "eleven_multilingual_v2"}, headers={"xi-api-key": eleven_key}, timeout=300)
+        res = requests.post(f"[https://api.elevenlabs.io/v1/text-to-speech/](https://api.elevenlabs.io/v1/text-to-speech/){voice_id}", json={"text": text, "model_id": "eleven_multilingual_v2"}, headers={"xi-api-key": eleven_key}, timeout=300)
         if res.status_code == 200:
             with open(temp_out, "wb") as f: f.write(res.content)
     elif "TTSMaker" in engine:
         voice_id = 781 if "Female" in voice_model else 780
-        res = requests.post("https://api.ttsmaker.com/v1/create-tts-order", json={"tts_api_key": ttsmaker_key, "tts_text": text, "voice_id": voice_id, "audio_format": "mp3"}, timeout=300).json()
+        res = requests.post("[https://api.ttsmaker.com/v1/create-tts-order](https://api.ttsmaker.com/v1/create-tts-order)", json={"tts_api_key": ttsmaker_key, "tts_text": text, "voice_id": voice_id, "audio_format": "mp3"}, timeout=300).json()
         if res.get("status") == "success":
             with open(temp_out, "wb") as f: f.write(requests.get(res["audio_file_url"]).content)
     else:
@@ -325,7 +325,6 @@ with st.sidebar:
         st.markdown("---")
         st.markdown("### 🔑 Additional API Keys")
         
-        # 👇 NEW: Together AI API Key (Replaced Pexels)
         saved_together = load_key(TOGETHER_KEY_FILE)
         together_key_input = st.text_input("Together AI API Key (FLUX Image Gen)", type="password", value=saved_together)
         if together_key_input and together_key_input != saved_together: save_key(TOGETHER_KEY_FILE, together_key_input)
@@ -662,7 +661,6 @@ elif app_mode == "🎙️ Faceless Channel Studio":
         
     with col_fc2:
         st.markdown("<div class='sub-box'>", unsafe_allow_html=True)
-        # 👇 FIX: Changed Visual Source Options for Together AI
         fc_visual_mode = st.radio("🎥 Visuals Source", ["🎨 Auto-Generate AI Images (Together FLUX)", "🖼️ Upload Manual Images"])
         fc_uploaded_images = None
         if "Upload" in fc_visual_mode:
@@ -680,7 +678,7 @@ elif app_mode == "🎙️ Faceless Channel Studio":
             pbar = st.progress(0, text="🚀 အလိုအလျောက် ဖန်တီးမှု စတင်နေပါပြီ...")
             keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
 
-            # STEP 1: Generate or Use Manual Story (Master Prompt Logic)
+            # STEP 1: Generate or Use Manual Story
             fc_story_text = ""
             if "Manual" in fc_script_mode:
                 pbar.progress(10, text="📝 Manual ဇာတ်ညွှန်းအား ဖတ်ယူနေပါသည်...")
@@ -728,7 +726,7 @@ At the absolute end, include these two lines:
                     fc_audio_dur = get_file_duration("fc_audio.wav")
                 except Exception as e: st.error(f"Audio Error: {e}"); st.stop()
 
-            # 👇 FIX: STEP 3 (Together AI FLUX Integration + Cinematic Animation)
+            # STEP 3: Together AI FLUX Integration + Cinematic Animation
             with st.spinner("⏳ [အဆင့် ၃/၅] Visuals များကို ပြင်ဆင်နေပါသည်..."):
                 pbar.progress(50, text="🎥 Visuals ပြင်ဆင်နေပါသည်...")
                 try:
@@ -782,7 +780,7 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
                         
                         def generate_together_image(prompt_text, idx):
                             try:
-                                url = "https://api.together.xyz/v1/images/generations"
+                                url = "[https://api.together.xyz/v1/images/generations](https://api.together.xyz/v1/images/generations)"
                                 headers = {
                                     "Authorization": f"Bearer {together_key_input.strip()}",
                                     "Content-Type": "application/json"
@@ -811,7 +809,6 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
                             except: pass
                             return None
 
-                        # Generate images concurrently via Together AI
                         with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
                             futures = [executor.submit(generate_together_image, kw, i) for i, kw in enumerate(search_keywords)]
                             completed = 0
@@ -854,8 +851,10 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
                         client_gemini = genai.Client(api_key=keys_list[0])
                         srt_prompt = f"Rewrite this Burmese SRT file into fast-paced TikTok style. CRITICAL RULES:\n1. Break down the subtitles into chunks of ONLY 1 to 4 words maximum per block.\n2. Interpolate the timestamps accurately to fit the original timeframe.\n3. Add ONE relevant emoji at the end of every subtitle block to make it engaging.\n4. Output ONLY valid SRT format without any markdown blocks.\n\nOriginal SRT:\n{raw_srt}"
                         srt_res = client_gemini.models.generate_content(model="gemini-2.5-flash", contents=srt_prompt)
-                        fc_srt_text = srt_res.text.strip().replace("```srt", "").replace("
-```", "")
+                        
+                        # 👇 BUG FIX: Used safe string replacement instead of raw backticks
+                        marker = chr(96) * 3
+                        fc_srt_text = srt_res.text.strip().replace(f"{marker}srt", "").replace(marker, "")
                         
                         fc_parsed, _ = parse_and_save_real_srt(fc_srt_text, "subtitles.srt", use_fade=True) # triggers Pop-up animation
                     except Exception as e:
