@@ -1,5 +1,5 @@
 # =====================================================================
-# 📌 AETHER FILMWORKS AI // STUDIO V52 (STRICT PROMPTS & BUG FIXES)
+# 📌 AETHER FILMWORKS AI // STUDIO V52 (FFMPEG COLOR BUG FIXED)
 # =====================================================================
 
 import streamlit as st
@@ -360,7 +360,6 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         
         video = ffmpeg.input(in_v).video
         
-        # Hardened Pipeline - Force Scaling to prevent Concatenation Crash
         v_w, v_h = (720, 1280) if "9:16" in ratio else (1280, 720)
         video = ffmpeg.filter(video, 'scale', v_w, v_h, force_original_aspect_ratio='increase').filter('crop', v_w, v_h)
         
@@ -410,11 +409,9 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
                 elif "Red" in sub_color: c_str = "red"
                 elif "Gold" in sub_color: c_str = "gold"
 
+                # 👇 FIX: 100% Bulletproof Color Assignment to stop FFmpeg from crashing
                 box_str = 1 if sub_bg else 0
-                box_color = 'black@0.6' if sub_bg else 'none'
-                
-                # Format escaping required for FFmpeg
-                escaped_text = wrapped_text.replace("'", "\u2019").replace(":", "\\:")
+                box_color = 'black@0.6' if sub_bg else 'black@0.0'
 
                 video = ffmpeg.filter(video, 'drawtext', textfile=txt_filename, fontfile='Padauk.ttf', fontcolor=c_str, fontsize=sub_size, bordercolor='black', borderw=sub_thickness, box=box_str, boxcolor=box_color, boxborderw=10, x='(w-text_w)/2', y=y_expr, line_spacing=20, enable=f'between(t,{start},{end})')
 
@@ -950,7 +947,6 @@ At the absolute end, include these two lines:
                                 generated_clips.append(clip_path)
 
                     else:
-                        # 👇 FIX: Dynamic Visual Style Generation based on Niche
                         style_mapping = {
                             "👻 Horror / Creepypasta": "Gritty graphic novel style, cinematic lighting, thick bold outlines, deep shadows",
                             "💔 Reddit Relationship Drama": "Cinematic photography, emotional lighting, soft focus, dramatic depth of field",
@@ -968,13 +964,11 @@ At the absolute end, include these two lines:
                         for key in keys_list:
                             try:
                                 client = genai.Client(api_key=key)
-                                # 👇 FIX: Instructing strict prompt format for generating proper pipes
                                 img_prompt_instruction = f"""Based on this story, give me exactly {img_count} highly detailed English image generation prompts describing chronological scenes. 
 GLOBAL STYLE DNA: {current_style}. Avoid explicit/violent words. Do NOT include text or words in the prompt.
 CRITICAL FORMAT RULE: Format strictly separated by a pipe '|' with NO newlines. Example: scene 1 | scene 2 | scene 3
 Story: {fc_story_text[:500]}"""
                                 prompt_req = client.models.generate_content(model="gemini-2.5-flash", contents=img_prompt_instruction)
-                                # Clean and enforce extraction
                                 raw_kws = prompt_req.text.replace('\n', '|').split('|')
                                 search_keywords = [kw.strip() for kw in raw_kws if len(kw.strip()) > 5][:img_count]
                                 break
@@ -1048,7 +1042,6 @@ Story: {fc_story_text[:500]}"""
                         
                         pbar.progress(78, text="📝 AI ဖြင့် Emoji များ ထည့်သွင်းနေပါသည်...")
                         client_gemini = genai.Client(api_key=keys_list[0])
-                        # 👇 FIX: Strict Timestamp Preservation rule added to the prompt
                         srt_prompt = f"Rewrite this Burmese SRT file into fast-paced TikTok style.\nCRITICAL RULES:\n1. You MUST KEEP ALL ORIGINAL TIMESTAMPS EXACTLY (e.g., 00:00:05,000 --> 00:00:07,000). DO NOT REMOVE TIMESTAMPS.\n2. Break down the subtitles into chunks of ONLY 1 to 4 words maximum per block.\n3. Interpolate the timestamps accurately to fit the original timeframe.\n4. Add ONE relevant emoji at the end of every subtitle block to make it engaging.\n5. Output ONLY valid SRT format without any markdown blocks.\n\nOriginal SRT:\n{raw_srt}"
                         srt_res = client_gemini.models.generate_content(model="gemini-2.5-flash", contents=srt_prompt)
                         
@@ -1066,7 +1059,6 @@ Story: {fc_story_text[:500]}"""
                             while "PROCESSING" in str(client.files.get(name=audio_upload.name).state): 
                                 time.sleep(2)
                             
-                            # 👇 FIX: Strict Timestamp rule here as well
                             srt_prompt = "Listen to the audio. Output ONLY a valid SRT file in Burmese. CRITICAL RULE: Each subtitle block MUST contain ONLY 1 to 4 words maximum. KEEP ALL EXACT TIMESTAMPS (-->). Add ONE relevant emoji at the end of every subtitle line. Ensure timestamps are precise. No markdown."
                             srt_res = client.models.generate_content(model="gemini-2.5-flash", contents=[audio_upload, srt_prompt])
                             
