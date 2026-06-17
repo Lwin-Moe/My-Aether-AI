@@ -1,5 +1,5 @@
 # =====================================================================
-# 📌 AETHER FILMWORKS AI // STUDIO V52 (BULLETPROOF TEXTWRAP & OVERLAY)
+# 📌 AETHER FILMWORKS AI // STUDIO V52 (CACHE BUSTER & NEW VOICE FX)
 # =====================================================================
 
 import streamlit as st
@@ -94,6 +94,7 @@ st.markdown('''
     </style>
 ''', unsafe_allow_html=True)
 
+# State initialization
 if "render_success" not in st.session_state: st.session_state.render_success = False
 if "generated_script" not in st.session_state: st.session_state.generated_script = ""
 if "original_transcript" not in st.session_state: st.session_state.original_transcript = ""
@@ -102,11 +103,16 @@ if "viral_tags" not in st.session_state: st.session_state.viral_tags = ""
 if "thumb_path_A" not in st.session_state: st.session_state.thumb_path_A = None
 if "thumb_path_B" not in st.session_state: st.session_state.thumb_path_B = None
 if "viral_score" not in st.session_state: st.session_state.viral_score = ""
+if "final_video_path" not in st.session_state: st.session_state.final_video_path = ""
 
 # --- 2. CORE AUTOMATION FLOW ENGINES ---
+# 👇 FIX: Total Wipeout for old files to prevent Caching/Mixing Bugs
 def cleanup_temp_files():
+    st.session_state.thumb_path_A = None
+    st.session_state.thumb_path_B = None
+    st.session_state.final_video_path = ""
     for f in os.listdir("."):
-        if f.startswith(("fc_clip_", "fc_img_", "raw_fc_clip_", "temp_", "subtitles.")):
+        if f.startswith(("fc_clip_", "fc_img_", "raw_fc_clip_", "temp_", "subtitles.", "thumb_A_", "thumb_B_", "FACELESS_FINAL_", "AETHER_RECAP_FINAL_", "fc_audio.wav", "fc_video_loop.mp4")):
             try: os.remove(f)
             except: pass
 
@@ -239,6 +245,7 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS", ttsmak
             factor = 1.0 + (pitch / 100.0) 
             audio = audio.filter('asetrate', int(44100 * factor)).filter('atempo', 1.0 / factor)
         
+        # 👇 FIX: Added New Motivation & Horror specific Voice FX
         if "Epic" in voice_fx: audio = audio.filter('bass', g=12, f=120)
         elif "Walkie-Talkie" in voice_fx: audio = audio.filter('highpass', f=400).filter('lowpass', f=3000).filter('volume', 1.5)
         elif "Reverb" in voice_fx: audio = audio.filter('aecho', 0.8, 0.88, 60, 0.4)
@@ -248,6 +255,8 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS", ttsmak
         elif "Telephone" in voice_fx: audio = audio.filter('highpass', f=300).filter('lowpass', f=2500).filter('compand', attacks='0', decays='0.2', points='-70/-70|-20/-20|0/-10')
         elif "Cave" in voice_fx: audio = audio.filter('aecho', 0.8, 0.9, 1000, 0.3)
         elif "Underwater" in voice_fx: audio = audio.filter('lowpass', f=400).filter('volume', 1.5)
+        elif "Deep & Energetic" in voice_fx: audio = audio.filter('bass', g=10, f=150).filter('treble', g=5, f=3000).filter('volume', 1.5)
+        elif "Deep & Chilling" in voice_fx: audio = audio.filter('bass', g=15, f=80).filter('aecho', 0.8, 0.85, 60, 0.3).filter('volume', 1.2)
 
         try: 
             (audio.output(output_file, acodec='pcm_s16le', ac=1, ar='44100').overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True))
@@ -256,7 +265,6 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS", ttsmak
         finally:
             if os.path.exists(temp_out): os.remove(temp_out)
 
-# 👇 FIX: Bulletproof Lenient Subtitle Parser to catch messy AI Timestamps for BOTH studios
 def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
     lines = raw_srt_text.strip().split('\n')
     parsed_lines = []
@@ -268,7 +276,6 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
         if not line: continue
         if line.isdigit() and len(line) < 5: continue 
         
-        # Lenient timestamp extraction
         if "-->" in line:
             if current_text:
                 parsed_lines.append((current_start, current_end, " ".join(current_text)))
@@ -318,7 +325,6 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
             
     return final_parsed, " ".join(full_speech)
 
-# 👇 FIX: Render video function using perfectly centered Drawtext with 25 characters wrap length
 def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_bypass=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)", use_mirror=False, use_color=False, use_grain=False, use_fps=False, sub_position="Bottom", sub_color="Yellow", sub_size=26, sub_thickness=2.5, sub_bg=False, use_freeze=False, logo_path=None):
     try:
         a_dur = get_file_duration(in_a)
@@ -350,7 +356,6 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
             logo = ffmpeg.filter(logo, 'scale', -1, 80)
             video = ffmpeg.overlay(video, logo, x='W-w-20', y=20)
 
-        # Apply robust Drawtext Overlay directly with 25 characters wrap width for 9:16 and middle positioning
         if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"] and parsed_timestamps:
             wrap_width = 25 if "9:16" in ratio else 45
             
@@ -360,7 +365,6 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
                 with open(txt_filename, "w", encoding="utf-8") as tf:
                     tf.write(wrapped_text)
                 
-                # Perfect Vertical Positioning
                 if "Center" in sub_position: y_expr = "(h-text_h)/2"
                 elif "Top" in sub_position: y_expr = "150"
                 else: y_expr = "h-text_h-150"
@@ -504,10 +508,13 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         dynamic_options = ["Synergy Puck (Male)", "Synergy Aoede (Female)", "Synergy Charon (Male - Deep)"] if "Synergy" in audio_engine_choice else (["Adam (Male Deep)", "Rachel (Female)"] if "ElevenLabs" in audio_engine_choice else (["TTSMaker Male", "TTSMaker Female"] if "TTSMaker" in audio_engine_choice else ["ဇော်ဇော် (Male)", "အောင်အောင် (Deep)", "နှင်းနှင်း (Female)"]))
         voice_char = st.selectbox("Select Character Voice", dynamic_options, index=0)
         pitch_level = st.slider("🎙️ Voice Pitch (Frequency Adjust)", min_value=-30, max_value=30, value=0, step=5)
+        
+        # 👇 FIX: Added New Voice FX options for both Studios
         fx_level = st.selectbox("🎧 Cinematic Voice FX", [
             "None", "🎙️ Epic Trailer Voice", "📻 Walkie-Talkie", 
             "🏛️ Cinematic Reverb", "👹 Demon / Monster", "🤫 ASMR / Whisper",
-            "🤖 Robot / Cyborg", "📞 Old Telephone", "⛰️ Deep Cave Echo", "🌊 Underwater / Muffled"
+            "🤖 Robot / Cyborg", "📞 Old Telephone", "⛰️ Deep Cave Echo", "🌊 Underwater / Muffled",
+            "🔥 Deep & Energetic (Motivation)", "👻 Deep & Chilling (Horror)"
         ])
         
         st.markdown("<div class='sub-box'>", unsafe_allow_html=True)
@@ -532,7 +539,13 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         elif not uploaded_file and not video_url: st.error("⚠️ ဗီဒီယိုဖိုင်သို့မဟုတ် Link ထည့်ပေးပါ။")
         else:
             st.session_state.render_success = False
-            v_input, a_extracted, a_generated, v_final, srt_final = "input_temp.mp4", "temp_extracted.mp3", "voice_temp.wav", "AETHER_RECAP_FINAL.mp4", "subtitles.srt"
+            
+            # 👇 FIX: Dynamic Cache Buster variables
+            run_id = str(int(time.time()))
+            v_final = f"AETHER_RECAP_FINAL_{run_id}.mp4"
+            st.session_state.final_video_path = v_final
+            
+            v_input, a_extracted, a_generated, srt_final = "input_temp.mp4", "temp_extracted.mp3", "voice_temp.wav", "subtitles.srt"
 
             pbar = st.progress(0, text="🚀 အလုပ်စတင်နေပါပြီ...")
             cleanup_temp_files()
@@ -604,7 +617,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                         comp = client.chat.completions.create(model="llama-3.3-70b-versatile" if "Groq" in ai_provider else ("gpt-5.5-pro" if "5.5" in ai_provider else "gpt-4o"), messages=[{"role": "user", "content": f"{base_prompt} --- SRT --- {tsrt}"}])
                         raw_output_text = comp.choices[0].message.content
 
-                    # Regex Extraction & Syntax fix integration
                     title_match = re.search(r'\[TITLE:\s*(.*?)\]', raw_output_text, re.IGNORECASE)
                     tags_match = re.search(r'\[TAGS:\s*(.*?)\]', raw_output_text, re.IGNORECASE)
                     
@@ -627,7 +639,8 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                         t_A = min(get_file_duration(v_input)*0.2, 10)
                         t_B = min(get_file_duration(v_input)*0.5, 20)
                         
-                        for thumb_name, t_val in [("thumb_A.jpg", t_A), ("thumb_B.jpg", t_B)]:
+                        for thumb_suffix, t_val in [("A", t_A), ("B", t_B)]:
+                            thumb_name = f"thumb_{thumb_suffix}_{run_id}.jpg"
                             try:
                                 stream = ffmpeg.input(v_input, ss=t_val)
                                 if cb_thumb_text:
@@ -638,8 +651,8 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                                 ffmpeg.output(stream, thumb_name, vframes=1).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
                             except: pass
                             
-                        st.session_state.thumb_path_A = "thumb_A.jpg" if os.path.exists("thumb_A.jpg") else None
-                        st.session_state.thumb_path_B = "thumb_B.jpg" if os.path.exists("thumb_B.jpg") else None
+                            if thumb_suffix == "A" and os.path.exists(thumb_name): st.session_state.thumb_path_A = thumb_name
+                            elif thumb_suffix == "B" and os.path.exists(thumb_name): st.session_state.thumb_path_B = thumb_name
                     except: pass
 
                 except Exception as e: st.error(f"Logic Error: {e}"); st.stop()
@@ -679,10 +692,10 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         
         col_out1, col_out2 = st.columns([1, 1])
         with col_out1:
-            if os.path.exists("AETHER_RECAP_FINAL.mp4"): 
-                st.video("AETHER_RECAP_FINAL.mp4")
+            if os.path.exists(st.session_state.final_video_path): 
+                st.video(st.session_state.final_video_path)
                 st.markdown('<div class="setting-panel"><h4>📥 Download Dashboard</h4>', unsafe_allow_html=True)
-                st.markdown(get_download_link("AETHER_RECAP_FINAL.mp4", "Aether_Recap.mp4", "Download Recap Video (MP4)"), unsafe_allow_html=True)
+                st.markdown(get_download_link(st.session_state.final_video_path, "Aether_Recap.mp4", "Download Recap Video (MP4)"), unsafe_allow_html=True)
                 if os.path.exists("subtitles.srt"):
                     st.markdown(get_download_link("subtitles.srt", "Aether_Subs.srt", "Download Subtitles (.SRT)"), unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
@@ -690,14 +703,10 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         with col_out2:
             st.markdown('<div class="setting-panel"><h3>📝 Scripts & Assets</h3>', unsafe_allow_html=True)
             col_t1, col_t2 = st.columns(2)
-            if st.session_state.thumb_path_A:
-                with col_t1: 
-                    st.image(st.session_state.thumb_path_A, caption="Thumbnail (A)", use_column_width=True)
-                    st.markdown(get_download_link(st.session_state.thumb_path_A, "Thumb_A.jpg", "Download A"), unsafe_allow_html=True)
-            if st.session_state.thumb_path_B:
-                with col_t2: 
-                    st.image(st.session_state.thumb_path_B, caption="Thumbnail (B)", use_column_width=True)
-                    st.markdown(get_download_link(st.session_state.thumb_path_B, "Thumb_B.jpg", "Download B"), unsafe_allow_html=True)
+            if st.session_state.thumb_path_A and os.path.exists(st.session_state.thumb_path_A):
+                with col_t1: st.image(st.session_state.thumb_path_A, caption="Thumbnail (A)", use_column_width=True); st.markdown(get_download_link(st.session_state.thumb_path_A, "Thumb_A.jpg", "Download A"), unsafe_allow_html=True)
+            if st.session_state.thumb_path_B and os.path.exists(st.session_state.thumb_path_B):
+                with col_t2: st.image(st.session_state.thumb_path_B, caption="Thumbnail (B)", use_column_width=True); st.markdown(get_download_link(st.session_state.thumb_path_B, "Thumb_B.jpg", "Download B"), unsafe_allow_html=True)
             
             with st.expander("👁️ Original Transcript", expanded=False):
                 st.text_area("မူရင်းစာသား:", value=st.session_state.original_transcript, height=150, disabled=True)
@@ -721,7 +730,8 @@ elif app_mode == "🎙️ Faceless Channel Studio":
         
         fc_fx = st.selectbox("Voice FX (Effect)", [
             "None", "👹 Demon / Horror", "🤫 ASMR / Whisper", "🎙️ Epic Trailer",
-            "🤖 Robot / Cyborg", "📞 Old Telephone", "⛰️ Deep Cave Echo", "🌊 Underwater / Muffled"
+            "🤖 Robot / Cyborg", "📞 Old Telephone", "⛰️ Deep Cave Echo", "🌊 Underwater / Muffled",
+            "🔥 Deep & Energetic (Motivation)", "👻 Deep & Chilling (Horror)"
         ], key="fc_fx")
         
         st.markdown("---")
@@ -768,6 +778,12 @@ elif app_mode == "🎙️ Faceless Channel Studio":
         elif "Upload" in fc_visual_mode and not fc_uploaded_images: st.error("⚠️ အနည်းဆုံးပုံ (၁) ပုံ Upload တင်ပေးပါ။")
         else:
             st.session_state.render_success = False
+            
+            # 👇 FIX: Dynamic Cache Buster
+            run_id = str(int(time.time()))
+            v_final = f"FACELESS_FINAL_{run_id}.mp4"
+            st.session_state.final_video_path = v_final
+            
             pbar = st.progress(0, text="🚀 အလိုအလျောက် ဖန်တီးမှုစတင်နေပါပြီ...")
             keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
             cleanup_temp_files()
@@ -808,6 +824,7 @@ At the absolute end, include these two lines:
                     if not fc_story_text:
                         st.error(f"Story Error: Key အားလုံး Limit ပြည့်နေပါသည်။ {last_err}"); st.stop()
 
+            # Robust Title Parsing
             title_match = re.search(r'\[TITLE:\s*(.*?)\]', fc_story_text, re.IGNORECASE)
             tags_match = re.search(r'\[TAGS:\s*(.*?)\]', fc_story_text, re.IGNORECASE)
             
@@ -948,24 +965,25 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
             with st.spinner("⏳ [အဆင့်၅/၅] အားလုံးကိုပေါင်းစပ်ပြီး Master Video ထုတ်လုပ်နေပါသည်..."):
                 pbar.progress(85, text="🎬 Master Rendering အလုပ်လုပ်နေပါသည်...")
                 try:
-                    success, err_msg = render_premium_saas_video("fc_video_loop.mp4", "fc_audio.wav", fc_parsed, "FACELESS_FINAL.mp4", fc_ratio, use_bypass=True, subtitle_mode=fc_subtitle_mode, sub_position=fc_sub_position, sub_color=fc_sub_color, sub_size=26, sub_thickness=2.5, sub_bg=False)
+                    success, err_msg = render_premium_saas_video("fc_video_loop.mp4", "fc_audio.wav", fc_parsed, v_final, fc_ratio, use_bypass=True, subtitle_mode=fc_subtitle_mode, sub_position=fc_sub_position, sub_color=fc_sub_color, sub_size=26, sub_thickness=2.5, sub_bg=False)
                     
                     if success and fc_bgm not in ["None (BGM မထည့်ပါ)"]:
                         bgm_path = os.path.join("bgm_tracks", random.choice(bgm_files) if "Auto" in fc_bgm else fc_bgm)
                         if os.path.exists(bgm_path):
                             try:
-                                ducked = ffmpeg.filter([ffmpeg.input(bgm_path, stream_loop=-1).audio.filter('aresample', 44100).filter('volume', fc_bgm_vol), ffmpeg.input("FACELESS_FINAL.mp4").audio], 'sidechaincompress', threshold=0.04, ratio=4, attack=50, release=300)
-                                mixed = ffmpeg.filter([ffmpeg.input("FACELESS_FINAL.mp4").audio, ducked], 'amix', inputs=2, duration='first').filter('volume', 2.0)
-                                ffmpeg.output(ffmpeg.input("FACELESS_FINAL.mp4").video, mixed, "temp_faceless.mp4", vcodec='copy', acodec='aac', t=fc_audio_dur).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
-                                shutil.move("temp_faceless.mp4", "FACELESS_FINAL.mp4")
+                                ducked = ffmpeg.filter([ffmpeg.input(bgm_path, stream_loop=-1).audio.filter('aresample', 44100).filter('volume', fc_bgm_vol), ffmpeg.input(v_final).audio], 'sidechaincompress', threshold=0.04, ratio=4, attack=50, release=300)
+                                mixed = ffmpeg.filter([ffmpeg.input(v_final).audio, ducked], 'amix', inputs=2, duration='first').filter('volume', 2.0)
+                                ffmpeg.output(ffmpeg.input(v_final).video, mixed, "temp_faceless.mp4", vcodec='copy', acodec='aac', t=fc_audio_dur).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
+                                shutil.move("temp_faceless.mp4", v_final)
                             except: pass
                     
                     try:
                         t_A = min(fc_audio_dur * 0.2, 10)
                         t_B = min(fc_audio_dur * 0.5, 20)
-                        for thumb_name, t_val in [("thumb_A.jpg", t_A), ("thumb_B.jpg", t_B)]:
+                        for thumb_suffix, t_val in [("A", t_A), ("B", t_B)]:
+                            thumb_name = f"thumb_{thumb_suffix}_{run_id}.jpg"
                             try:
-                                stream = ffmpeg.input("FACELESS_FINAL.mp4", ss=t_val)
+                                stream = ffmpeg.input(v_final, ss=t_val)
                                 with open("thumb_text.txt", "w", encoding="utf-8") as tf:
                                     title_text = st.session_state.viral_title if st.session_state.viral_title else "Viral Video"
                                     tf.write(textwrap.fill(title_text, width=25))
@@ -973,8 +991,9 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
                                     stream = ffmpeg.filter(stream.video, 'drawtext', textfile='thumb_text.txt', fontfile='Padauk.ttf', fontcolor='white', fontsize=65, x='(w-text_w)/2', y='(h-text_h)/2', box=1, boxcolor='red@0.9', boxborderw=20, borderw=3, bordercolor='black', line_spacing=15)
                                 ffmpeg.output(stream, thumb_name, vframes=1).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
                             except: pass
-                        st.session_state.thumb_path_A = "thumb_A.jpg" if os.path.exists("thumb_A.jpg") else None
-                        st.session_state.thumb_path_B = "thumb_B.jpg" if os.path.exists("thumb_B.jpg") else None
+                            
+                            if thumb_suffix == "A" and os.path.exists(thumb_name): st.session_state.thumb_path_A = thumb_name
+                            elif thumb_suffix == "B" and os.path.exists(thumb_name): st.session_state.thumb_path_B = thumb_name
                     except: pass
                             
                     pbar.progress(100, text="✅ အားလုံးပြီးစီးပါပြီ!")
@@ -990,9 +1009,9 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
                     
                     col_f1, col_f2 = st.columns(2)
                     with col_f1:
-                        st.video("FACELESS_FINAL.mp4")
+                        st.video(st.session_state.final_video_path)
                         st.markdown('<div class="setting-panel"><h4>📥 Download Dashboard</h4>', unsafe_allow_html=True)
-                        st.markdown(get_download_link("FACELESS_FINAL.mp4", "Viral_Faceless.mp4", "Download Final Video (No Refresh)"), unsafe_allow_html=True)
+                        st.markdown(get_download_link(st.session_state.final_video_path, "Viral_Faceless.mp4", "Download Final Video (No Refresh)"), unsafe_allow_html=True)
                         if os.path.exists("subtitles.srt"):
                             st.markdown(get_download_link("subtitles.srt", "Faceless_Subs.srt", "Download Subtitles (.SRT)"), unsafe_allow_html=True)
                         st.markdown('</div>', unsafe_allow_html=True)
@@ -1002,11 +1021,11 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
                         st.info(f"📈 **Viral Prediction:**\n{st.session_state.viral_score}")
                         
                         col_ta, col_tb = st.columns(2)
-                        if st.session_state.thumb_path_A:
+                        if st.session_state.thumb_path_A and os.path.exists(st.session_state.thumb_path_A):
                             with col_ta: 
                                 st.image(st.session_state.thumb_path_A, caption="Thumbnail A")
                                 st.markdown(get_download_link(st.session_state.thumb_path_A, "Thumb_A.jpg", "Download A"), unsafe_allow_html=True)
-                        if st.session_state.thumb_path_B:
+                        if st.session_state.thumb_path_B and os.path.exists(st.session_state.thumb_path_B):
                             with col_tb: 
                                 st.image(st.session_state.thumb_path_B, caption="Thumbnail B")
                                 st.markdown(get_download_link(st.session_state.thumb_path_B, "Thumb_B.jpg", "Download B"), unsafe_allow_html=True)
@@ -1025,3 +1044,14 @@ elif app_mode == "🎥 Veo Video Studio":
 elif app_mode == "🎵 Lyria Music Studio":
     st.markdown('<div class="setting-panel"><h3>🎵 Lyria 3 Pro Music Generator</h3>', unsafe_allow_html=True)
     music_prompt = st.text_area("🎧 Enter Music Prompt", placeholder="Epic cinematic background music...")
+    if st.button("🚀 Generate Lyria Music"): pass
+
+elif app_mode == "⚡ Translation/Transcript Studio":
+    st.markdown('<h2 style="color:#00e5ff;">⚡ Translation & Subtitle Studio (AI Dual Engine)</h2>', unsafe_allow_html=True)
+    video_url = st.text_input("YouTube / FB / TikTok / Rednote URL ထည့်ပါ:")
+    if st.button("🚀 စတင်လုပ်ဆောင်မည်"): pass
+
+elif app_mode == "📥 Video Downloader Hub":
+    st.markdown('<h2 style="color:#00e5ff;">📥 Video Downloader Hub</h2>', unsafe_allow_html=True)
+    dl_url = st.text_input("ဗီဒီယို URL ကို ဒီမှာ ထည့်ပါ:", key="hub_dl_url")
+    if st.button("⬇️ ဗီဒီယိုစစ်ဆေးပြီး ဒေါင်းလုဒ်ဆွဲမည်"): pass
