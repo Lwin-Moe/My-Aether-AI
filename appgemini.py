@@ -1,5 +1,5 @@
 # =====================================================================
-# 📌 AETHER FILMWORKS AI // STUDIO V52 (POLLINATIONS AI + MASTER PROMPT)
+# 📌 AETHER FILMWORKS AI // STUDIO V52 (FONT FIX + COLOR OPTIONS + RENDER FIX)
 # =====================================================================
 
 import streamlit as st
@@ -221,12 +221,14 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
                 start_sec = to_sec(start_str)
                 end_sec = to_sec(end_str)
                 
+                # Minimum duration & Overlap Fix (Preserved Groq Fix)
                 if start_sec < prev_end_sec: start_sec = prev_end_sec + 0.1
                 if end_sec - start_sec < 0.8: end_sec = start_sec + 0.8
                 prev_end_sec = end_sec
 
                 text_content = block.strip()
                 if use_fade: 
+                    # Pop-up animation effect
                     text_content = "{\\fscx0\\fscy0\\t(0,150,\\fscx100\\fscy100)}" + text_content
                 parsed_lines.append((start_sec, end_sec, text_content))
                 full_speech.append(block.strip())
@@ -283,15 +285,13 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
             logo = ffmpeg.filter(logo, 'scale', -1, 80)
             video = ffmpeg.overlay(video, logo, x='W-w-20', y=20)
 
+        # 👇 FIX: Reverted to subtitles filter with fontsdir='.' to solve Tofu Boxes and accurately load Pyidaungsu.ttf
         if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"] and os.path.exists("subtitles.srt"):
-            ass_path = "subtitles.ass"
-            subprocess.run([FFMPEG_BINARY, "-y", "-i", "subtitles.srt", ass_path], capture_output=True)
-            if os.path.exists(ass_path):
-                video = ffmpeg.filter(video, 'ass', ass_path)
-            else:
-                video = ffmpeg.filter(video, 'subtitles', safe_srt_path.replace(':', '\\:'), charenc='UTF-8', fontsdir='.', force_style=sub_style_str)
+            safe_srt_path_escaped = safe_srt_path.replace(':', '\\:')
+            video = ffmpeg.filter(video, 'subtitles', safe_srt_path_escaped, charenc='UTF-8', fontsdir='.', force_style=sub_style_str)
 
-        out = ffmpeg.output(video, audio, out_v, vcodec='libx264', acodec='aac', preset='fast', crf=21, t=v_max_dur)
+        # 👇 FIX: Ensure output format is yuv420p so video is playable in Web/Mobile
+        out = ffmpeg.output(video, audio, out_v, vcodec='libx264', pix_fmt='yuv420p', acodec='aac', preset='fast', crf=21, t=v_max_dur)
         out.run(cmd=FFMPEG_BINARY, overwrite_output=True, capture_stdout=True, capture_stderr=True)
         return True, "Success"
     except ffmpeg.Error as e: return False, str(e)
@@ -405,7 +405,8 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         st.markdown("<p style='font-weight: bold; color: #818cf8; font-size: 16px;'>📝 Subtitle Pro Settings</p>", unsafe_allow_html=True)
         if subtitle_mode in ["Both (Burn + SRT)", "Burn into Video"]:
             sub_position = st.selectbox("📍 Position", ["Bottom", "Center", "Top"])
-            sub_color = st.selectbox("🎨 Color", ["Yellow Text + Black Outline", "White Text + Black Outline", "Neon Green Text + Black Outline"])
+            # 👇 FIX: Added Red and Gold colors for standard mode
+            sub_color = st.selectbox("🎨 Color", ["Yellow Text + Black Outline", "White Text + Black Outline", "Neon Green Text + Black Outline", "Red Text + Black Outline", "Gold Text + Black Outline"])
             sub_font = st.selectbox("🅰️ Font Family", ["Pyidaungsu", "NotoSans-Bold", "Myanmar3_2018", "Padauk"])
             sub_size = st.slider("🔠 Font Size", 16, 40, 22)
             sub_thickness = st.slider("✒️ Outline Thickness", 1.0, 5.0, 2.5)
@@ -546,12 +547,26 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     raw_speech = " ".join([t for _,_,t in parsed_timestamps])
                     clean_speech = re.sub(r'\{.*?\}', '', raw_speech)
                     asyncio.run(generate_tts(clean_speech, voice_char, a_generated, engine=audio_engine_choice, ttsmaker_key=key_ttsmaker, eleven_key=locals().get('eleven_key_input', ''), custom_eleven_id=locals().get('custom_eleven_id', ''), gemini_key=locals().get('synergy_key', api_key_input), pitch=pitch_level, voice_fx=fx_level))
+                    
+                    # 👇 FIX: Duration check to prevent generating a 3-second corrupted video
+                    a_dur = get_file_duration(a_generated)
+                    if a_dur < 5.0:
+                        st.error("❌ အသံထုတ်လုပ်ခြင်း မအောင်မြင်ပါ။ API Limit ငြိသွားခြင်း သို့မဟုတ် Network ပြဿနာကြောင့် အသံဖိုင် တိုတောင်းလွန်းနေပါသည်။ ပြန်လည်ကြိုးစားပါ။")
+                        st.stop()
+                        
                 except Exception as e: st.error(f"အသံထုတ်လုပ်ခြင်း မအောင်မြင်ပါ: {e}"); st.stop()
 
             with st.spinner("⏳ [အဆင့် ၅/၆] ဗီဒီယိုနှင့် စာတန်းထိုး ပေါင်းစပ်နေပါသည်..."):
                 pbar.progress(80, text="🎬 [အဆင့် ၅/၆] ဗီဒီယိုနှင့် စာတန်းထိုး ပေါင်းစပ်နေပါသည်...")
                 align_val = 2 if "Bottom" in sub_position else (5 if "Center" in sub_position else 8)
-                prim_c = "&H0000FFFF" if "Yellow" in sub_color else ("&H00FFFFFF" if "White" in sub_color else "&H0000FF00")
+                
+                # 👇 FIX: Color handling including Red and Gold
+                prim_c = "&H0000FFFF"
+                if "White" in sub_color: prim_c = "&H00FFFFFF"
+                elif "Green" in sub_color: prim_c = "&H0000FF00"
+                elif "Red" in sub_color: prim_c = "&H000000FF"
+                elif "Gold" in sub_color: prim_c = "&H0000D7FF"
+                
                 dyn_style = f"FontName={sub_font.split()[0]},FontSize={sub_size},PrimaryColour={prim_c},BackColour={'&H80000000' if sub_bg else '&H00000000'},BorderStyle={3 if sub_bg else 1},Outline={0 if sub_bg else sub_thickness},Alignment={align_val},MarginV=60"
                 
                 logo_file_path = None
@@ -631,9 +646,12 @@ elif app_mode == "🎙️ Faceless Channel Studio":
         st.markdown("<b>🎨 Visual & Niche Settings</b>", unsafe_allow_html=True)
         fc_niche = st.selectbox("Select Niche", ["👻 Horror / Creepypasta", "💔 Reddit Relationship Drama", "🧠 Dark Psychology", "💡 Fun Facts / Trivia"])
         fc_ratio = st.selectbox("Video Ratio", ["9:16 (TikTok/Shorts)", "16:9 (YouTube)"], key="fc_ratio")
-        
         fc_duration = st.slider("⏱️ Story Duration (Minutes)", 1, 10, 3)
-        st.caption("💡 Subtitles များသည် Viral ဖြစ်စေရန် (Alex Hormozi Style) အလယ်တည့်တည့်တွင် အကြီးကြီး အော်တိုချိန်ညှိပေးထားပါသည်။")
+
+        # 👇 FIX: Added Position & Color options to Faceless Studio directly in Sidebar
+        st.markdown("<b>📝 Subtitle Pro Settings</b>", unsafe_allow_html=True)
+        fc_sub_position = st.selectbox("📍 Position", ["Center", "Bottom", "Top"], index=0, key="fc_sub_pos")
+        fc_sub_color = st.selectbox("🎨 Color", ["Yellow Text", "White Text", "Neon Green Text", "Red Text", "Gold Text"], index=0, key="fc_sub_col")
 
         fc_subtitle_mode = st.radio("Subtitle Output Mode", ["Both (Burn + SRT)", "Export SRT File Only", "Burn into Video"], key="fc_sub_mode")
 
@@ -657,7 +675,6 @@ elif app_mode == "🎙️ Faceless Channel Studio":
         
     with col_fc2:
         st.markdown("<div class='sub-box'>", unsafe_allow_html=True)
-        # 👇 FIX: Changed Visual Source to Pollinations AI
         fc_visual_mode = st.radio("🎥 Visuals Source", ["🎨 Auto-Generate AI Images (Pollinations)", "🖼️ Upload Manual Images"])
         fc_uploaded_images = None
         if "Upload" in fc_visual_mode:
@@ -719,10 +736,16 @@ At the absolute end, include these two lines:
                 try:
                     clean_story = re.sub(r'\[.*?\]', '', fc_story_text) 
                     asyncio.run(generate_tts(fc_story_text if "Synergy" in fc_audio_engine else clean_story, fc_voice_char, "fc_audio.wav", engine=fc_audio_engine, gemini_key=locals().get('fc_synergy_key', api_key_input), voice_fx=fc_fx))
+                    
+                    # 👇 FIX: Duration check to prevent generating a broken/short video
                     fc_audio_dur = get_file_duration("fc_audio.wav")
+                    if fc_audio_dur < 5.0:
+                        st.error("❌ အသံထုတ်လုပ်ခြင်း မအောင်မြင်ပါ။ API Limit ငြိသွားခြင်း သို့မဟုတ် Network ပြဿနာကြောင့် အသံဖိုင် တိုတောင်းလွန်းနေပါသည်။ ပြန်လည်ကြိုးစားပါ။")
+                        st.stop()
+                        
                 except Exception as e: st.error(f"Audio Error: {e}"); st.stop()
 
-            # 👇 FIX: STEP 3 (Pollinations AI Integration - NO API KEY REQUIRED)
+            # STEP 3: Pollinations AI Integration
             with st.spinner("⏳ [အဆင့် ၃/၅] Visuals များကို ပြင်ဆင်နေပါသည်..."):
                 pbar.progress(50, text="🎥 Visuals ပြင်ဆင်နေပါသည်...")
                 try:
@@ -750,7 +773,6 @@ At the absolute end, include these two lines:
                                 generated_clips.append(clip_path)
 
                     else:
-                        # Auto-Generate with Pollinations AI
                         search_keywords = []
                         last_err = ""
                         for key in keys_list:
@@ -809,7 +831,8 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
                     with open("fc_concat.txt", "w") as f:
                         for c in generated_clips: f.write(f"file '{c}'\n")
                     
-                    subprocess.run([FFMPEG_BINARY, "-y", "-f", "concat", "-safe", "0", "-i", "fc_concat.txt", "-t", str(fc_audio_dur), "-c", "copy", "fc_video_loop.mp4"], capture_output=True)
+                    # 👇 FIX: Added pix_fmt yuv420p to ensure browser compatibility
+                    subprocess.run([FFMPEG_BINARY, "-y", "-f", "concat", "-safe", "0", "-i", "fc_concat.txt", "-t", str(fc_audio_dur), "-c", "copy", "-pix_fmt", "yuv420p", "fc_video_loop.mp4"], capture_output=True)
                 except Exception as e: st.error(f"Visual Error: {e}"); st.stop()
 
             # STEP 4: Dual Sync Engine (Groq Whisper + Gemini Formatter with Emoji)
@@ -838,11 +861,10 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
                         marker = chr(96) * 3
                         fc_srt_text = srt_res.text.strip().replace(f"{marker}srt", "").replace(marker, "")
                         
-                        fc_parsed, _ = parse_and_save_real_srt(fc_srt_text, "subtitles.srt", use_fade=True) # triggers Pop-up animation
+                        fc_parsed, _ = parse_and_save_real_srt(fc_srt_text, "subtitles.srt", use_fade=True)
                     except Exception as e:
                         last_err = str(e)
                 
-                # Fallback to Gemini alone if Groq fails or no key provided
                 if not fc_parsed:
                     for key in keys_list:
                         try:
@@ -871,8 +893,15 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
             with st.spinner("⏳ [အဆင့် ၅/၅] အားလုံးကိုပေါင်းစပ်ပြီး Master Video ထုတ်လုပ်နေပါသည်..."):
                 pbar.progress(85, text="🎬 Master Rendering အလုပ်လုပ်နေပါသည်...")
                 try:
-                    # Pro-Level Subtitle Styling (Bold, Thick Outline, Drop Shadow, Center Alignment)
-                    dyn_fc_style = f"FontName=Pyidaungsu,FontSize=24,PrimaryColour=&H0000FFFF,BackColour=&H00000000,BorderStyle=1,Outline=2.5,Shadow=2,Bold=1,Alignment=5,MarginV=80"
+                    # 👇 FIX: Dynamically apply user-selected position and color for Faceless Mode
+                    align_fc = 5 if "Center" in fc_sub_position else (2 if "Bottom" in fc_sub_position else 8)
+                    prim_fc = "&H0000FFFF"
+                    if "White" in fc_sub_color: prim_fc = "&H00FFFFFF"
+                    elif "Green" in fc_sub_color: prim_fc = "&H0000FF00"
+                    elif "Red" in fc_sub_color: prim_fc = "&H000000FF"
+                    elif "Gold" in fc_sub_color: prim_fc = "&H0000D7FF"
+
+                    dyn_fc_style = f"FontName=Pyidaungsu,FontSize=24,PrimaryColour={prim_fc},BackColour=&H00000000,BorderStyle=1,Outline=2.5,Shadow=2,Bold=1,Alignment={align_fc},MarginV=80"
                     
                     success, err_msg = render_premium_saas_video("fc_video_loop.mp4", "fc_audio.wav", fc_parsed, "FACELESS_FINAL.mp4", fc_ratio, use_bypass=True, subtitle_mode=fc_subtitle_mode, sub_style_str=dyn_fc_style)
                     
