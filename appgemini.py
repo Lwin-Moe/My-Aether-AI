@@ -1,5 +1,5 @@
 # =====================================================================
-# 📌 AETHER FILMWORKS AI // STUDIO V52 (TOGETHER AI + MASTER PROMPT + BUG FIX)
+# 📌 AETHER FILMWORKS AI // STUDIO V52 (POLLINATIONS AI + MASTER PROMPT)
 # =====================================================================
 
 import streamlit as st
@@ -37,7 +37,7 @@ else:
 if not os.path.exists("Pyidaungsu.ttf"):
     try:
         import urllib.request
-        urllib.request.urlretrieve("[https://github.com/google/fonts/raw/main/ofl/padauk/Padauk-Regular.ttf](https://github.com/google/fonts/raw/main/ofl/padauk/Padauk-Regular.ttf)", "Pyidaungsu.ttf")
+        urllib.request.urlretrieve("https://github.com/google/fonts/raw/main/ofl/padauk/Padauk-Regular.ttf", "Pyidaungsu.ttf")
     except:
         pass
 
@@ -47,7 +47,7 @@ ELEVEN_KEY_FILE = "saved_eleven_key.txt"
 GROQ_KEY_FILE = "saved_groq_key.txt"
 OPENAI_KEY_FILE = "saved_openai_key.txt"
 ELEVEN_VOICE_ID_FILE = "saved_eleven_voice_id.txt"
-TOGETHER_KEY_FILE = "saved_together_key.txt" 
+PEXELS_KEY_FILE = "saved_pexels_key.txt" 
 
 def load_key(file_path):
     if os.path.exists(file_path):
@@ -68,7 +68,7 @@ st.set_page_config(page_title="AETHER STUDIO V52", layout="wide", page_icon="�
 
 st.markdown('''
     <style>
-    @import url('[https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Montserrat:wght@500;700;800;900&display=swap](https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Montserrat:wght@500;700;800;900&display=swap)');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Montserrat:wght@500;700;800;900&display=swap');
     .stApp { background-color: #0b0f19 !important; background-image: radial-gradient(circle at top, #161b2e 0%, #0b0f19 60%) !important; color: #cbd5e1 !important; font-family: 'Inter', sans-serif; }
     section[data-testid="stSidebar"] { background-color: #0d111c !important; border-right: 1px solid rgba(255, 255, 255, 0.05) !important; }
     h1, h2, h3, h4 { font-family: 'Montserrat', sans-serif !important; color: #f8fafc !important; font-weight: 700 !important; }
@@ -144,7 +144,7 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
         
         last_err = ""
         for idx, current_key in enumerate(keys_list):
-            url = f"[https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key=){current_key}"
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key={current_key}"
             try:
                 res = requests.post(url, json=payload, timeout=300)
                 if res.status_code == 200:
@@ -165,12 +165,12 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
         if not os.path.exists(temp_out): raise Exception(f"Keys Exhausted. {last_err}")
     elif "ElevenLabs" in engine:
         voice_id = custom_eleven_id.strip() if custom_eleven_id else ("21m00Tcm4TlvDq8ikWAM" if "Male" in voice_model else "AZnzlk1XvdvUeBnXmlld")
-        res = requests.post(f"[https://api.elevenlabs.io/v1/text-to-speech/](https://api.elevenlabs.io/v1/text-to-speech/){voice_id}", json={"text": text, "model_id": "eleven_multilingual_v2"}, headers={"xi-api-key": eleven_key}, timeout=300)
+        res = requests.post(f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}", json={"text": text, "model_id": "eleven_multilingual_v2"}, headers={"xi-api-key": eleven_key}, timeout=300)
         if res.status_code == 200:
             with open(temp_out, "wb") as f: f.write(res.content)
     elif "TTSMaker" in engine:
         voice_id = 781 if "Female" in voice_model else 780
-        res = requests.post("[https://api.ttsmaker.com/v1/create-tts-order](https://api.ttsmaker.com/v1/create-tts-order)", json={"tts_api_key": ttsmaker_key, "tts_text": text, "voice_id": voice_id, "audio_format": "mp3"}, timeout=300).json()
+        res = requests.post("https://api.ttsmaker.com/v1/create-tts-order", json={"tts_api_key": ttsmaker_key, "tts_text": text, "voice_id": voice_id, "audio_format": "mp3"}, timeout=300).json()
         if res.get("status") == "success":
             with open(temp_out, "wb") as f: f.write(requests.get(res["audio_file_url"]).content)
     else:
@@ -221,14 +221,12 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
                 start_sec = to_sec(start_str)
                 end_sec = to_sec(end_str)
                 
-                # Minimum duration & Overlap Fix
                 if start_sec < prev_end_sec: start_sec = prev_end_sec + 0.1
                 if end_sec - start_sec < 0.8: end_sec = start_sec + 0.8
                 prev_end_sec = end_sec
 
                 text_content = block.strip()
                 if use_fade: 
-                    # Pop-up animation effect
                     text_content = "{\\fscx0\\fscy0\\t(0,150,\\fscx100\\fscy100)}" + text_content
                 parsed_lines.append((start_sec, end_sec, text_content))
                 full_speech.append(block.strip())
@@ -285,7 +283,6 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
             logo = ffmpeg.filter(logo, 'scale', -1, 80)
             video = ffmpeg.overlay(video, logo, x='W-w-20', y=20)
 
-        # ASS Filter (Hard Burn) for stability
         if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"] and os.path.exists("subtitles.srt"):
             ass_path = "subtitles.ass"
             subprocess.run([FFMPEG_BINARY, "-y", "-i", "subtitles.srt", ass_path], capture_output=True)
@@ -324,10 +321,9 @@ with st.sidebar:
     if app_mode == "🎙️ Faceless Channel Studio":
         st.markdown("---")
         st.markdown("### 🔑 Additional API Keys")
-        
-        saved_together = load_key(TOGETHER_KEY_FILE)
-        together_key_input = st.text_input("Together AI API Key (FLUX Image Gen)", type="password", value=saved_together)
-        if together_key_input and together_key_input != saved_together: save_key(TOGETHER_KEY_FILE, together_key_input)
+        saved_pexels = load_key(PEXELS_KEY_FILE)
+        pexels_key_input = st.text_input("Pexels API Key (Optional for SD Video)", type="password", value=saved_pexels)
+        if pexels_key_input and pexels_key_input != saved_pexels: save_key(PEXELS_KEY_FILE, pexels_key_input)
         
         saved_groq_fc = load_key(GROQ_KEY_FILE)
         groq_key_fc = st.text_input("Groq API Key (For Accurate Whisper Sync)", type="password", value=saved_groq_fc)
@@ -661,7 +657,8 @@ elif app_mode == "🎙️ Faceless Channel Studio":
         
     with col_fc2:
         st.markdown("<div class='sub-box'>", unsafe_allow_html=True)
-        fc_visual_mode = st.radio("🎥 Visuals Source", ["🎨 Auto-Generate AI Images (Together FLUX)", "🖼️ Upload Manual Images"])
+        # 👇 FIX: Changed Visual Source to Pollinations AI
+        fc_visual_mode = st.radio("🎥 Visuals Source", ["🎨 Auto-Generate AI Images (Pollinations)", "🖼️ Upload Manual Images"])
         fc_uploaded_images = None
         if "Upload" in fc_visual_mode:
             fc_uploaded_images = st.file_uploader("🖼️ Upload Images (JPG/PNG)", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
@@ -672,7 +669,6 @@ elif app_mode == "🎙️ Faceless Channel Studio":
         if not api_key_input: st.error("⚠️ Google Gemini API Key ထည့်သွင်းပေးပါ။ (Sidebar တွင်ထည့်ပါ)")
         elif "Manual" in fc_script_mode and not fc_manual_script.strip(): st.error("⚠️ Manual ဇာတ်ညွှန်း ထည့်သွင်းပေးပါ။")
         elif "Upload" in fc_visual_mode and not fc_uploaded_images: st.error("⚠️ အနည်းဆုံး ပုံ (၁) ပုံ Upload တင်ပေးပါ။")
-        elif "Together" in fc_visual_mode and not together_key_input: st.error("⚠️ Together AI API Key ထည့်သွင်းပေးပါ။ (Sidebar တွင်ထည့်ပါ)")
         else:
             st.session_state.render_success = False
             pbar = st.progress(0, text="🚀 အလိုအလျောက် ဖန်တီးမှု စတင်နေပါပြီ...")
@@ -726,7 +722,7 @@ At the absolute end, include these two lines:
                     fc_audio_dur = get_file_duration("fc_audio.wav")
                 except Exception as e: st.error(f"Audio Error: {e}"); st.stop()
 
-            # STEP 3: Together AI FLUX Integration + Cinematic Animation
+            # 👇 FIX: STEP 3 (Pollinations AI Integration - NO API KEY REQUIRED)
             with st.spinner("⏳ [အဆင့် ၃/၅] Visuals များကို ပြင်ဆင်နေပါသည်..."):
                 pbar.progress(50, text="🎥 Visuals ပြင်ဆင်နေပါသည်...")
                 try:
@@ -754,7 +750,7 @@ At the absolute end, include these two lines:
                                 generated_clips.append(clip_path)
 
                     else:
-                        # Auto-Generate with Together AI (FLUX.1-schnell)
+                        # Auto-Generate with Pollinations AI
                         search_keywords = []
                         last_err = ""
                         for key in keys_list:
@@ -778,31 +774,18 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
                         total_clips = len(search_keywords)
                         clip_dur = fc_audio_dur / total_clips
                         
-                        def generate_together_image(prompt_text, idx):
+                        def generate_pollinations_image(prompt_text, idx):
                             try:
-                                url = "[https://api.together.xyz/v1/images/generations](https://api.together.xyz/v1/images/generations)"
-                                headers = {
-                                    "Authorization": f"Bearer {together_key_input.strip()}",
-                                    "Content-Type": "application/json"
-                                }
-                                payload = {
-                                    "model": "black-forest-labs/FLUX.1-schnell-Free",
-                                    "prompt": prompt_text.strip(),
-                                    "width": tg_width,
-                                    "height": tg_height,
-                                    "steps": 4,
-                                    "n": 1,
-                                    "response_format": "b64_json"
-                                }
+                                encoded_prompt = urllib.parse.quote(prompt_text.strip())
+                                url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={tg_width}&height={tg_height}&nologo=true"
                                 
-                                res = requests.post(url, json=payload, headers=headers, timeout=60)
+                                res = requests.get(url, timeout=60)
                                 if res.status_code == 200:
-                                    img_b64 = res.json()["data"][0]["b64_json"]
                                     img_path = f"fc_img_{idx}.jpg"
                                     clip_path = f"fc_clip_{idx}.mp4"
                                     
                                     with open(img_path, "wb") as f:
-                                        f.write(base64.b64decode(img_b64))
+                                        f.write(res.content)
                                         
                                     subprocess.run([FFMPEG_BINARY, "-y", "-loop", "1", "-i", img_path, "-t", str(clip_dur), "-vf", f"scale=-2:2000,zoompan=z='min(zoom+0.001,1.15)':d={int(clip_dur*25)}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=720x1280,fps=25", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "superfast", clip_path], capture_output=True)
                                     return clip_path
@@ -810,16 +793,16 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
                             return None
 
                         with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-                            futures = [executor.submit(generate_together_image, kw, i) for i, kw in enumerate(search_keywords)]
+                            futures = [executor.submit(generate_pollinations_image, kw, i) for i, kw in enumerate(search_keywords)]
                             completed = 0
                             for future in concurrent.futures.as_completed(futures):
                                 completed += 1
-                                pbar.progress(50 + (completed * 5), text=f"🎨 Together AI ဖြင့် ပုံများ ဖန်တီးနေပါသည် (Clip {completed}/{total_clips})...")
+                                pbar.progress(50 + (completed * 5), text=f"🎨 AI ဖြင့် ပုံများ ဖန်တီးနေပါသည် (Clip {completed}/{total_clips})...")
                         
                         generated_clips = [f"fc_clip_{i}.mp4" for i in range(total_clips) if os.path.exists(f"fc_clip_{i}.mp4")]
 
                     if not generated_clips:
-                        st.error("❌ Visual Generation Failed. Together AI Limit သို့မဟုတ် ပုံရိပ် ဖန်တီးမှု ပြဿနာရှိပါသည်။")
+                        st.error("❌ Visual Generation Failed. ပုံရိပ် ဖန်တီးမှု ပြဿနာရှိပါသည်။")
                         st.stop()
                     
                     pbar.progress(65, text="🎞️ ဗီဒီယိုများကို ပေါင်းစပ်နေပါသည်...")
@@ -852,7 +835,6 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
                         srt_prompt = f"Rewrite this Burmese SRT file into fast-paced TikTok style. CRITICAL RULES:\n1. Break down the subtitles into chunks of ONLY 1 to 4 words maximum per block.\n2. Interpolate the timestamps accurately to fit the original timeframe.\n3. Add ONE relevant emoji at the end of every subtitle block to make it engaging.\n4. Output ONLY valid SRT format without any markdown blocks.\n\nOriginal SRT:\n{raw_srt}"
                         srt_res = client_gemini.models.generate_content(model="gemini-2.5-flash", contents=srt_prompt)
                         
-                        # 👇 BUG FIX: Used safe string replacement instead of raw backticks
                         marker = chr(96) * 3
                         fc_srt_text = srt_res.text.strip().replace(f"{marker}srt", "").replace(marker, "")
                         
