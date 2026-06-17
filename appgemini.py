@@ -1,5 +1,5 @@
 # =====================================================================
-# 📌 AETHER FILMWORKS AI // STUDIO V52 (POLLINATIONS AI + BUG FIXES)
+# 📌 AETHER FILMWORKS AI // STUDIO V52 (DYNAMIC IMAGE COUNT + BUG FIXES)
 # =====================================================================
 
 import streamlit as st
@@ -263,14 +263,12 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
                 start_sec = to_sec(start_str)
                 end_sec = to_sec(end_str)
                 
-                # Minimum duration & Overlap Fix
                 if start_sec < prev_end_sec: start_sec = prev_end_sec + 0.1
                 if end_sec - start_sec < 0.8: end_sec = start_sec + 0.8
                 prev_end_sec = end_sec
 
                 text_content = block.strip()
                 if use_fade: 
-                    # Pop-up animation effect
                     text_content = "{\\fscx0\\fscy0\\t(0,150,\\fscx100\\fscy100)}" + text_content
                 parsed_lines.append((start_sec, end_sec, text_content))
                 full_speech.append(block.strip())
@@ -412,7 +410,6 @@ with st.sidebar:
         saved_groq_fc = load_key(GROQ_KEY_FILE)
         groq_key_fc = st.text_input("Groq API Key (For Accurate Whisper Sync)", type="password", value=saved_groq_fc)
         if groq_key_fc and groq_key_fc != saved_groq_fc: save_key(GROQ_KEY_FILE, groq_key_fc)
-        # 👇 FIX: TOGETHER_KEY_FILE removed entirely from Sidebar
 
 # =====================================================================
 # 📌 MODE 1 - MOVIE DUBBING
@@ -849,14 +846,18 @@ At the absolute end, include these two lines:
                     else:
                         search_keywords = []
                         last_err = ""
+                        
+                        # 👇 NEW: Calculate dynamic image count based on audio duration (1 image per 15 seconds)
+                        img_count = max(1, int(fc_audio_dur // 15))
+                        
                         for key in keys_list:
                             try:
                                 client = genai.Client(api_key=key)
-                                img_prompt_instruction = f"""Based on this story, give me exactly FOUR highly detailed English image generation prompts describing chronological scenes. 
+                                img_prompt_instruction = f"""Based on this story, give me exactly {img_count} highly detailed English image generation prompts describing chronological scenes. 
 GLOBAL STYLE DNA: Think Gritty graphic novel style, cinematic lighting, thick bold outlines, deep shadows, highly detailed 8k masterpiece. Avoid explicit/violent words. Do NOT include text or words in the prompt.
 Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
                                 prompt_req = client.models.generate_content(model="gemini-2.5-flash", contents=img_prompt_instruction)
-                                search_keywords = prompt_req.text.split('|')[:4]
+                                search_keywords = prompt_req.text.split('|')[:img_count]
                                 break
                             except Exception as e:
                                 last_err = str(e)
