@@ -1,5 +1,5 @@
 # =====================================================================
-# 📌 AETHER FILMWORKS AI // STUDIO V52 (FONT FIX + COLOR OPTIONS + RENDER FIX)
+# 📌 AETHER FILMWORKS AI // STUDIO V52 (AUDIO CHUNKING + NOTO SANS FONT FIX)
 # =====================================================================
 
 import streamlit as st
@@ -33,11 +33,11 @@ if shutil.which("ffmpeg"):
 else:
     FFMPEG_BINARY = imageio_ffmpeg.get_ffmpeg_exe()
 
-# 👇 Auto-Font Downloader to prevent Tofu boxes in Cloud environments
-if not os.path.exists("Pyidaungsu.ttf"):
+# 👇 FIX: Auto-Font Downloader updated to Noto Sans Myanmar Bold for perfect text shaping
+if not os.path.exists("NotoSansMyanmar-Bold.ttf"):
     try:
         import urllib.request
-        urllib.request.urlretrieve("https://github.com/google/fonts/raw/main/ofl/padauk/Padauk-Regular.ttf", "Pyidaungsu.ttf")
+        urllib.request.urlretrieve("https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansMyanmar/NotoSansMyanmar-Bold.ttf", "NotoSansMyanmar-Bold.ttf")
     except:
         pass
 
@@ -130,52 +130,92 @@ def extract_audio_fast(video_in, audio_out="temp_extracted.mp3"):
         return audio_out
     except: return None
 
+# 👇 FIX: Added Audio Chunking logic to prevent 4-second video cutoffs and handled Synergy Tags
 async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default Free)", ttsmaker_key="", eleven_key="", custom_eleven_id="", gemini_key="", pitch=0, voice_fx="None (Standard Voice)"):
     if not text.strip(): return
+    
+    # Edge-TTS will fail if tags like [pause=0.5] are present. Remove them.
+    if "Synergy" not in engine:
+        text = re.sub(r'\[.*?\]', '', text)
+        text = re.sub(r'\{.*?\}', '', text)
+        
+    # Split text into safe chunks (max ~400 characters) to prevent API timeout or truncation
+    text = text.replace('\n', '။ ')
+    sentences = text.split('။')
+    
+    chunks = []
+    current_chunk = ""
+    for sentence in sentences:
+        sentence = sentence.strip()
+        if not sentence: continue
+        sentence += '။ ' 
+        if len(current_chunk) + len(sentence) < 400:
+            current_chunk += sentence
+        else:
+            if current_chunk.strip(): chunks.append(current_chunk.strip())
+            current_chunk = sentence
+    if current_chunk.strip(): chunks.append(current_chunk.strip())
+    
     needs_ffmpeg = pitch != 0 or voice_fx != "None (Standard Voice)"
     temp_out = "temp_raw_audio_fx.wav" if needs_ffmpeg else output_file
-
-    if "Synergy" in engine:
-        if not gemini_key: raise Exception("Gemini API Key လိုအပ်ပါသည်။")
-        keys_list = [k.strip() for k in gemini_key.split(",") if k.strip()]
-        voice_name = "Puck" if "Puck" in voice_model else ("Charon" if "Charon" in voice_model else "Aoede")
-        prompt_text = "You are a professional Burmese movie narrator. Read the following text naturally. " + text
-        payload = {"contents": [{"parts": [{"text": prompt_text}]}], "safetySettings": [{"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"}, {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"}, {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"}, {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}], "generationConfig": {"responseModalities": ["AUDIO"], "speechConfig": { "voiceConfig": { "prebuiltVoiceConfig": { "voiceName": voice_name } } }}}
+    
+    chunk_files = []
+    
+    for i, chunk_text in enumerate(chunks):
+        if not chunk_text.strip(): continue
+        c_out = f"temp_tts_chunk_{i}.wav" if ("Synergy" in engine or "ElevenLabs" in engine) else f"temp_tts_chunk_{i}.mp3"
         
-        last_err = ""
-        for idx, current_key in enumerate(keys_list):
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key={current_key}"
-            try:
-                res = requests.post(url, json=payload, timeout=300)
-                if res.status_code == 200:
-                    candidate = res.json().get("candidates", [{}])[0]
-                    if candidate.get("finishReason") == "SAFETY": raise Exception("Safety Error")
-                    pcm_data = base64.b64decode(candidate["content"]["parts"][0]["inlineData"]["data"])
-                    with wave.open(temp_out, "wb") as wf:
-                        wf.setnchannels(1); wf.setsampwidth(2); wf.setframerate(24000); wf.writeframes(pcm_data)
-                    break
-                elif res.status_code == 429:
-                    last_err = "Limit Reached"
-                    continue
-                else:
-                    last_err = res.text
-                    continue
-            except Exception as e: 
-                last_err = str(e); continue
-        if not os.path.exists(temp_out): raise Exception(f"Keys Exhausted. {last_err}")
-    elif "ElevenLabs" in engine:
-        voice_id = custom_eleven_id.strip() if custom_eleven_id else ("21m00Tcm4TlvDq8ikWAM" if "Male" in voice_model else "AZnzlk1XvdvUeBnXmlld")
-        res = requests.post(f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}", json={"text": text, "model_id": "eleven_multilingual_v2"}, headers={"xi-api-key": eleven_key}, timeout=300)
-        if res.status_code == 200:
-            with open(temp_out, "wb") as f: f.write(res.content)
-    elif "TTSMaker" in engine:
-        voice_id = 781 if "Female" in voice_model else 780
-        res = requests.post("https://api.ttsmaker.com/v1/create-tts-order", json={"tts_api_key": ttsmaker_key, "tts_text": text, "voice_id": voice_id, "audio_format": "mp3"}, timeout=300).json()
-        if res.get("status") == "success":
-            with open(temp_out, "wb") as f: f.write(requests.get(res["audio_file_url"]).content)
-    else:
-        voice = "my-MM-ThihaNeural" if "Male" in voice_model else "my-MM-NilarNeural"
-        await edge_tts.Communicate(text, voice).save(temp_out)
+        if "Synergy" in engine:
+            keys_list = [k.strip() for k in gemini_key.split(",") if k.strip()]
+            voice_name = "Puck" if "Puck" in voice_model else ("Charon" if "Charon" in voice_model else "Aoede")
+            prompt_text = "You are a professional Burmese movie narrator. Read the following text naturally. " + chunk_text
+            payload = {"contents": [{"parts": [{"text": prompt_text}]}], "safetySettings": [{"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"}, {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"}, {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"}, {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}], "generationConfig": {"responseModalities": ["AUDIO"], "speechConfig": { "voiceConfig": { "prebuiltVoiceConfig": { "voiceName": voice_name } } }}}
+            
+            success = False
+            for current_key in keys_list:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key={current_key}"
+                try:
+                    res = requests.post(url, json=payload, timeout=60)
+                    if res.status_code == 200:
+                        candidate = res.json().get("candidates", [{}])[0]
+                        if candidate.get("finishReason") != "SAFETY" and "content" in candidate:
+                            pcm_data = base64.b64decode(candidate["content"]["parts"][0]["inlineData"]["data"])
+                            with wave.open(c_out, "wb") as wf:
+                                wf.setnchannels(1); wf.setsampwidth(2); wf.setframerate(24000); wf.writeframes(pcm_data)
+                            success = True
+                            break
+                except: pass
+            if not success: continue 
+        elif "ElevenLabs" in engine:
+            voice_id = custom_eleven_id.strip() if custom_eleven_id else ("21m00Tcm4TlvDq8ikWAM" if "Male" in voice_model else "AZnzlk1XvdvUeBnXmlld")
+            res = requests.post(f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}", json={"text": chunk_text, "model_id": "eleven_multilingual_v2"}, headers={"xi-api-key": eleven_key}, timeout=60)
+            if res.status_code == 200:
+                with open(c_out, "wb") as f: f.write(res.content)
+        elif "TTSMaker" in engine:
+            voice_id = 781 if "Female" in voice_model else 780
+            res = requests.post("https://api.ttsmaker.com/v1/create-tts-order", json={"tts_api_key": ttsmaker_key, "tts_text": chunk_text, "voice_id": voice_id, "audio_format": "mp3"}, timeout=60).json()
+            if res.get("status") == "success":
+                with open(c_out, "wb") as f: f.write(requests.get(res["audio_file_url"]).content)
+        else:
+            voice = "my-MM-ThihaNeural" if "Male" in voice_model else "my-MM-NilarNeural"
+            await edge_tts.Communicate(chunk_text, voice).save(c_out)
+            
+        if os.path.exists(c_out):
+            chunk_files.append(c_out)
+
+    if not chunk_files:
+        raise Exception("TTS Generation Failed. Please check API keys or connection.")
+        
+    # Concatenate all generated audio chunks
+    with open("audio_concat.txt", "w", encoding="utf-8") as f:
+        for c in chunk_files: f.write(f"file '{c}'\n")
+    
+    subprocess.run([FFMPEG_BINARY, "-y", "-f", "concat", "-safe", "0", "-i", "audio_concat.txt", "-c:a", "pcm_s16le", "-ar", "44100", temp_out], capture_output=True)
+    
+    # Cleanup temporary chunk files
+    for c in chunk_files:
+        if os.path.exists(c): os.remove(c)
+    if os.path.exists("audio_concat.txt"): os.remove("audio_concat.txt")
 
     if needs_ffmpeg:
         audio = ffmpeg.input(temp_out)
@@ -187,8 +227,10 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
         elif "Reverb" in voice_fx: audio = audio.filter('aecho', 0.8, 0.88, 60, 0.4)
         elif "Demon" in voice_fx: audio = audio.filter('bass', g=15, f=100).filter('aecho', 0.8, 0.88, 40, 0.5)
         elif "ASMR" in voice_fx: audio = audio.filter('treble', g=12, f=6000).filter('volume', 1.5)
-        try: (audio.output(output_file, acodec='pcm_s16le', ac=1, ar='44100').overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True))
-        except: import shutil; shutil.copy(temp_out, output_file)
+        try: 
+            (audio.output(output_file, acodec='pcm_s16le', ac=1, ar='44100').overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True))
+        except: 
+            import shutil; shutil.copy(temp_out, output_file)
         finally:
             if os.path.exists(temp_out): os.remove(temp_out)
 
@@ -221,14 +263,12 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
                 start_sec = to_sec(start_str)
                 end_sec = to_sec(end_str)
                 
-                # Minimum duration & Overlap Fix (Preserved Groq Fix)
                 if start_sec < prev_end_sec: start_sec = prev_end_sec + 0.1
                 if end_sec - start_sec < 0.8: end_sec = start_sec + 0.8
                 prev_end_sec = end_sec
 
                 text_content = block.strip()
                 if use_fade: 
-                    # Pop-up animation effect
                     text_content = "{\\fscx0\\fscy0\\t(0,150,\\fscx100\\fscy100)}" + text_content
                 parsed_lines.append((start_sec, end_sec, text_content))
                 full_speech.append(block.strip())
@@ -285,12 +325,14 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
             logo = ffmpeg.filter(logo, 'scale', -1, 80)
             video = ffmpeg.overlay(video, logo, x='W-w-20', y=20)
 
-        # 👇 FIX: Reverted to subtitles filter with fontsdir='.' to solve Tofu Boxes and accurately load Pyidaungsu.ttf
         if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"] and os.path.exists("subtitles.srt"):
-            safe_srt_path_escaped = safe_srt_path.replace(':', '\\:')
-            video = ffmpeg.filter(video, 'subtitles', safe_srt_path_escaped, charenc='UTF-8', fontsdir='.', force_style=sub_style_str)
+            ass_path = "subtitles.ass"
+            subprocess.run([FFMPEG_BINARY, "-y", "-i", "subtitles.srt", ass_path], capture_output=True)
+            if os.path.exists(ass_path):
+                video = ffmpeg.filter(video, 'ass', ass_path)
+            else:
+                video = ffmpeg.filter(video, 'subtitles', safe_srt_path.replace(':', '\\:'), charenc='UTF-8', fontsdir='.', force_style=sub_style_str)
 
-        # 👇 FIX: Ensure output format is yuv420p so video is playable in Web/Mobile
         out = ffmpeg.output(video, audio, out_v, vcodec='libx264', pix_fmt='yuv420p', acodec='aac', preset='fast', crf=21, t=v_max_dur)
         out.run(cmd=FFMPEG_BINARY, overwrite_output=True, capture_stdout=True, capture_stderr=True)
         return True, "Success"
@@ -405,9 +447,9 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         st.markdown("<p style='font-weight: bold; color: #818cf8; font-size: 16px;'>📝 Subtitle Pro Settings</p>", unsafe_allow_html=True)
         if subtitle_mode in ["Both (Burn + SRT)", "Burn into Video"]:
             sub_position = st.selectbox("📍 Position", ["Bottom", "Center", "Top"])
-            # 👇 FIX: Added Red and Gold colors for standard mode
             sub_color = st.selectbox("🎨 Color", ["Yellow Text + Black Outline", "White Text + Black Outline", "Neon Green Text + Black Outline", "Red Text + Black Outline", "Gold Text + Black Outline"])
-            sub_font = st.selectbox("🅰️ Font Family", ["Pyidaungsu", "NotoSans-Bold", "Myanmar3_2018", "Padauk"])
+            # 👇 FIX: Added NotoSansMyanmar-Bold as default
+            sub_font = st.selectbox("🅰️ Font Family", ["NotoSansMyanmar-Bold", "Pyidaungsu", "Myanmar3_2018", "Padauk"])
             sub_size = st.slider("🔠 Font Size", 16, 40, 22)
             sub_thickness = st.slider("✒️ Outline Thickness", 1.0, 5.0, 2.5)
             col_s1, col_s2 = st.columns(2)
@@ -418,7 +460,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                 sub_fade = st.checkbox("✨ Cinematic Fades")
         else:
             st.info("💡 Burn into Video ရွေးထားမှ ချိန်ညှိနိုင်ပါမည်။")
-            sub_position, sub_color, sub_font, sub_size, sub_thickness, sub_bg, sub_short, sub_fade = "Bottom", "Yellow", "Pyidaungsu", 22, 2.5, False, False, False
+            sub_position, sub_color, sub_font, sub_size, sub_thickness, sub_bg, sub_short, sub_fade = "Bottom", "Yellow", "NotoSansMyanmar-Bold", 22, 2.5, False, False, False
         st.markdown("</div>", unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -495,7 +537,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
 
                         if not success_gemini: raise Exception(f"Gemini API Error: {last_err}")
 
-                    else: # Groq / OpenAI Fallback
+                    else: 
                         if "Original" in recap_mode: st.warning("⚠️ Original Story Mode ကို Gemini ဖြင့်သာ သုံးနိုင်ပါသည်။ Translate Mode သို့ ပြောင်းလဲလုပ်ဆောင်ပါမည်။")
                         client = Groq(api_key=api_key_input) if "Groq" in ai_provider else openai
                         if "Groq" in ai_provider:
@@ -523,7 +565,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     
                     try:
                         thumb_time = min(get_file_duration(v_input)/3, 15)
-                        font_path = "Pyidaungsu.ttf"
+                        font_path = "NotoSansMyanmar-Bold.ttf"
                         
                         try:
                             stream = ffmpeg.input(v_input, ss=thumb_time)
@@ -547,20 +589,12 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     raw_speech = " ".join([t for _,_,t in parsed_timestamps])
                     clean_speech = re.sub(r'\{.*?\}', '', raw_speech)
                     asyncio.run(generate_tts(clean_speech, voice_char, a_generated, engine=audio_engine_choice, ttsmaker_key=key_ttsmaker, eleven_key=locals().get('eleven_key_input', ''), custom_eleven_id=locals().get('custom_eleven_id', ''), gemini_key=locals().get('synergy_key', api_key_input), pitch=pitch_level, voice_fx=fx_level))
-                    
-                    # 👇 FIX: Duration check to prevent generating a 3-second corrupted video
-                    a_dur = get_file_duration(a_generated)
-                    if a_dur < 5.0:
-                        st.error("❌ အသံထုတ်လုပ်ခြင်း မအောင်မြင်ပါ။ API Limit ငြိသွားခြင်း သို့မဟုတ် Network ပြဿနာကြောင့် အသံဖိုင် တိုတောင်းလွန်းနေပါသည်။ ပြန်လည်ကြိုးစားပါ။")
-                        st.stop()
-                        
                 except Exception as e: st.error(f"အသံထုတ်လုပ်ခြင်း မအောင်မြင်ပါ: {e}"); st.stop()
 
             with st.spinner("⏳ [အဆင့် ၅/၆] ဗီဒီယိုနှင့် စာတန်းထိုး ပေါင်းစပ်နေပါသည်..."):
                 pbar.progress(80, text="🎬 [အဆင့် ၅/၆] ဗီဒီယိုနှင့် စာတန်းထိုး ပေါင်းစပ်နေပါသည်...")
                 align_val = 2 if "Bottom" in sub_position else (5 if "Center" in sub_position else 8)
                 
-                # 👇 FIX: Color handling including Red and Gold
                 prim_c = "&H0000FFFF"
                 if "White" in sub_color: prim_c = "&H00FFFFFF"
                 elif "Green" in sub_color: prim_c = "&H0000FF00"
@@ -648,7 +682,6 @@ elif app_mode == "🎙️ Faceless Channel Studio":
         fc_ratio = st.selectbox("Video Ratio", ["9:16 (TikTok/Shorts)", "16:9 (YouTube)"], key="fc_ratio")
         fc_duration = st.slider("⏱️ Story Duration (Minutes)", 1, 10, 3)
 
-        # 👇 FIX: Added Position & Color options to Faceless Studio directly in Sidebar
         st.markdown("<b>📝 Subtitle Pro Settings</b>", unsafe_allow_html=True)
         fc_sub_position = st.selectbox("📍 Position", ["Center", "Bottom", "Top"], index=0, key="fc_sub_pos")
         fc_sub_color = st.selectbox("🎨 Color", ["Yellow Text", "White Text", "Neon Green Text", "Red Text", "Gold Text"], index=0, key="fc_sub_col")
@@ -737,7 +770,6 @@ At the absolute end, include these two lines:
                     clean_story = re.sub(r'\[.*?\]', '', fc_story_text) 
                     asyncio.run(generate_tts(fc_story_text if "Synergy" in fc_audio_engine else clean_story, fc_voice_char, "fc_audio.wav", engine=fc_audio_engine, gemini_key=locals().get('fc_synergy_key', api_key_input), voice_fx=fc_fx))
                     
-                    # 👇 FIX: Duration check to prevent generating a broken/short video
                     fc_audio_dur = get_file_duration("fc_audio.wav")
                     if fc_audio_dur < 5.0:
                         st.error("❌ အသံထုတ်လုပ်ခြင်း မအောင်မြင်ပါ။ API Limit ငြိသွားခြင်း သို့မဟုတ် Network ပြဿနာကြောင့် အသံဖိုင် တိုတောင်းလွန်းနေပါသည်။ ပြန်လည်ကြိုးစားပါ။")
@@ -831,7 +863,6 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
                     with open("fc_concat.txt", "w") as f:
                         for c in generated_clips: f.write(f"file '{c}'\n")
                     
-                    # 👇 FIX: Added pix_fmt yuv420p to ensure browser compatibility
                     subprocess.run([FFMPEG_BINARY, "-y", "-f", "concat", "-safe", "0", "-i", "fc_concat.txt", "-t", str(fc_audio_dur), "-c", "copy", "-pix_fmt", "yuv420p", "fc_video_loop.mp4"], capture_output=True)
                 except Exception as e: st.error(f"Visual Error: {e}"); st.stop()
 
@@ -893,7 +924,6 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
             with st.spinner("⏳ [အဆင့် ၅/၅] အားလုံးကိုပေါင်းစပ်ပြီး Master Video ထုတ်လုပ်နေပါသည်..."):
                 pbar.progress(85, text="🎬 Master Rendering အလုပ်လုပ်နေပါသည်...")
                 try:
-                    # 👇 FIX: Dynamically apply user-selected position and color for Faceless Mode
                     align_fc = 5 if "Center" in fc_sub_position else (2 if "Bottom" in fc_sub_position else 8)
                     prim_fc = "&H0000FFFF"
                     if "White" in fc_sub_color: prim_fc = "&H00FFFFFF"
@@ -901,7 +931,8 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
                     elif "Red" in fc_sub_color: prim_fc = "&H000000FF"
                     elif "Gold" in fc_sub_color: prim_fc = "&H0000D7FF"
 
-                    dyn_fc_style = f"FontName=Pyidaungsu,FontSize=24,PrimaryColour={prim_fc},BackColour=&H00000000,BorderStyle=1,Outline=2.5,Shadow=2,Bold=1,Alignment={align_fc},MarginV=80"
+                    # 👇 FIX: FontName is safely set to NotoSansMyanmar-Bold
+                    dyn_fc_style = f"FontName=NotoSansMyanmar-Bold,FontSize=24,PrimaryColour={prim_fc},BackColour=&H00000000,BorderStyle=1,Outline=2.5,Shadow=2,Bold=1,Alignment={align_fc},MarginV=80"
                     
                     success, err_msg = render_premium_saas_video("fc_video_loop.mp4", "fc_audio.wav", fc_parsed, "FACELESS_FINAL.mp4", fc_ratio, use_bypass=True, subtitle_mode=fc_subtitle_mode, sub_style_str=dyn_fc_style)
                     
