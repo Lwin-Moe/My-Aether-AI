@@ -1,5 +1,5 @@
 # =====================================================================
-# 📌 AETHER FILMWORKS AI // STUDIO V52 (AUDIO CHUNKING + NOTO SANS FONT FIX)
+# 📌 AETHER FILMWORKS AI // STUDIO V52 (FONT PATH & SMART CHUNKING FIX)
 # =====================================================================
 
 import streamlit as st
@@ -33,7 +33,7 @@ if shutil.which("ffmpeg"):
 else:
     FFMPEG_BINARY = imageio_ffmpeg.get_ffmpeg_exe()
 
-# 👇 FIX: Auto-Font Downloader updated to Noto Sans Myanmar Bold for perfect text shaping
+# 👇 Auto-Font Downloader to prevent Tofu boxes in Cloud environments
 if not os.path.exists("NotoSansMyanmar-Bold.ttf"):
     try:
         import urllib.request
@@ -130,26 +130,28 @@ def extract_audio_fast(video_in, audio_out="temp_extracted.mp3"):
         return audio_out
     except: return None
 
-# 👇 FIX: Added Audio Chunking logic to prevent 4-second video cutoffs and handled Synergy Tags
+# 👇 FIX: Upgraded Smart Chunking Logic splitting by ?, !, ., \n correctly
 async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default Free)", ttsmaker_key="", eleven_key="", custom_eleven_id="", gemini_key="", pitch=0, voice_fx="None (Standard Voice)"):
     if not text.strip(): return
     
-    # Edge-TTS will fail if tags like [pause=0.5] are present. Remove them.
     if "Synergy" not in engine:
         text = re.sub(r'\[.*?\]', '', text)
         text = re.sub(r'\{.*?\}', '', text)
         
-    # Split text into safe chunks (max ~400 characters) to prevent API timeout or truncation
-    text = text.replace('\n', '။ ')
-    sentences = text.split('။')
-    
+    parts = re.split(r'([။?!.\n]+)', text)
+    sentences = []
+    for i in range(0, len(parts)-1, 2):
+        sentences.append(parts[i] + parts[i+1])
+    if len(parts) % 2 != 0 and parts[-1].strip():
+        sentences.append(parts[-1])
+        
     chunks = []
     current_chunk = ""
     for sentence in sentences:
         sentence = sentence.strip()
         if not sentence: continue
-        sentence += '။ ' 
-        if len(current_chunk) + len(sentence) < 400:
+        sentence += ' ' 
+        if len(current_chunk) + len(sentence) < 300:
             current_chunk += sentence
         else:
             if current_chunk.strip(): chunks.append(current_chunk.strip())
@@ -206,13 +208,11 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default
     if not chunk_files:
         raise Exception("TTS Generation Failed. Please check API keys or connection.")
         
-    # Concatenate all generated audio chunks
     with open("audio_concat.txt", "w", encoding="utf-8") as f:
         for c in chunk_files: f.write(f"file '{c}'\n")
     
     subprocess.run([FFMPEG_BINARY, "-y", "-f", "concat", "-safe", "0", "-i", "audio_concat.txt", "-c:a", "pcm_s16le", "-ar", "44100", temp_out], capture_output=True)
     
-    # Cleanup temporary chunk files
     for c in chunk_files:
         if os.path.exists(c): os.remove(c)
     if os.path.exists("audio_concat.txt"): os.remove("audio_concat.txt")
@@ -284,6 +284,42 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
              full_speech.append("[pause=1.0] စာတန်းထိုး အပြောင်းအလဲလုပ်နေပါသည်။")
     return parsed_lines, " ".join(full_speech)
 
+# 👇 FIX: Fully Custom ASS Writer replacing buggy FFmpeg conversion
+def create_custom_ass(parsed_timestamps, output_file, style_dict, video_w=720, video_h=1280):
+    font_name = style_dict.get('FontName', 'NotoSansMyanmar-Bold')
+    font_size = style_dict.get('FontSize', '24')
+    pri_color = style_dict.get('PrimaryColour', '&H0000FFFF')
+    bg_color = style_dict.get('BackColour', '&H00000000')
+    outline = style_dict.get('Outline', '1')
+    shadow = style_dict.get('Shadow', '1')
+    align = style_dict.get('Alignment', '2')
+    margin_v = style_dict.get('MarginV', '60')
+    bold = style_dict.get('Bold', '1')
+    
+    header = f"""[Script Info]
+ScriptType: v4.00+
+PlayResX: {video_w}
+PlayResY: {video_h}
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,{font_name},{font_size},{pri_color},&H000000FF,&H00000000,{bg_color},{bold},0,0,0,100,100,0,0,1,{outline},{shadow},{align},10,10,{margin_v},1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+"""
+    with open(output_file, 'w', encoding='utf-8') as f:
+        f.write(header)
+        for start, end, text in parsed_timestamps:
+            def fmt_ass_time(sec):
+                h = int(sec // 3600)
+                m = int((sec % 3600) // 60)
+                s = int(sec % 60)
+                cs = int((sec - int(sec)) * 100)
+                return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
+            clean_text = text.replace('\n', '\\N')
+            f.write(f"Dialogue: 0,{fmt_ass_time(start)},{fmt_ass_time(end)},Default,,0,0,0,,{clean_text}\n")
+
 def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_bypass=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)", use_mirror=False, use_color=False, use_grain=False, use_fps=False, sub_style_str="", use_freeze=False, logo_path=None):
     try:
         a_dur = get_file_duration(in_a)
@@ -325,13 +361,17 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
             logo = ffmpeg.filter(logo, 'scale', -1, 80)
             video = ffmpeg.overlay(video, logo, x='W-w-20', y=20)
 
+        # 👇 FIX: Integrated Custom ASS implementation with explicit Font path
         if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"] and os.path.exists("subtitles.srt"):
             ass_path = "subtitles.ass"
-            subprocess.run([FFMPEG_BINARY, "-y", "-i", "subtitles.srt", ass_path], capture_output=True)
-            if os.path.exists(ass_path):
-                video = ffmpeg.filter(video, 'ass', ass_path)
-            else:
-                video = ffmpeg.filter(video, 'subtitles', safe_srt_path.replace(':', '\\:'), charenc='UTF-8', fontsdir='.', force_style=sub_style_str)
+            style_dict = dict(item.split('=') for item in sub_style_str.split(','))
+            v_w, v_h = (720, 1280) if "9:16" in ratio else (1280, 720)
+            
+            create_custom_ass(parsed_timestamps, ass_path, style_dict, v_w, v_h)
+            
+            # Using the explicit font directory mentioned by user
+            font_dir = "/mount/src/my-aether-ai/font" if os.path.exists("/mount/src/my-aether-ai/font") else "."
+            video = ffmpeg.filter(video, 'ass', ass_path, fontsdir=font_dir)
 
         out = ffmpeg.output(video, audio, out_v, vcodec='libx264', pix_fmt='yuv420p', acodec='aac', preset='fast', crf=21, t=v_max_dur)
         out.run(cmd=FFMPEG_BINARY, overwrite_output=True, capture_stdout=True, capture_stderr=True)
@@ -363,9 +403,10 @@ with st.sidebar:
     if app_mode == "🎙️ Faceless Channel Studio":
         st.markdown("---")
         st.markdown("### 🔑 Additional API Keys")
-        saved_pexels = load_key(PEXELS_KEY_FILE)
-        pexels_key_input = st.text_input("Pexels API Key (Optional for SD Video)", type="password", value=saved_pexels)
-        if pexels_key_input and pexels_key_input != saved_pexels: save_key(PEXELS_KEY_FILE, pexels_key_input)
+        
+        saved_together = load_key(TOGETHER_KEY_FILE)
+        together_key_input = st.text_input("Together AI API Key (FLUX Image Gen)", type="password", value=saved_together)
+        if together_key_input and together_key_input != saved_together: save_key(TOGETHER_KEY_FILE, together_key_input)
         
         saved_groq_fc = load_key(GROQ_KEY_FILE)
         groq_key_fc = st.text_input("Groq API Key (For Accurate Whisper Sync)", type="password", value=saved_groq_fc)
@@ -448,7 +489,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         if subtitle_mode in ["Both (Burn + SRT)", "Burn into Video"]:
             sub_position = st.selectbox("📍 Position", ["Bottom", "Center", "Top"])
             sub_color = st.selectbox("🎨 Color", ["Yellow Text + Black Outline", "White Text + Black Outline", "Neon Green Text + Black Outline", "Red Text + Black Outline", "Gold Text + Black Outline"])
-            # 👇 FIX: Added NotoSansMyanmar-Bold as default
             sub_font = st.selectbox("🅰️ Font Family", ["NotoSansMyanmar-Bold", "Pyidaungsu", "Myanmar3_2018", "Padauk"])
             sub_size = st.slider("🔠 Font Size", 16, 40, 22)
             sub_thickness = st.slider("✒️ Outline Thickness", 1.0, 5.0, 2.5)
@@ -931,7 +971,7 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
                     elif "Red" in fc_sub_color: prim_fc = "&H000000FF"
                     elif "Gold" in fc_sub_color: prim_fc = "&H0000D7FF"
 
-                    # 👇 FIX: FontName is safely set to NotoSansMyanmar-Bold
+                    # Explicitly state NotoSansMyanmar-Bold to pair with Custom ASS generator
                     dyn_fc_style = f"FontName=NotoSansMyanmar-Bold,FontSize=24,PrimaryColour={prim_fc},BackColour=&H00000000,BorderStyle=1,Outline=2.5,Shadow=2,Bold=1,Alignment={align_fc},MarginV=80"
                     
                     success, err_msg = render_premium_saas_video("fc_video_loop.mp4", "fc_audio.wav", fc_parsed, "FACELESS_FINAL.mp4", fc_ratio, use_bypass=True, subtitle_mode=fc_subtitle_mode, sub_style_str=dyn_fc_style)
