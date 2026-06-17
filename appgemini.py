@@ -1,5 +1,5 @@
 # =====================================================================
-# 📌 AETHER FILMWORKS AI // STUDIO V52 (FONT PATH & SMART CHUNKING FIX)
+# 📌 AETHER FILMWORKS AI // STUDIO V52 (POLLINATIONS AI + BUG FIXES)
 # =====================================================================
 
 import streamlit as st
@@ -130,7 +130,7 @@ def extract_audio_fast(video_in, audio_out="temp_extracted.mp3"):
         return audio_out
     except: return None
 
-# 👇 FIX: Upgraded Smart Chunking Logic splitting by ?, !, ., \n correctly
+# Smart Chunking Logic splitting by ?, !, ., \n correctly
 async def generate_tts(text, voice_model, output_file, engine="Edge-TTS (Default Free)", ttsmaker_key="", eleven_key="", custom_eleven_id="", gemini_key="", pitch=0, voice_fx="None (Standard Voice)"):
     if not text.strip(): return
     
@@ -263,12 +263,14 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
                 start_sec = to_sec(start_str)
                 end_sec = to_sec(end_str)
                 
+                # Minimum duration & Overlap Fix
                 if start_sec < prev_end_sec: start_sec = prev_end_sec + 0.1
                 if end_sec - start_sec < 0.8: end_sec = start_sec + 0.8
                 prev_end_sec = end_sec
 
                 text_content = block.strip()
                 if use_fade: 
+                    # Pop-up animation effect
                     text_content = "{\\fscx0\\fscy0\\t(0,150,\\fscx100\\fscy100)}" + text_content
                 parsed_lines.append((start_sec, end_sec, text_content))
                 full_speech.append(block.strip())
@@ -284,16 +286,16 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
              full_speech.append("[pause=1.0] စာတန်းထိုး အပြောင်းအလဲလုပ်နေပါသည်။")
     return parsed_lines, " ".join(full_speech)
 
-# 👇 FIX: Fully Custom ASS Writer replacing buggy FFmpeg conversion
+# Fully Custom ASS Writer replacing buggy FFmpeg conversion
 def create_custom_ass(parsed_timestamps, output_file, style_dict, video_w=720, video_h=1280):
     font_name = style_dict.get('FontName', 'NotoSansMyanmar-Bold')
     font_size = style_dict.get('FontSize', '24')
     pri_color = style_dict.get('PrimaryColour', '&H0000FFFF')
     bg_color = style_dict.get('BackColour', '&H00000000')
-    outline = style_dict.get('Outline', '1')
-    shadow = style_dict.get('Shadow', '1')
-    align = style_dict.get('Alignment', '2')
-    margin_v = style_dict.get('MarginV', '60')
+    outline = style_dict.get('Outline', '2')
+    shadow = style_dict.get('Shadow', '2')
+    align = style_dict.get('Alignment', '5')
+    margin_v = style_dict.get('MarginV', '80')
     bold = style_dict.get('Bold', '1')
     
     header = f"""[Script Info]
@@ -361,7 +363,7 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
             logo = ffmpeg.filter(logo, 'scale', -1, 80)
             video = ffmpeg.overlay(video, logo, x='W-w-20', y=20)
 
-        # 👇 FIX: Integrated Custom ASS implementation with explicit Font path
+        # Integrated Custom ASS implementation with explicit Font path
         if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"] and os.path.exists("subtitles.srt"):
             ass_path = "subtitles.ass"
             style_dict = dict(item.split('=') for item in sub_style_str.split(','))
@@ -369,7 +371,7 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
             
             create_custom_ass(parsed_timestamps, ass_path, style_dict, v_w, v_h)
             
-            # Using the explicit font directory mentioned by user
+            # Using the explicit font directory
             font_dir = "/mount/src/my-aether-ai/font" if os.path.exists("/mount/src/my-aether-ai/font") else "."
             video = ffmpeg.filter(video, 'ass', ass_path, fontsdir=font_dir)
 
@@ -403,14 +405,14 @@ with st.sidebar:
     if app_mode == "🎙️ Faceless Channel Studio":
         st.markdown("---")
         st.markdown("### 🔑 Additional API Keys")
-        
-        saved_together = load_key(TOGETHER_KEY_FILE)
-        together_key_input = st.text_input("Together AI API Key (FLUX Image Gen)", type="password", value=saved_together)
-        if together_key_input and together_key_input != saved_together: save_key(TOGETHER_KEY_FILE, together_key_input)
+        saved_pexels = load_key(PEXELS_KEY_FILE)
+        pexels_key_input = st.text_input("Pexels API Key (Optional for SD Video)", type="password", value=saved_pexels)
+        if pexels_key_input and pexels_key_input != saved_pexels: save_key(PEXELS_KEY_FILE, pexels_key_input)
         
         saved_groq_fc = load_key(GROQ_KEY_FILE)
         groq_key_fc = st.text_input("Groq API Key (For Accurate Whisper Sync)", type="password", value=saved_groq_fc)
         if groq_key_fc and groq_key_fc != saved_groq_fc: save_key(GROQ_KEY_FILE, groq_key_fc)
+        # 👇 FIX: TOGETHER_KEY_FILE removed entirely from Sidebar
 
 # =====================================================================
 # 📌 MODE 1 - MOVIE DUBBING
