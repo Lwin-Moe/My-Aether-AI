@@ -1,5 +1,5 @@
 # =====================================================================
-# 📌 AETHER FILMWORKS AI // STUDIO V52 (ERROR-FREE & BULLETPROOF OVERLAY)
+# 📌 AETHER FILMWORKS AI // STUDIO V52 (STRICT ERROR BOUNDARY FIX)
 # =====================================================================
 
 import streamlit as st
@@ -106,7 +106,6 @@ if "viral_score" not in st.session_state: st.session_state.viral_score = ""
 if "final_video_path" not in st.session_state: st.session_state.final_video_path = ""
 
 # --- 2. CORE AUTOMATION FLOW ENGINES ---
-# 👇 FIX: Cleanup strictly targets disk files, completely leaves Session State alone
 def cleanup_temp_files():
     for f in os.listdir("."):
         if f.startswith(("fc_clip_", "fc_img_", "raw_fc_clip_", "temp_", "subtitles.", "thumb_A_", "thumb_B_", "FACELESS_FINAL_", "AETHER_RECAP_FINAL_", "fc_audio.wav", "fc_video_loop.mp4")):
@@ -272,7 +271,6 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
         if not line: continue
         if line.isdigit() and len(line) < 5: continue 
         
-        # Lenient timestamp extraction
         if "-->" in line:
             if current_text:
                 parsed_lines.append((current_start, current_end, " ".join(current_text)))
@@ -634,7 +632,8 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                         t_A = min(get_file_duration(v_input)*0.2, 10)
                         t_B = min(get_file_duration(v_input)*0.5, 20)
                         
-                        for thumb_name, t_val in [("thumb_A.jpg", t_A), ("thumb_B.jpg", t_B)]:
+                        for thumb_suffix, t_val in [("A", t_A), ("B", t_B)]:
+                            thumb_name = f"thumb_{thumb_suffix}_{run_id}.jpg"
                             try:
                                 stream = ffmpeg.input(v_input, ss=t_val)
                                 if cb_thumb_text:
@@ -645,8 +644,8 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                                 ffmpeg.output(stream, thumb_name, vframes=1).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
                             except: pass
                             
-                        st.session_state.thumb_path_A = "thumb_A.jpg" if os.path.exists("thumb_A.jpg") else None
-                        st.session_state.thumb_path_B = "thumb_B.jpg" if os.path.exists("thumb_B.jpg") else None
+                            if thumb_suffix == "A" and os.path.exists(thumb_name): st.session_state.thumb_path_A = thumb_name
+                            elif thumb_suffix == "B" and os.path.exists(thumb_name): st.session_state.thumb_path_B = thumb_name
                     except: pass
 
                 except Exception as e: st.error(f"Logic Error: {e}"); st.stop()
@@ -660,8 +659,9 @@ if app_mode == "🎙️ Movie Dubbing Studio":
             with st.spinner("⏳ [အဆင့်၅/၆] ဗီဒီယိုနှင့် စာတန်းထိုးပေါင်းစပ်နေပါသည်..."):
                 pbar.progress(80, text="🎬 [အဆင့် ၅/၆] ဗီဒီယိုနှင့်စာတန်းထိုး ပေါင်းစပ်နေပါသည်...")
                 
+                # 👇 FIX: Added st.stop() here to catch render failures strictly
                 success, err_msg = render_premium_saas_video(v_input, a_generated, parsed_timestamps, v_final, video_ratio, cb_bypass, cb_blur, watermark_text, subtitle_mode, cb_mirror, cb_color, cb_grain, cb_fps, sub_position=sub_position, sub_color=sub_color, sub_size=sub_size, sub_thickness=sub_thickness, sub_bg=sub_bg, use_freeze=cb_freeze, logo_path=logo_file_path)
-                if not success: st.error(f"Sync Failure: {err_msg}")
+                if not success: st.error(f"❌ Sync Failure: {err_msg}"); st.stop()
 
             if success and selected_bgm not in ["None (BGM မထည့်ပါ)"]:
                 with st.spinner("⏳ [အဆင့်၆/၆] Auto-Ducking ဖြင့် BGM ထပ်မံပေါင်းစပ်နေပါသည်..."):
@@ -821,13 +821,12 @@ At the absolute end, include these two lines:
                     if not fc_story_text:
                         st.error(f"Story Error: Key အားလုံး Limit ပြည့်နေပါသည်။ {last_err}"); st.stop()
 
+            # Regex parsing and cleaning
             title_match = re.search(r'\[TITLE:\s*(.*?)\]', fc_story_text, re.IGNORECASE)
             tags_match = re.search(r'\[TAGS:\s*(.*?)\]', fc_story_text, re.IGNORECASE)
             
-            if title_match: 
-                st.session_state.viral_title = re.sub(r'[\[\]]', '', title_match.group(1)).strip()
-            if tags_match: 
-                st.session_state.viral_tags = tags_match.group(1).strip()
+            if title_match: st.session_state.viral_title = re.sub(r'[\[\]]', '', title_match.group(1)).strip()
+            if tags_match: st.session_state.viral_tags = tags_match.group(1).strip()
             
             fc_story_text = re.sub(r'\[TITLE:.*?\]', '', fc_story_text, flags=re.IGNORECASE)
             fc_story_text = re.sub(r'\[TAGS:.*?\]', '', fc_story_text, flags=re.IGNORECASE).strip()
@@ -911,7 +910,12 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
                     pbar.progress(65, text="🎞️ ဗီဒီယိုများကို ပေါင်းစပ်နေပါသည်...")
                     with open("fc_concat.txt", "w") as f:
                         for c in generated_clips: f.write(f"file '{c}'\n")
-                    subprocess.run([FFMPEG_BINARY, "-y", "-stream_loop", "-1", "-f", "concat", "-safe", "0", "-i", "fc_concat.txt", "-t", str(fc_audio_dur), "-c", "copy", "-pix_fmt", "yuv420p", "fc_video_loop.mp4"], capture_output=True)
+                    
+                    # 👇 FIX: Removed -pix_fmt yuv420p from concat command to prevent FFmpeg silent crash
+                    res_concat = subprocess.run([FFMPEG_BINARY, "-y", "-stream_loop", "-1", "-f", "concat", "-safe", "0", "-i", "fc_concat.txt", "-t", str(fc_audio_dur), "-c", "copy", "fc_video_loop.mp4"], capture_output=True)
+                    if not os.path.exists("fc_video_loop.mp4"):
+                        st.error(f"❌ FFmpeg Concat Error. Video loop creation failed. {res_concat.stderr.decode('utf-8', errors='ignore')}")
+                        st.stop()
                 except Exception as e: st.error(f"Visual Error: {e}"); st.stop()
 
             with st.spinner("⏳ [အဆင့်၄/၅] စာတန်းထိုးများကို Alex Hormozi ပုံစံ ချိန်ညှိနေပါသည်..."):
@@ -961,9 +965,11 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
             with st.spinner("⏳ [အဆင့်၅/၅] အားလုံးကိုပေါင်းစပ်ပြီး Master Video ထုတ်လုပ်နေပါသည်..."):
                 pbar.progress(85, text="🎬 Master Rendering အလုပ်လုပ်နေပါသည်...")
                 try:
+                    # 👇 FIX: Added st.stop() here to catch render failures strictly
                     success, err_msg = render_premium_saas_video("fc_video_loop.mp4", "fc_audio.wav", fc_parsed, v_final, fc_ratio, use_bypass=True, subtitle_mode=fc_subtitle_mode, sub_position=fc_sub_position, sub_color=fc_sub_color, sub_size=26, sub_thickness=2.5, sub_bg=False)
+                    if not success: st.error(f"❌ Sync Failure: {err_msg}"); st.stop()
                     
-                    if success and fc_bgm not in ["None (BGM မထည့်ပါ)"]:
+                    if fc_bgm not in ["None (BGM မထည့်ပါ)"]:
                         bgm_path = os.path.join("bgm_tracks", random.choice(bgm_files) if "Auto" in fc_bgm else fc_bgm)
                         if os.path.exists(bgm_path):
                             try:
@@ -1005,12 +1011,16 @@ Format strictly separated by a pipe '|'. Story: {fc_story_text[:300]}"""
                     
                     col_f1, col_f2 = st.columns(2)
                     with col_f1:
-                        st.video(st.session_state.final_video_path)
-                        st.markdown('<div class="setting-panel"><h4>📥 Download Dashboard</h4>', unsafe_allow_html=True)
-                        st.markdown(get_download_link(st.session_state.final_video_path, "Viral_Faceless.mp4", "Download Final Video (No Refresh)"), unsafe_allow_html=True)
-                        if os.path.exists("subtitles.srt"):
-                            st.markdown(get_download_link("subtitles.srt", "Faceless_Subs.srt", "Download Subtitles (.SRT)"), unsafe_allow_html=True)
-                        st.markdown('</div>', unsafe_allow_html=True)
+                        # 👇 FIX: Added os.path.exists safeguard before attempting to load the video
+                        if os.path.exists(st.session_state.final_video_path):
+                            st.video(st.session_state.final_video_path)
+                            st.markdown('<div class="setting-panel"><h4>📥 Download Dashboard</h4>', unsafe_allow_html=True)
+                            st.markdown(get_download_link(st.session_state.final_video_path, "Viral_Faceless.mp4", "Download Final Video (No Refresh)"), unsafe_allow_html=True)
+                            if os.path.exists("subtitles.srt"):
+                                st.markdown(get_download_link("subtitles.srt", "Faceless_Subs.srt", "Download Subtitles (.SRT)"), unsafe_allow_html=True)
+                            st.markdown('</div>', unsafe_allow_html=True)
+                        else:
+                            st.error("❌ ဗီဒီယိုဖိုင်ကို ရှာမတွေ့ပါ။ Rendering တွင် ချို့ယွင်းချက် ရှိနိုင်ပါသည်။")
 
                     with col_f2:
                         st.markdown("### 📝 Generated Story & Assets")
