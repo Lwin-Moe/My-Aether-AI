@@ -1,5 +1,5 @@
 # =====================================================================
-# 📌 AETHER FILMWORKS AI // STUDIO V52 (FFMPEG COLOR BUG FIXED)
+# 📌 AETHER FILMWORKS AI // STUDIO V52 (PERFECT SYNC & IMAGE FETCH FIX)
 # =====================================================================
 
 import streamlit as st
@@ -25,7 +25,6 @@ import random
 import shutil
 import textwrap 
 import urllib.parse 
-import concurrent.futures 
 
 # 👇 FIX: Prioritize system FFmpeg
 if shutil.which("ffmpeg"):
@@ -409,9 +408,10 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
                 elif "Red" in sub_color: c_str = "red"
                 elif "Gold" in sub_color: c_str = "gold"
 
-                # 👇 FIX: 100% Bulletproof Color Assignment to stop FFmpeg from crashing
                 box_str = 1 if sub_bg else 0
                 box_color = 'black@0.6' if sub_bg else 'black@0.0'
+                
+                escaped_text = wrapped_text.replace("'", "\u2019").replace(":", "\\:")
 
                 video = ffmpeg.filter(video, 'drawtext', textfile=txt_filename, fontfile='Padauk.ttf', fontcolor=c_str, fontsize=sub_size, bordercolor='black', borderw=sub_thickness, box=box_str, boxcolor=box_color, boxborderw=10, x='(w-text_w)/2', y=y_expr, line_spacing=20, enable=f'between(t,{start},{end})')
 
@@ -999,14 +999,13 @@ Story: {fc_story_text[:500]}"""
                                 pass
                             return None
 
-                        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-                            futures = [executor.submit(generate_pollinations_image, kw, i) for i, kw in enumerate(search_keywords)]
-                            completed = 0
-                            for future in concurrent.futures.as_completed(futures):
-                                completed += 1
-                                pbar.progress(50 + int((completed/total_clips)*15), text=f"🎨 AI ဖြင့် ပုံများ ဖန်တီးနေပါသည် (Clip {completed}/{total_clips})...")
-                        
-                        generated_clips = [f"fc_clip_{i}.mp4" for i in range(total_clips) if os.path.exists(f"fc_clip_{i}.mp4")]
+                        # 👇 FIX: Sequential Loop to prevent Rate Limit / Single Image Bug
+                        for i, kw in enumerate(search_keywords):
+                            pbar.progress(50 + int(((i+1)/total_clips)*15), text=f"🎨 AI ဖြင့် ပုံများ ဖန်တီးနေပါသည် (Clip {i+1}/{total_clips})...")
+                            generated_clip = generate_pollinations_image(kw, i)
+                            if generated_clip and os.path.exists(generated_clip):
+                                generated_clips.append(generated_clip)
+                            time.sleep(2) # Prevent Free API Ban
 
                     if not generated_clips: 
                         st.error("❌ Visual Generation Failed. ပုံရိပ် ဖန်တီးမှု ပြဿနာရှိပါသည်။")
@@ -1031,6 +1030,7 @@ Story: {fc_story_text[:500]}"""
                 last_err = ""
                 groq_key_val = locals().get('groq_key_fc', '').strip()
  
+                # 👇 FIX: Bypassed Gemini SRT Rewrite directly using Whisper's Perfect Timestamps
                 if groq_key_val:
                     try:
                         pbar.progress(72, text="📝 Whisper ဖြင့် အသံအား တိကျစွာ ဖြတ်တောက်နေပါသည်...")
@@ -1039,39 +1039,12 @@ Story: {fc_story_text[:500]}"""
                             raw_srt = client_groq.audio.transcriptions.create(
                                 file=("fc_audio.wav", file.read()), model="whisper-large-v3", response_format="srt"
                             )
-                        
-                        pbar.progress(78, text="📝 AI ဖြင့် Emoji များ ထည့်သွင်းနေပါသည်...")
-                        client_gemini = genai.Client(api_key=keys_list[0])
-                        srt_prompt = f"Rewrite this Burmese SRT file into fast-paced TikTok style.\nCRITICAL RULES:\n1. You MUST KEEP ALL ORIGINAL TIMESTAMPS EXACTLY (e.g., 00:00:05,000 --> 00:00:07,000). DO NOT REMOVE TIMESTAMPS.\n2. Break down the subtitles into chunks of ONLY 1 to 4 words maximum per block.\n3. Interpolate the timestamps accurately to fit the original timeframe.\n4. Add ONE relevant emoji at the end of every subtitle block to make it engaging.\n5. Output ONLY valid SRT format without any markdown blocks.\n\nOriginal SRT:\n{raw_srt}"
-                        srt_res = client_gemini.models.generate_content(model="gemini-2.5-flash", contents=srt_prompt)
-                        
-                        marker = chr(96) * 3
-                        fc_srt_text = srt_res.text.strip().replace(f"{marker}srt", "").replace(marker, "")
-                        fc_parsed, _ = parse_and_save_real_srt(fc_srt_text, "subtitles.srt", use_fade=False)
+                        # Use raw output directly to guarantee 100% PERFECT SYNC
+                        fc_parsed, _ = parse_and_save_real_srt(raw_srt, "subtitles.srt", use_fade=False)
                     except Exception as e: 
                         last_err = str(e)
                 
                 if not fc_parsed:
-                    for key in keys_list:
-                        try:
-                            client = genai.Client(api_key=key)
-                            audio_upload = client.files.upload(file="fc_audio.wav")
-                            while "PROCESSING" in str(client.files.get(name=audio_upload.name).state): 
-                                time.sleep(2)
-                            
-                            srt_prompt = "Listen to the audio. Output ONLY a valid SRT file in Burmese. CRITICAL RULE: Each subtitle block MUST contain ONLY 1 to 4 words maximum. KEEP ALL EXACT TIMESTAMPS (-->). Add ONE relevant emoji at the end of every subtitle line. Ensure timestamps are precise. No markdown."
-                            srt_res = client.models.generate_content(model="gemini-2.5-flash", contents=[audio_upload, srt_prompt])
-                            
-                            marker = chr(96) * 3
-                            fc_srt_text = srt_res.text.strip().replace(f"{marker}srt", "").replace(marker, "")
-                            fc_parsed, _ = parse_and_save_real_srt(fc_srt_text, "subtitles.srt", use_fade=False) 
-                            client.files.delete(name=audio_upload.name)
-                            break
-                        except Exception as e: 
-                            last_err = str(e)
-                            continue
-                        
-                if not fc_parsed: 
                     st.error(f"SRT Error: ကျေးဇူးပြု၍ API Limit သို့မဟုတ် Key မှန်ကန်မှု စစ်ဆေးပါ။ {last_err}")
                     st.stop()
 
