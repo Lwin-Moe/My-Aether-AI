@@ -1,5 +1,5 @@
 # =====================================================================
-# 📌 AETHER FILMWORKS AI // STUDIO V52 (PERFECT SYNC & IMAGE FETCH FIX)
+# 📌 AETHER FILMWORKS AI // STUDIO V52 (BURGLISH OVERRIDE & PERFECT SYNC)
 # =====================================================================
 
 import streamlit as st
@@ -1000,6 +1000,7 @@ Story: {fc_story_text[:500]}"""
                                 pass
                             return None
 
+                        # Sequential Image Generation Loop (Prevents Free API Limitations)
                         for i, kw in enumerate(search_keywords):
                             pbar.progress(50 + int(((i+1)/total_clips)*15), text=f"🎨 AI ဖြင့် ပုံများ ဖန်တီးနေပါသည် (Clip {i+1}/{total_clips})...")
                             generated_clip = generate_pollinations_image(kw, i)
@@ -1024,20 +1025,20 @@ Story: {fc_story_text[:500]}"""
                     st.error(f"Visual Error: {e}")
                     st.stop()
 
-            with st.spinner("⏳ [အဆင့်၄/၅] စာတန်းထိုးများကို Alex Hormozi ပုံစံ ချိန်ညှိနေပါသည်..."):
+            with st.spinner("⏳ [အဆင့်၄/၅] စာတန်းထိုးများကို ချိန်ညှိနေပါသည်..."):
                 pbar.progress(70, text="📝 Timeline ချိန်ညှိနေပါသည်...")
                 fc_parsed = None
                 last_err = ""
                 groq_key_val = locals().get('groq_key_fc', '').strip()
  
-                # 👇 FIX: Changed Groq response_format to verbose_json to fix Error 400
+                # 👇 FIX: Python Native Mapping to override Burglish with Real Burmese Script
                 if groq_key_val:
                     try:
                         pbar.progress(72, text="📝 Whisper ဖြင့် အသံအား တိကျစွာ ဖြတ်တောက်နေပါသည်...")
                         client_groq = Groq(api_key=groq_key_val)
                         with open("fc_audio.wav", "rb") as file:
                             transcription = client_groq.audio.transcriptions.create(
-                                file=("fc_audio.wav", file.read()), model="whisper-large-v3", response_format="verbose_json"
+                                file=("fc_audio.wav", file.read()), model="whisper-large-v3", response_format="verbose_json", language="my"
                             )
                         
                         def fmt_time(sec):
@@ -1045,13 +1046,35 @@ Story: {fc_story_text[:500]}"""
                             
                         raw_srt_str = ""
                         segments = transcription.segments if hasattr(transcription, 'segments') else transcription.get('segments', [])
-                        for i_seg, seg in enumerate(segments, 1):
-                            s_start = seg.start if hasattr(seg, 'start') else seg['start']
-                            s_end = seg.end if hasattr(seg, 'end') else seg['end']
-                            s_text = seg.text if hasattr(seg, 'text') else seg['text']
-                            raw_srt_str += f"{i_seg}\n{fmt_time(s_start)} --> {fmt_time(s_end)}\n{s_text.strip()}\n\n"
-                            
-                        fc_parsed, _ = parse_and_save_real_srt(raw_srt_str, "subtitles.srt", use_fade=False)
+                        
+                        # Clean original burmese text for pure mapping
+                        clean_script_for_sub = re.sub(r'\[.*?\]', '', fc_story_text)
+                        clean_script_for_sub = re.sub(r'\{.*?\}', '', clean_script_for_sub)
+                        burmese_words = clean_script_for_sub.split()
+                        
+                        num_segments = len(segments)
+                        
+                        if num_segments > 0 and len(burmese_words) > 0:
+                            words_per_seg = max(1, len(burmese_words) // num_segments)
+                            for i_seg, seg in enumerate(segments):
+                                s_start = seg.start if hasattr(seg, 'start') else seg['start']
+                                s_end = seg.end if hasattr(seg, 'end') else seg['end']
+                                
+                                start_idx = i_seg * words_per_seg
+                                if i_seg == num_segments - 1:
+                                    chunk_words = burmese_words[start_idx:]
+                                else:
+                                    chunk_words = burmese_words[start_idx : start_idx + words_per_seg]
+                                
+                                s_text = " ".join(chunk_words)
+                                if not s_text.strip(): 
+                                    s_text = "..."
+                                
+                                raw_srt_str += f"{i_seg+1}\n{fmt_time(s_start)} --> {fmt_time(s_end)}\n{s_text.strip()}\n\n"
+                                
+                            fc_parsed, _ = parse_and_save_real_srt(raw_srt_str, "subtitles.srt", use_fade=False)
+                        else:
+                            last_err = "No segments found or script is empty."
                     except Exception as e: 
                         last_err = str(e)
                 
