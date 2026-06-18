@@ -1,5 +1,5 @@
 # =====================================================================
-# 📌 AETHER FILMWORKS AI // STUDIO V52 (BURGLISH OVERRIDE & PERFECT SYNC)
+# 📌 AETHER FILMWORKS AI // STUDIO V52 (PROPORTIONAL WORD CHUNKING SYNC)
 # =====================================================================
 
 import streamlit as st
@@ -622,11 +622,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
 
                     extra_rules += "\nAt the absolute end of the response, you MUST include these two lines on separate lines:\n[TITLE: (Provide a viral Burmese title here)]\n[TAGS: #tag1 #tag2]"
                     
-                    if sub_short:
-                        hormozi_rule = " [HORMOZI]: Split the subtitles into chunks of ONLY 1 to 4 words max per block. CRITICAL: DO NOT remove original timestamps."
-                    else:
-                        hormozi_rule = ""
-
                     if "Gemini" in ai_provider:
                         keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
                         success_gemini = False; last_err = ""
@@ -641,9 +636,9 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                                     time.sleep(2)
                                 
                                 if "Original" in recap_mode:
-                                    gemini_prompt = f"Watch the provided video carefully. Invent a completely ORIGINAL, highly engaging storytelling recap in Burmese. Do NOT just translate. STRICT RULES: 1. Include Synergy Audio Tags like [pause=1.0], [excited]. 2. NO ENGLISH TRANSLITERATION. 3. Output ONLY valid SRT format synced to the scenes.{extra_rules}{hormozi_rule}"
+                                    gemini_prompt = f"Watch the provided video carefully. Invent a completely ORIGINAL, highly engaging storytelling recap in Burmese. Do NOT just translate. STRICT RULES: 1. Include Synergy Audio Tags like [pause=1.0], [excited]. 2. NO ENGLISH TRANSLITERATION. 3. Output ONLY valid SRT format synced to the scenes.{extra_rules}"
                                 else:
-                                    gemini_prompt = f"Listen to the audio. Translate and adapt the text into highly engaging, natural spoken Burmese. STRICT RULES: 1. Include Synergy Audio Tags like [pause=1.0], [excited]. 2. NO ENGLISH TRANSLITERATION. 3. Output ONLY valid SRT format matching original timestamps.{extra_rules}{hormozi_rule}"
+                                    gemini_prompt = f"Listen to the audio. Translate and adapt the text into highly engaging, natural spoken Burmese. STRICT RULES: 1. Include Synergy Audio Tags like [pause=1.0], [excited]. 2. NO ENGLISH TRANSLITERATION. 3. Output ONLY valid SRT format matching original timestamps.{extra_rules}"
                                 
                                 response = client.models.generate_content(model="gemini-2.5-flash", contents=[media_file, gemini_prompt])
                                 raw_output_text = response.text.strip()
@@ -667,7 +662,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                             with open(a_extracted, "rb") as file: 
                                 tsrt = openai.audio.translations.create(model="whisper-1", file=file, response_format="srt")
                         
-                        base_prompt = f"Translate and adapt the English SRT into engaging Burmese. Add audio tags. Output valid SRT format. {extra_rules}{hormozi_rule}"
+                        base_prompt = f"Translate and adapt the English SRT into engaging Burmese. Add audio tags. Output valid SRT format. {extra_rules}"
                         comp = client.chat.completions.create(model="llama-3.3-70b-versatile" if "Groq" in ai_provider else ("gpt-5.5-pro" if "5.5" in ai_provider else "gpt-4o"), messages=[{"role": "user", "content": f"{base_prompt} --- SRT --- {tsrt}"}])
                         raw_output_text = comp.choices[0].message.content
 
@@ -832,6 +827,9 @@ elif app_mode == "🎙️ Faceless Channel Studio":
             bgm_options.extend(bgm_files)
         fc_bgm = st.selectbox("🎼 Background Music", bgm_options, key="fc_bgm")
         fc_bgm_vol = st.slider("🔊 BGM Volume", 1, 50, 8, key="fc_bgm_vol") / 100.0
+        
+        # 👇 FIX: Added Hormozi style checkbox logic for Faceless Studio
+        fc_sub_short = st.checkbox("✂️ Short & Punchy (Hormozi)", value=True)
 
     st.markdown('<div class="setting-panel"><h4>🛠️ Manual Controls (Optional)</h4>', unsafe_allow_html=True)
     col_fc1, col_fc2 = st.columns(2)
@@ -1000,7 +998,6 @@ Story: {fc_story_text[:500]}"""
                                 pass
                             return None
 
-                        # Sequential Image Generation Loop (Prevents Free API Limitations)
                         for i, kw in enumerate(search_keywords):
                             pbar.progress(50 + int(((i+1)/total_clips)*15), text=f"🎨 AI ဖြင့် ပုံများ ဖန်တီးနေပါသည် (Clip {i+1}/{total_clips})...")
                             generated_clip = generate_pollinations_image(kw, i)
@@ -1031,7 +1028,7 @@ Story: {fc_story_text[:500]}"""
                 last_err = ""
                 groq_key_val = locals().get('groq_key_fc', '').strip()
  
-                # 👇 FIX: Python Native Mapping to override Burglish with Real Burmese Script
+                # 👇 FIX: Proportional Native Mapping (Replaces Burglish, Perfect Sync, Hormozi Chunking)
                 if groq_key_val:
                     try:
                         pbar.progress(72, text="📝 Whisper ဖြင့် အသံအား တိကျစွာ ဖြတ်တောက်နေပါသည်...")
@@ -1044,37 +1041,50 @@ Story: {fc_story_text[:500]}"""
                         def fmt_time(sec):
                             return f"{int(sec//3600):02d}:{int((sec%3600)//60):02d}:{int(sec%60):02d},{int((sec%1)*1000):03d}"
                             
-                        raw_srt_str = ""
-                        segments = transcription.segments if hasattr(transcription, 'segments') else transcription.get('segments', [])
-                        
-                        # Clean original burmese text for pure mapping
+                        # Clean Burmese script for mapping
                         clean_script_for_sub = re.sub(r'\[.*?\]', '', fc_story_text)
                         clean_script_for_sub = re.sub(r'\{.*?\}', '', clean_script_for_sub)
                         burmese_words = clean_script_for_sub.split()
                         
-                        num_segments = len(segments)
+                        segments = transcription.segments if hasattr(transcription, 'segments') else transcription.get('segments', [])
                         
-                        if num_segments > 0 and len(burmese_words) > 0:
-                            words_per_seg = max(1, len(burmese_words) // num_segments)
-                            for i_seg, seg in enumerate(segments):
-                                s_start = seg.start if hasattr(seg, 'start') else seg['start']
-                                s_end = seg.end if hasattr(seg, 'end') else seg['end']
+                        raw_srt_str = ""
+                        chunk_idx = 1
+                        
+                        total_b_words = len(burmese_words)
+                        total_w_words = sum(len(seg.text.split() if hasattr(seg, 'text') else seg['text'].split()) for seg in segments)
+                        
+                        word_idx = 0
+                        for i_seg, seg in enumerate(segments):
+                            s_start = seg.start if hasattr(seg, 'start') else seg['start']
+                            s_end = seg.end if hasattr(seg, 'end') else seg['end']
+                            w_text = seg.text if hasattr(seg, 'text') else seg['text']
+                            w_words_len = max(1, len(w_text.split()))
+                            
+                            num_b_words = max(1, int((w_words_len / max(1, total_w_words)) * total_b_words))
+                            
+                            if i_seg == len(segments) - 1:
+                                seg_b_words = burmese_words[word_idx:]
+                            else:
+                                seg_b_words = burmese_words[word_idx : word_idx + num_b_words]
                                 
-                                start_idx = i_seg * words_per_seg
-                                if i_seg == num_segments - 1:
-                                    chunk_words = burmese_words[start_idx:]
-                                else:
-                                    chunk_words = burmese_words[start_idx : start_idx + words_per_seg]
+                            word_idx += num_b_words
+                            if not seg_b_words: continue
+                            
+                            # Hormozi Style chunking (3 words) or normal (12 words)
+                            chunk_size = 3 if fc_sub_short else 12
+                            seg_chunks = [seg_b_words[i:i + chunk_size] for i in range(0, len(seg_b_words), chunk_size)]
+                            if not seg_chunks: continue
+                            
+                            time_per_chunk = (s_end - s_start) / len(seg_chunks)
+                            for j, c_words in enumerate(seg_chunks):
+                                c_start = s_start + (j * time_per_chunk)
+                                c_end = c_start + time_per_chunk
+                                s_text = " ".join(c_words)
+                                raw_srt_str += f"{chunk_idx}\n{fmt_time(c_start)} --> {fmt_time(c_end)}\n{s_text}\n\n"
+                                chunk_idx += 1
                                 
-                                s_text = " ".join(chunk_words)
-                                if not s_text.strip(): 
-                                    s_text = "..."
-                                
-                                raw_srt_str += f"{i_seg+1}\n{fmt_time(s_start)} --> {fmt_time(s_end)}\n{s_text.strip()}\n\n"
-                                
-                            fc_parsed, _ = parse_and_save_real_srt(raw_srt_str, "subtitles.srt", use_fade=False)
-                        else:
-                            last_err = "No segments found or script is empty."
+                        fc_parsed, _ = parse_and_save_real_srt(raw_srt_str, "subtitles.srt", use_fade=False)
                     except Exception as e: 
                         last_err = str(e)
                 
