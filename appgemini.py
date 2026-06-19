@@ -380,7 +380,6 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
             safe_font_path = font_path.replace('\\', '/')
             
             for i, (start, end, text) in enumerate(parsed_timestamps):
-                # 👇 FIX: Perfect Center Alignment using Python strings
                 wrapped_lines = textwrap.wrap(text, width=wrap_width)
                 if not wrapped_lines: wrapped_lines = [text]
                 max_len = max(len(line) for line in wrapped_lines)
@@ -403,7 +402,7 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
                 box_str = 1 if sub_bg else 0
                 box_color = 'black@0.6' if sub_bg else 'black@0.0'
                 
-                video = ffmpeg.filter(video, 'drawtext', textfile=txt_filename, fontfile=safe_font_path, fontcolor=c_str, fontsize=sub_size, bordercolor='black', borderw=sub_thickness, box=box_str, boxcolor=box_color, boxborderw=10, x='(w-text_w)/2', y=y_expr, line_spacing=20, enable=f'between(t,{start},{end})')
+                video = ffmpeg.filter(video, 'drawtext', textfile=txt_filename, fontfile=safe_font_path, fontcolor=c_str, fontsize=sub_size, bordercolor='black', borderw=sub_thickness, box=box_str, boxcolor=box_color, boxborderw=10, x='(w-text_w)/2', y=y_expr, line_spacing=20, text_align='C', enable=f'between(t,{start},{end})')
 
         out = ffmpeg.output(video, audio, out_v, vcodec='libx264', pix_fmt='yuv420p', acodec='aac', preset='superfast', crf=23, t=a_dur)
         out.run(cmd=FFMPEG_BINARY, overwrite_output=True, capture_stdout=True, capture_stderr=True)
@@ -649,7 +648,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                                     max_l = max(len(l) for l in wrapped_lines) if wrapped_lines else 0
                                     c_text = "\n".join(l.center(max_l, " ") for l in wrapped_lines)
                                     with open("thumb_text.txt", "w", encoding="utf-8") as tf: tf.write(c_text)
-                                    if os.path.exists(selected_font): stream = ffmpeg.filter(stream.video, 'drawtext', textfile='thumb_text.txt', fontfile=selected_font.replace('\\','/'), fontcolor='white', fontsize=65, x='(w-text_w)/2', y='(h-text_h)/2', box=1, boxcolor='red@0.9', boxborderw=20, borderw=3, bordercolor='black', line_spacing=15)
+                                    if os.path.exists(selected_font): stream = ffmpeg.filter(stream.video, 'drawtext', textfile='thumb_text.txt', fontfile=selected_font.replace('\\','/'), fontcolor='white', fontsize=65, x='(w-text_w)/2', y='(h-text_h)/2', box=1, boxcolor='red@0.9', boxborderw=20, borderw=3, bordercolor='black', line_spacing=15, text_align='C')
                                 ffmpeg.output(stream, thumb_name, vframes=1).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
                             except Exception: pass
                             if thumb_suffix == "A" and os.path.exists(thumb_name): st.session_state.thumb_path_A = thumb_name
@@ -892,8 +891,7 @@ Story: {fc_story_text[:500]}"""
                                 raw_kws = prompt_req.text.replace('\n', '|').split('|')
                                 search_keywords = [kw.strip() for kw in raw_kws if len(kw.strip()) > 5][:img_count]
                                 break
-                            except Exception as e:
-                                last_err = str(e); continue
+                            except Exception: continue
                                 
                         if not search_keywords: 
                             search_keywords = [f"{current_style}, epic scene {i}" for i in range(img_count)]
@@ -938,13 +936,18 @@ Story: {fc_story_text[:500]}"""
                 last_err = ""
                 groq_key_val = locals().get('groq_key_fc', '').strip()
  
+                # 👇 FIX: Ultimate Hybrid Word-Level Timestamp Mapping
                 if groq_key_val:
                     try:
                         pbar.progress(72, text="📝 Whisper ဖြင့် အသံအား တိကျစွာ ဖြတ်တောက်နေပါသည်...")
                         client_groq = Groq(api_key=groq_key_val)
                         with open("fc_audio.wav", "rb") as file:
                             transcription = client_groq.audio.transcriptions.create(
-                                file=("fc_audio.wav", file.read()), model="whisper-large-v3", response_format="verbose_json", language="my"
+                                file=("fc_audio.wav", file.read()), 
+                                model="whisper-large-v3", 
+                                response_format="verbose_json", 
+                                language="my",
+                                timestamp_granularities=["word"]
                             )
                         
                         def fmt_time(sec): return f"{int(sec//3600):02d}:{int((sec%3600)//60):02d}:{int(sec%60):02d},{int((sec%1)*1000):03d}"
@@ -952,39 +955,70 @@ Story: {fc_story_text[:500]}"""
                         clean_script_for_sub = re.sub(r'\[.*?\]', '', fc_story_text)
                         clean_script_for_sub = re.sub(r'\{.*?\}', '', clean_script_for_sub)
                         burmese_words = clean_script_for_sub.split()
+                        total_b = len(burmese_words)
                         
-                        segments = transcription.segments if hasattr(transcription, 'segments') else transcription.get('segments', [])
+                        whisper_words = transcription.words if hasattr(transcription, 'words') else transcription.get('words', [])
+                        if not whisper_words:
+                            segments = transcription.segments if hasattr(transcription, 'segments') else transcription.get('segments', [])
+                            for seg in segments:
+                                w_list = seg.words if hasattr(seg, 'words') else seg.get('words', [])
+                                whisper_words.extend(w_list)
+
                         raw_srt_str = ""
                         chunk_idx = 1
                         
-                        total_b_words = len(burmese_words)
-                        total_audio_duration = sum((seg.end if hasattr(seg, 'end') else seg['end']) - (seg.start if hasattr(seg, 'start') else seg['start']) for seg in segments)
-                        
-                        word_idx = 0
-                        for i_seg, seg in enumerate(segments):
-                            s_start = seg.start if hasattr(seg, 'start') else seg['start']
-                            s_end = seg.end if hasattr(seg, 'end') else seg['end']
-                            seg_duration = s_end - s_start
-                            
-                            num_b_words = max(1, int((seg_duration / max(0.1, total_audio_duration)) * total_b_words))
-                            if i_seg == len(segments) - 1: seg_b_words = burmese_words[word_idx:]
-                            else: seg_b_words = burmese_words[word_idx : word_idx + num_b_words]
-                                
-                            word_idx += num_b_words
-                            if not seg_b_words: continue
-                            
+                        if len(whisper_words) > 0 and total_b > 0:
+                            total_w = len(whisper_words)
                             chunk_size = 3 if fc_sub_short else 12
-                            seg_chunks = [seg_b_words[i:i + chunk_size] for i in range(0, len(seg_b_words), chunk_size)]
-                            if not seg_chunks: continue
+                            seg_chunks = [burmese_words[i:i + chunk_size] for i in range(0, total_b, chunk_size)]
                             
-                            time_per_chunk = (s_end - s_start) / len(seg_chunks)
                             for j, c_words in enumerate(seg_chunks):
-                                c_start = s_start + (j * time_per_chunk)
-                                c_end = c_start + time_per_chunk
+                                start_b_idx = j * chunk_size
+                                end_b_idx = start_b_idx + len(c_words) - 1
+                                
+                                start_w_idx = min(int((start_b_idx / total_b) * total_w), total_w - 1)
+                                end_w_idx = min(int((end_b_idx / total_b) * total_w), total_w - 1)
+                                
+                                w_start_info = whisper_words[start_w_idx]
+                                w_end_info = whisper_words[end_w_idx]
+                                
+                                c_start = w_start_info.start if hasattr(w_start_info, 'start') else w_start_info['start']
+                                c_end = w_end_info.end if hasattr(w_end_info, 'end') else w_end_info['end']
+                                
+                                if c_end <= c_start: c_end = c_start + 0.5
+                                    
                                 s_text = " ".join(c_words)
                                 raw_srt_str += f"{chunk_idx}\n{fmt_time(c_start)} --> {fmt_time(c_end)}\n{s_text}\n\n"
                                 chunk_idx += 1
+                        else:
+                            # Fallback if words array is empty
+                            segments = transcription.segments if hasattr(transcription, 'segments') else transcription.get('segments', [])
+                            total_audio_duration = sum((seg.end if hasattr(seg, 'end') else seg['end']) - (seg.start if hasattr(seg, 'start') else seg['start']) for seg in segments)
+                            word_idx = 0
+                            for i_seg, seg in enumerate(segments):
+                                s_start = seg.start if hasattr(seg, 'start') else seg['start']
+                                s_end = seg.end if hasattr(seg, 'end') else seg['end']
+                                seg_duration = s_end - s_start
                                 
+                                num_b_words = max(1, int((seg_duration / max(0.1, total_audio_duration)) * total_b))
+                                if i_seg == len(segments) - 1: seg_b_words = burmese_words[word_idx:]
+                                else: seg_b_words = burmese_words[word_idx : word_idx + num_b_words]
+                                    
+                                word_idx += num_b_words
+                                if not seg_b_words: continue
+                                
+                                chunk_size = 3 if fc_sub_short else 12
+                                seg_chunks = [seg_b_words[i:i + chunk_size] for i in range(0, len(seg_b_words), chunk_size)]
+                                if not seg_chunks: continue
+                                
+                                time_per_chunk = (s_end - s_start) / len(seg_chunks)
+                                for j, c_words in enumerate(seg_chunks):
+                                    c_start = s_start + (j * time_per_chunk)
+                                    c_end = c_start + time_per_chunk
+                                    s_text = " ".join(c_words)
+                                    raw_srt_str += f"{chunk_idx}\n{fmt_time(c_start)} --> {fmt_time(c_end)}\n{s_text}\n\n"
+                                    chunk_idx += 1
+                                    
                         fc_parsed, _ = parse_and_save_real_srt(raw_srt_str, "subtitles.srt", use_fade=False)
                     except Exception as e: last_err = str(e)
                 
