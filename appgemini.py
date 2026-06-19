@@ -354,7 +354,7 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
             
     return final_parsed, " ".join(full_speech)
 
-def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_bypass=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)", use_mirror=False, use_color=False, use_grain=False, use_fps=False, sub_position="Bottom", sub_color="Yellow", sub_size=26, sub_thickness=2.5, sub_bg=False, use_freeze=False, logo_path=None):
+def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_bypass=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)", use_mirror=False, use_color=False, use_grain=False, use_fps=False, sub_position="Bottom", sub_color="Yellow", sub_size=28, sub_thickness=2.5, sub_bg=False, use_freeze=False, logo_path=None):
     try:
         a_dur = get_file_duration(in_a)
         
@@ -414,7 +414,8 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
                 
                 escaped_text = wrapped_text.replace("'", "\u2019").replace(":", "\\:")
 
-                video = ffmpeg.filter(video, 'drawtext', textfile=txt_filename, fontfile='Padauk.ttf', fontcolor=c_str, fontsize=sub_size, bordercolor='black', borderw=sub_thickness, box=box_str, boxcolor=box_color, boxborderw=10, x='(w-text_w)/2', y=y_expr, line_spacing=20, enable=f'between(t,{start},{end})')
+                # 👇 FIX: Added text_align='M' to center-align the multiline text
+                video = ffmpeg.filter(video, 'drawtext', textfile=txt_filename, fontfile='Padauk.ttf', fontcolor=c_str, fontsize=sub_size, bordercolor='black', borderw=sub_thickness, box=box_str, boxcolor=box_color, boxborderw=10, x='(w-text_w)/2', y=y_expr, line_spacing=20, text_align='M', enable=f'between(t,{start},{end})')
 
         out = ffmpeg.output(video, audio, out_v, vcodec='libx264', pix_fmt='yuv420p', acodec='aac', preset='superfast', crf=23, t=a_dur)
         out.run(cmd=FFMPEG_BINARY, overwrite_output=True, capture_stdout=True, capture_stderr=True)
@@ -828,7 +829,6 @@ elif app_mode == "🎙️ Faceless Channel Studio":
         fc_bgm = st.selectbox("🎼 Background Music", bgm_options, key="fc_bgm")
         fc_bgm_vol = st.slider("🔊 BGM Volume", 1, 50, 8, key="fc_bgm_vol") / 100.0
         
-        # 👇 FIX: Added Hormozi style checkbox logic for Faceless Studio
         fc_sub_short = st.checkbox("✂️ Short & Punchy (Hormozi)", value=True)
 
     st.markdown('<div class="setting-panel"><h4>🛠️ Manual Controls (Optional)</h4>', unsafe_allow_html=True)
@@ -836,6 +836,12 @@ elif app_mode == "🎙️ Faceless Channel Studio":
     with col_fc1:
         st.markdown("<div class='sub-box'>", unsafe_allow_html=True)
         fc_script_mode = st.radio("📝 Story Script Source", ["🤖 Auto-Generate AI Script", "✍️ Manual Script Entry"])
+        
+        # 👇 FIX: Optional Custom Topic Input
+        fc_custom_topic = ""
+        if "Auto" in fc_script_mode:
+            fc_custom_topic = st.text_input("💡 ဇာတ်လမ်း အကြောင်းအရာ (Optional):", placeholder="ဥပမာ - သရဲဘုံကျောင်း, ပင်လယ်ဓားပြ...", key="fc_topic")
+            
         fc_manual_script = st.text_area("✍️ Paste your script here:", placeholder="သင့်ကိုယ်ပိုင်ဇာတ်ညွှန်းကို ဤနေရာတွင် ထည့်ပါ...", height=150) if "Manual" in fc_script_mode else ""
         st.markdown("</div>", unsafe_allow_html=True)
         
@@ -872,15 +878,17 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                 with st.spinner(f"⏳ [အဆင့်၁/၅] Gemini ဖြင့် {fc_duration} မိနစ်စာ ဇာတ်လမ်း ရေးသားနေပါသည်..."):
                     pbar.progress(10, text="📝 ဇာတ်လမ်း ရေးသားနေပါသည်...")
                     target_words = fc_duration * 140
+                    topic_instruction = f"Specifically, the story MUST be deeply focused on this topic: {fc_custom_topic.strip()}.\n" if fc_custom_topic.strip() else ""
+                    
                     story_prompt = f"""Act as a YouTube content strategist AND cinematic narrative writer.
 Write an engaging {fc_duration}-minute highly viral script for a {fc_niche} TikTok/YouTube video in natural spoken Burmese. (Around {target_words} words).
- 
+{topic_instruction}
 CRITICAL RULES:
 1. THE VIRAL HOOK (0-3s): Start with a mind-blowing, highly engaging 3-second viral hook.
 2. NO FORMAL GRAMMAR: STRICTLY PROHIBITED to use formal literary markers (၌,၍, သည့်, သည်, ၏). Use natural spoken endings (တယ်, တဲ့, မှာ, ရဲ့).
 3. POV: Write in second person (မင်း / မင်းရဲ့) if applicable.
 4. AUDIO TAGS: Include tags like [pause=1.0], [excited], [whisper] to guide the voice.
-5. Do not use English transliteration. Use emotionally immersive storytelling.
+5. Do not use English transliteration. Use emotionally immersive storytelling. MUST BE IN PURE BURMESE LANGUAGE.
  
 Output format:
 Provide the script directly.
@@ -937,22 +945,23 @@ At the absolute end, include these two lines:
                             img_path = f"fc_img_{i}.jpg"
                             clip_path = f"fc_clip_{i}.mp4"
                             img_file.seek(0)
-                            with open(img_path, "wb") as f: 
+                            with open(img_path, "wb") as f:
                                 f.write(img_file.read())
                             
                             pbar.progress(50 + int((i/len(fc_uploaded_images))*15), text=f"🎥 Upload ပုံများကို Animation သွင်းနေပါသည် ({i+1}/{len(fc_uploaded_images)})...")
                             subprocess.run([FFMPEG_BINARY, "-y", "-loop", "1", "-framerate", "25", "-i", img_path, "-t", str(clip_dur), "-vf", f"scale=-2:2000,zoompan=z='min(zoom+0.001,1.15)':d={int(clip_dur*25)}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={v_w}x{v_h},fps=25", "-c:v", "libx264", "-preset", "superfast", clip_path], capture_output=True)
-                            if os.path.exists(clip_path): 
+                            if os.path.exists(clip_path):
                                 generated_clips.append(clip_path)
 
                     else:
+                        # 👇 FIX: Epic Cinematic Visuals mapped like Midjourney
                         style_mapping = {
-                            "👻 Horror / Creepypasta": "Gritty graphic novel style, cinematic lighting, thick bold outlines, deep shadows",
-                            "💔 Reddit Relationship Drama": "Cinematic photography, emotional lighting, soft focus, dramatic depth of field",
-                            "🧠 Dark Psychology": "Dark neo-noir cinematic style, high contrast, psychological thriller lighting",
-                            "💡 Fun Facts / Trivia": "Vibrant 3D illustration style, bright colors, highly detailed, engaging visual",
-                            "🚀 Motivation / Mindset": "Epic cinematic photography, bright inspiring lighting, golden hour, highly uplifting atmosphere",
-                            "📜 Ancient History / Myths": "Epic historical fantasy painting, cinematic lighting, realistic textures, highly detailed"
+                            "👻 Horror / Creepypasta": "Ultra-realistic cinematic horror, 8k, eerie volumetric lighting, chilling atmosphere, photorealistic, Unreal Engine 5 render",
+                            "💔 Reddit Relationship Drama": "Cinematic drama photography, moody soft lighting, hyper-detailed faces, 8k resolution, emotional depth, masterpiece",
+                            "🧠 Dark Psychology": "Neo-noir psychological thriller style, high contrast moody lighting, cinematic depth of field, ultra-detailed masterpiece",
+                            "💡 Fun Facts / Trivia": "Vibrant Pixar 3D animation style, bright studio lighting, incredibly detailed, 8k, trending on artstation",
+                            "🚀 Motivation / Mindset": "Epic cinematic photography, golden hour god rays, highly inspiring, 8k resolution, masterpiece, dramatic sky",
+                            "📜 Ancient History / Myths": "Epic fantasy concept art, Lord of the Rings style, dramatic cinematic lighting, intricate details, 8k, highly epic"
                         }
                         current_style = style_mapping.get(fc_niche, "Cinematic, highly detailed 8k masterpiece")
 
@@ -963,9 +972,10 @@ At the absolute end, include these two lines:
                         for key in keys_list:
                             try:
                                 client = genai.Client(api_key=key)
-                                img_prompt_instruction = f"""Based on this story, give me exactly {img_count} highly detailed English image generation prompts describing chronological scenes. 
-GLOBAL STYLE DNA: {current_style}. Avoid explicit/violent words. Do NOT include text or words in the prompt.
-CRITICAL FORMAT RULE: Format strictly separated by a pipe '|' with NO newlines. Example: scene 1 | scene 2 | scene 3
+                                img_prompt_instruction = f"""Act as a professional Midjourney Prompt Engineer. Based on this story, give me exactly {img_count} highly detailed, epic English image generation prompts for chronological scenes.
+GLOBAL STYLE DNA: {current_style}. 
+RULES: Include camera angles, lighting conditions, and extreme details. Avoid explicit/violent words. Do NOT include text or words in the prompt. MUST BE IN PURE ENGLISH.
+CRITICAL FORMAT RULE: Format strictly separated by a pipe '|' with NO newlines. Example: scene 1 | scene 2
 Story: {fc_story_text[:500]}"""
                                 prompt_req = client.models.generate_content(model="gemini-2.5-flash", contents=img_prompt_instruction)
                                 raw_kws = prompt_req.text.replace('\n', '|').split('|')
@@ -974,27 +984,30 @@ Story: {fc_story_text[:500]}"""
                             except Exception as e:
                                 last_err = str(e)
                                 continue
-                                
-                        if not search_keywords: 
+
+                        if not search_keywords:
                             st.error(f"Keyword Error: Key အားလုံး Limit ပြည့်နေပါသည်။ {last_err}")
                             st.stop()
-                        
+
                         total_clips = len(search_keywords)
                         clip_dur = fc_audio_dur / total_clips
-                        
+
                         def generate_pollinations_image(prompt_text, idx):
                             try:
-                                encoded_prompt = urllib.parse.quote(prompt_text.strip())
+                                epic_suffix = ", masterpiece, best quality, ultra detailed, 8k resolution, highly realistic, spectacular, breathtaking"
+                                final_prompt = prompt_text.strip() + epic_suffix
+                                
+                                encoded_prompt = urllib.parse.quote(final_prompt)
                                 url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={v_w}&height={v_h}&nologo=true"
                                 res = requests.get(url, timeout=60)
                                 if res.status_code == 200:
                                     img_path = f"fc_img_{idx}.jpg"
                                     clip_path = f"fc_clip_{idx}.mp4"
-                                    with open(img_path, "wb") as f: 
+                                    with open(img_path, "wb") as f:
                                         f.write(res.content)
                                     subprocess.run([FFMPEG_BINARY, "-y", "-loop", "1", "-framerate", "25", "-i", img_path, "-t", str(clip_dur), "-vf", f"scale=-2:2000,zoompan=z='min(zoom+0.001,1.15)':d={int(clip_dur*25)}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={v_w}x{v_h},fps=25", "-c:v", "libx264", "-preset", "superfast", clip_path], capture_output=True)
                                     return clip_path
-                            except Exception: 
+                            except Exception:
                                 pass
                             return None
 
@@ -1005,20 +1018,20 @@ Story: {fc_story_text[:500]}"""
                                 generated_clips.append(generated_clip)
                             time.sleep(2)
 
-                    if not generated_clips: 
-                        st.error("❌ Visual Generation Failed. ပုံရိပ် ဖန်တီးမှု ပြဿနာရှိပါသည်။")
+                    if not generated_clips:
+                        st.error("❌ Visual Generation Failed. ပုံရိပ် ဖန်တီးမှု ပြဿနာရှိပါသည်။ Server က Rate Limit ကြောင့် ပိတ်ချလိုက်တာဖြစ်နိုင်ပါတယ်။ API Key ပြောင်းသုံးပါ သို့မဟုတ် ခဏစောင့်ပါ။")
                         st.stop()
                     
                     pbar.progress(65, text="🎞️ ဗီဒီယိုများကို ပေါင်းစပ်နေပါသည်...")
                     with open("fc_concat.txt", "w") as f:
-                        for c in generated_clips: 
+                        for c in generated_clips:
                             f.write(f"file '{c}'\n")
-                    
+
                     res_concat = subprocess.run([FFMPEG_BINARY, "-y", "-stream_loop", "-1", "-f", "concat", "-safe", "0", "-i", "fc_concat.txt", "-t", str(fc_audio_dur), "-c", "copy", "fc_video_loop.mp4"], capture_output=True)
                     if not os.path.exists("fc_video_loop.mp4"):
                         st.error(f"❌ FFmpeg Concat Error. {res_concat.stderr.decode('utf-8', errors='ignore')}")
                         st.stop()
-                except Exception as e: 
+                except Exception as e:
                     st.error(f"Visual Error: {e}")
                     st.stop()
 
@@ -1028,7 +1041,6 @@ Story: {fc_story_text[:500]}"""
                 last_err = ""
                 groq_key_val = locals().get('groq_key_fc', '').strip()
  
-                # 👇 FIX: Proportional Native Mapping (Replaces Burglish, Perfect Sync, Hormozi Chunking)
                 if groq_key_val:
                     try:
                         pbar.progress(72, text="📝 Whisper ဖြင့် အသံအား တိကျစွာ ဖြတ်တောက်နေပါသည်...")
@@ -1041,40 +1053,22 @@ Story: {fc_story_text[:500]}"""
                         def fmt_time(sec):
                             return f"{int(sec//3600):02d}:{int((sec%3600)//60):02d}:{int(sec%60):02d},{int((sec%1)*1000):03d}"
                             
-                        # Clean Burmese script for mapping
-                        clean_script_for_sub = re.sub(r'\[.*?\]', '', fc_story_text)
-                        clean_script_for_sub = re.sub(r'\{.*?\}', '', clean_script_for_sub)
-                        burmese_words = clean_script_for_sub.split()
-                        
                         segments = transcription.segments if hasattr(transcription, 'segments') else transcription.get('segments', [])
                         
                         raw_srt_str = ""
                         chunk_idx = 1
                         
-                        total_b_words = len(burmese_words)
-                        total_w_words = sum(len(seg.text.split() if hasattr(seg, 'text') else seg['text'].split()) for seg in segments)
-                        
-                        word_idx = 0
-                        for i_seg, seg in enumerate(segments):
+                        # 👇 FIX: Direct Timestamp Mapping (No more math drift)
+                        for seg in segments:
                             s_start = seg.start if hasattr(seg, 'start') else seg['start']
                             s_end = seg.end if hasattr(seg, 'end') else seg['end']
                             w_text = seg.text if hasattr(seg, 'text') else seg['text']
-                            w_words_len = max(1, len(w_text.split()))
                             
-                            num_b_words = max(1, int((w_words_len / max(1, total_w_words)) * total_b_words))
+                            seg_words = w_text.split()
+                            if not seg_words: continue
                             
-                            if i_seg == len(segments) - 1:
-                                seg_b_words = burmese_words[word_idx:]
-                            else:
-                                seg_b_words = burmese_words[word_idx : word_idx + num_b_words]
-                                
-                            word_idx += num_b_words
-                            if not seg_b_words: continue
-                            
-                            # Hormozi Style chunking (3 words) or normal (12 words)
                             chunk_size = 3 if fc_sub_short else 12
-                            seg_chunks = [seg_b_words[i:i + chunk_size] for i in range(0, len(seg_b_words), chunk_size)]
-                            if not seg_chunks: continue
+                            seg_chunks = [seg_words[i:i + chunk_size] for i in range(0, len(seg_words), chunk_size)]
                             
                             time_per_chunk = (s_end - s_start) / len(seg_chunks)
                             for j, c_words in enumerate(seg_chunks):
@@ -1085,7 +1079,7 @@ Story: {fc_story_text[:500]}"""
                                 chunk_idx += 1
                                 
                         fc_parsed, _ = parse_and_save_real_srt(raw_srt_str, "subtitles.srt", use_fade=False)
-                    except Exception as e: 
+                    except Exception as e:
                         last_err = str(e)
                 
                 if not fc_parsed:
@@ -1095,11 +1089,12 @@ Story: {fc_story_text[:500]}"""
             with st.spinner("⏳ [အဆင့်၅/၅] အားလုံးကိုပေါင်းစပ်ပြီး Master Video ထုတ်လုပ်နေပါသည်..."):
                 pbar.progress(85, text="🎬 Master Rendering အလုပ်လုပ်နေပါသည်...")
                 try:
-                    success, err_msg = render_premium_saas_video("fc_video_loop.mp4", "fc_audio.wav", fc_parsed, v_final, fc_ratio, use_bypass=True, subtitle_mode=fc_subtitle_mode, sub_position=fc_sub_position, sub_color=fc_sub_color, sub_size=26, sub_thickness=2.5, sub_bg=False)
-                    if not success: 
+                    # 👇 FIX: Subtitle size increased from 26 to 28
+                    success, err_msg = render_premium_saas_video("fc_video_loop.mp4", "fc_audio.wav", fc_parsed, v_final, fc_ratio, use_bypass=True, subtitle_mode=fc_subtitle_mode, sub_position=fc_sub_position, sub_color=fc_sub_color, sub_size=28, sub_thickness=2.5, sub_bg=False)
+                    if not success:
                         st.error(f"❌ Video Generation Output Failure! Internal Engine Log: {err_msg}")
                         st.stop()
-                    
+
                     if fc_bgm not in ["None (BGM မထည့်ပါ)"]:
                         bgm_path = os.path.join("bgm_tracks", random.choice(bgm_files) if "Auto" in fc_bgm else fc_bgm)
                         if os.path.exists(bgm_path):
@@ -1108,9 +1103,9 @@ Story: {fc_story_text[:500]}"""
                                 mixed = ffmpeg.filter([ffmpeg.input(v_final).audio, ducked], 'amix', inputs=2, duration='first').filter('volume', 2.0)
                                 ffmpeg.output(ffmpeg.input(v_final).video, mixed, "temp_faceless.mp4", vcodec='copy', acodec='aac', t=fc_audio_dur).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
                                 shutil.move("temp_faceless.mp4", v_final)
-                            except Exception: 
+                            except Exception:
                                 pass
-                    
+
                     try:
                         t_A = min(fc_audio_dur * 0.2, 10)
                         t_B = min(fc_audio_dur * 0.5, 20)
@@ -1124,28 +1119,28 @@ Story: {fc_story_text[:500]}"""
                                 if os.path.exists("Padauk.ttf"):
                                     stream = ffmpeg.filter(stream.video, 'drawtext', textfile='thumb_text.txt', fontfile='Padauk.ttf', fontcolor='white', fontsize=65, x='(w-text_w)/2', y='(h-text_h)/2', box=1, boxcolor='red@0.9', boxborderw=20, borderw=3, bordercolor='black', line_spacing=15)
                                 ffmpeg.output(stream, thumb_name, vframes=1).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
-                            except Exception: 
+                            except Exception:
                                 pass
-                            
-                            if thumb_suffix == "A" and os.path.exists(thumb_name): 
+
+                            if thumb_suffix == "A" and os.path.exists(thumb_name):
                                 st.session_state.thumb_path_A = thumb_name
-                            elif thumb_suffix == "B" and os.path.exists(thumb_name): 
+                            elif thumb_suffix == "B" and os.path.exists(thumb_name):
                                 st.session_state.thumb_path_B = thumb_name
-                    except Exception: 
+                    except Exception:
                         pass
-                            
+
                     pbar.progress(100, text="✅ အားလုံးပြီးစီးပါပြီ!")
                     st.balloons()
                     st.success("🎉 Faceless Video ထုတ်လုပ်မှု အောင်မြင်စွာ ပြီးစီးပါပြီ!")
-                    
+
                     try:
                         client_viral = genai.Client(api_key=keys_list[0])
                         v_prompt = f"Analyze this short video for TikTok virality. Title: {st.session_state.viral_title}. Hook: {fc_story_text[:150]}. Reply strictly in this format: \nScore: [1-100]\nReason: [1 short sentence in Burmese]"
                         v_res = client_viral.models.generate_content(model="gemini-2.5-flash", contents=v_prompt)
                         st.session_state.viral_score = v_res.text.strip()
-                    except Exception: 
+                    except Exception:
                         st.session_state.viral_score = "Score: 90\nReason: အရမ်းကောင်းတဲ့ Hook ပါ။"
-                    
+
                     col_f1, col_f2 = st.columns(2)
                     with col_f1:
                         if os.path.exists(st.session_state.final_video_path):
@@ -1157,26 +1152,24 @@ Story: {fc_story_text[:500]}"""
                             st.markdown('</div>', unsafe_allow_html=True)
                         else:
                             st.error("❌ ဗီဒီယိုဖိုင်ကို ရှာမတွေ့ပါ။ Rendering တွင် ချို့ယွင်းချက် ရှိနိုင်ပါသည်။")
-
                     with col_f2:
                         st.markdown("### 📝 Generated Story & Assets")
                         st.info(f"📈 **Viral Prediction:**\n{st.session_state.viral_score}")
-                        
+
                         col_ta, col_tb = st.columns(2)
                         if st.session_state.thumb_path_A and os.path.exists(st.session_state.thumb_path_A):
-                            with col_ta: 
+                            with col_ta:
                                 st.image(st.session_state.thumb_path_A, caption="Thumbnail A")
                                 st.markdown(get_download_link(st.session_state.thumb_path_A, "Thumb_A.jpg", "Download A"), unsafe_allow_html=True)
                         if st.session_state.thumb_path_B and os.path.exists(st.session_state.thumb_path_B):
-                            with col_tb: 
+                            with col_tb:
                                 st.image(st.session_state.thumb_path_B, caption="Thumbnail B")
                                 st.markdown(get_download_link(st.session_state.thumb_path_B, "Thumb_B.jpg", "Download B"), unsafe_allow_html=True)
-                        
+
                         st.text_area("ဇာတ်လမ်း:", value=fc_story_text, height=300, disabled=True)
-                except Exception as e: 
+                except Exception as e:
                     st.error(f"Render Error: {e}")
                     st.stop()
-
 # =====================================================================
 # 📌 MODE 2 - VEO VIDEO STUDIO
 # =====================================================================
