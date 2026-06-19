@@ -12,10 +12,12 @@ import random
 import shutil
 import textwrap
 import urllib.parse
+import urllib.request
 import concurrent.futures
 import re
 import wave
 import requests
+import subprocess
 import ffmpeg
 import imageio_ffmpeg
 import yt_dlp
@@ -34,7 +36,6 @@ else:
 local_font_path = "Padauk.ttf"
 if not os.path.exists(local_font_path):
     try:
-        import urllib.request
         urllib.request.urlretrieve("https://github.com/google/fonts/raw/main/ofl/padauk/Padauk-Regular.ttf", local_font_path)
     except Exception:
         pass
@@ -351,7 +352,6 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
             
     return final_parsed, " ".join(full_speech)
 
-# 👇 FIX: Added text_align='C' for centering and dynamically loading font_path
 def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_bypass=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)", use_mirror=False, use_color=False, use_grain=False, use_fps=False, sub_position="Bottom", sub_color="Yellow", sub_size=26, sub_thickness=2.5, sub_bg=False, use_freeze=False, logo_path=None, font_path="Padauk.ttf"):
     try:
         a_dur = get_file_duration(in_a)
@@ -413,7 +413,6 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
                 
                 escaped_text = wrapped_text.replace("'", "\u2019").replace(":", "\\:")
 
-                # 👇 FIX: Added text_align='C' for perfect multiline centering
                 video = ffmpeg.filter(video, 'drawtext', textfile=txt_filename, fontfile=safe_font_path, fontcolor=c_str, fontsize=sub_size, bordercolor='black', borderw=sub_thickness, box=box_str, boxcolor=box_color, boxborderw=10, x='(w-text_w)/2', y=y_expr, line_spacing=20, text_align='C', enable=f'between(t,{start},{end})')
 
         out = ffmpeg.output(video, audio, out_v, vcodec='libx264', pix_fmt='yuv420p', acodec='aac', preset='superfast', crf=23, t=a_dur)
@@ -551,7 +550,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
         st.markdown("<div class='sub-box'>", unsafe_allow_html=True)
         st.markdown("<p style='font-weight: bold; color: #818cf8; font-size: 16px;'>📝 Subtitle Pro Settings</p>", unsafe_allow_html=True)
         if subtitle_mode in ["Both (Burn + SRT)", "Burn into Video"]:
-            # 👇 FIX: Added Dynamic Font Selection for Movie Dubbing
             selected_font = st.selectbox("🔤 Font Style", available_fonts, index=0)
             sub_position = st.selectbox("📍 Position", ["Bottom", "Center", "Top"])
             sub_color = st.selectbox("🎨 Color", ["Yellow Text", "White Text", "Neon Green Text", "Red Text", "Gold Text"])
@@ -745,12 +743,9 @@ elif app_mode == "🎙️ Faceless Channel Studio":
         fc_duration = st.slider("⏱️ Story Duration (Minutes)", 1, 10, 3)
 
         st.markdown("<b>📝 Subtitle Pro Settings</b>", unsafe_allow_html=True)
-        # 👇 FIX: Dynamic Font Selection for Faceless Video
         fc_selected_font = st.selectbox("🔤 Font Style", available_fonts, index=0, key="fc_font")
         fc_sub_position = st.selectbox("📍 Position", ["Center", "Bottom", "Top"], index=0, key="fc_sub_pos")
         fc_sub_color = st.selectbox("🎨 Color", ["Yellow Text", "White Text", "Neon Green Text", "Red Text", "Gold Text"], index=0, key="fc_sub_col")
-        
-        # 👇 FIX: Size default is 28 now with Slider
         fc_sub_size = st.slider("🔠 Font Size", 16, 50, 28, key="fc_sub_size")
         fc_subtitle_mode = st.radio("Subtitle Output Mode", ["Both (Burn + SRT)", "Export SRT File Only", "Burn into Video"], key="fc_sub_mode")
 
@@ -769,7 +764,6 @@ elif app_mode == "🎙️ Faceless Channel Studio":
         st.markdown("<div class='sub-box'>", unsafe_allow_html=True)
         fc_script_mode = st.radio("📝 Story Script Source", ["🤖 Auto-Generate AI Script", "✍️ Manual Script Entry"])
         
-        # 👇 FIX: Optional Custom Topic & Added AI Rules to Faceless UI
         fc_custom_topic = ""
         if "Auto" in fc_script_mode:
             fc_custom_topic = st.text_input("💡 ဇာတ်လမ်း အကြောင်းအရာ (Optional):", placeholder="ဥပမာ - သရဲဘုံကျောင်း, ပင်လယ်ဓားပြ...", key="fc_topic")
@@ -814,7 +808,6 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     pbar.progress(10, text="📝 ဇာတ်လမ်း ရေးသားနေပါသည်...")
                     target_words = fc_duration * 140
                     
-                    # 👇 FIX: Integrated Custom Topic & Storytelling Rules
                     topic_instruction = f"Specifically, the story MUST be deeply focused on this topic: {fc_custom_topic.strip()}.\n" if fc_custom_topic.strip() else ""
                     hook_rule = "1. THE VIRAL HOOK (0-3s): Start with a mind-blowing, highly engaging 3-second viral hook.\n" if fc_script_hook else ""
                     curiosity_rule = "2. CURIOSITY GAPS: Insert curiosity gaps in the middle to retain audience attention.\n" if fc_script_curiosity else ""
@@ -880,7 +873,6 @@ At the absolute end, include these two lines:
                             subprocess.run([FFMPEG_BINARY, "-y", "-loop", "1", "-framerate", "25", "-i", img_path, "-t", str(clip_dur), "-vf", f"scale=-2:2000,zoompan=z='min(zoom+0.001,1.15)':d={int(clip_dur*25)}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={v_w}x{v_h},fps=25", "-c:v", "libx264", "-preset", "superfast", clip_path], capture_output=True)
                             if os.path.exists(clip_path): generated_clips.append(clip_path)
                     else:
-                        # 👇 FIX: Epic Cinematic Visuals (Midjourney Style Suffix)
                         style_mapping = {
                             "👻 Horror / Creepypasta": "Ultra-realistic cinematic horror, 8k, eerie volumetric lighting, chilling atmosphere, photorealistic, Unreal Engine 5 render",
                             "💔 Reddit Relationship Drama": "Cinematic drama photography, moody soft lighting, hyper-detailed faces, 8k resolution, emotional depth, masterpiece",
@@ -952,7 +944,6 @@ Story: {fc_story_text[:500]}"""
                 last_err = ""
                 groq_key_val = locals().get('groq_key_fc', '').strip()
  
-                # 👇 FIX: Perfect Sync (Direct Whisper Timestamp Mapping with No Math)
                 if groq_key_val:
                     try:
                         pbar.progress(72, text="📝 Whisper ဖြင့် အသံအား တိကျစွာ ဖြတ်တောက်နေပါသည်...")
@@ -996,7 +987,6 @@ Story: {fc_story_text[:500]}"""
             with st.spinner("⏳ [အဆင့်၅/၅] အားလုံးကိုပေါင်းစပ်ပြီး Master Video ထုတ်လုပ်နေပါသည်..."):
                 pbar.progress(85, text="🎬 Master Rendering အလုပ်လုပ်နေပါသည်...")
                 try:
-                    # 👇 FIX: Render with new Sub_size, Font, and Centered alignments
                     success, err_msg = render_premium_saas_video("fc_video_loop.mp4", "fc_audio.wav", fc_parsed, v_final, fc_ratio, use_bypass=True, subtitle_mode=fc_subtitle_mode, sub_position=fc_sub_position, sub_color=fc_sub_color, sub_size=fc_sub_size, sub_thickness=2.5, sub_bg=False, font_path=fc_selected_font)
                     if not success: st.error(f"❌ Video Generation Output Failure! Internal Engine Log: {err_msg}"); st.stop()
                     
