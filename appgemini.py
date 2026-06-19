@@ -1324,4 +1324,3 @@ elif app_mode == "Video Downloader Hub":
     st.markdown('<h2 style="color:#00e5ff;">Video Downloader Hub</h2>', unsafe_allow_html=True)
     dl_url = st.text_input("\u1017\u102e\u1012\u102e\u101a\u102d\u102f URL \u1000\u102d\u102f \u1012\u102e\u1019\u103e\u102c \u1011\u100a\u1037\u103a\u1015\u102b:", key="hub_dl_url")
     if st.button("\u1017\u102e\u1012\u102e\u101a\u102d\u102f\u1005\u1005\u103a\u1006\u1031\u1038\u1015\u103c\u102e\u1038 \u1012\u1031\u102b\u1004\u103a\u1038\u101c\u102f\u1012\u103a\u1006\u103d\u1032\u1019\u100a\u103a"): pass
-```
