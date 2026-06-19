@@ -56,6 +56,7 @@ API_KEY_FILE = "saved_api_key.txt"
 ELEVEN_KEY_FILE = "saved_eleven_key.txt"
 GROQ_KEY_FILE = "saved_groq_key.txt"
 OPENAI_KEY_FILE = "saved_openai_key.txt"
+DEEPSEEK_KEY_FILE = "saved_deepseek_key.txt"
 ELEVEN_VOICE_ID_FILE = "saved_eleven_voice_id.txt"
 
 def load_key(file_path):
@@ -75,6 +76,120 @@ def get_download_link(file_path, file_name, link_text):
         b64 = base64.b64encode(f.read()).decode()
     return f'<a href="data:application/octet-stream;base64,{b64}" download="{file_name}" style="display:block; text-align:center; margin-top:10px; padding:12px 20px; background:linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color:white; text-decoration:none; border-radius:8px; font-weight:bold;">📥 {link_text}</a>'
 
+# =====================================================================
+# 📌 DeepSeek API Integration
+# =====================================================================
+
+def call_deepseek_api(prompt, api_key, system_prompt="", max_tokens=4000, temperature=0.9):
+    """
+    DeepSeek V3 API ကို ခေါ်မယ်။
+    Free Tier: 100 requests/day, 50 requests/min
+    """
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": prompt})
+    
+    payload = {
+        "model": "deepseek-chat",
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "top_p": 0.95
+    }
+    
+    response = requests.post(
+        "https://api.deepseek.com/v1/chat/completions",
+        headers=headers,
+        json=payload,
+        timeout=120
+    )
+    
+    if response.status_code == 200:
+        return response.json()["choices"][0]["message"]["content"]
+    else:
+        raise Exception(f"DeepSeek API Error {response.status_code}: {response.text[:200]}")
+
+def deepseek_generate_script(api_key, script_prompt):
+    """DeepSeek နဲ့ ဇာတ်ညွှန်းရေး"""
+    system_prompt = """You are a professional Burmese storyteller and viral content strategist. 
+You create highly engaging, emotionally immersive scripts for TikTok/YouTube.
+RULES:
+- Use natural spoken Burmese (တယ်, တဲ့, မှာ, ရဲ့). NEVER use formal literary markers (၌, ၍, သည့်, သည်, ၏).
+- Include audio tags like [pause=1.0], [excited], [whisper] to guide voice acting.
+- Write in a conversational, Gen-Z friendly tone.
+- NO English transliteration. PURE BURMESE ONLY.
+- Output valid SRT format with timestamps when requested."""
+    
+    return call_deepseek_api(script_prompt, api_key, system_prompt, max_tokens=4000, temperature=0.95)
+
+def deepseek_generate_metadata(api_key, story_text):
+    """DeepSeek နဲ့ Viral Title, Tags ထုတ်မယ်"""
+    prompt = f"""Based on this Burmese story, create:
+1. A highly viral, click-worthy Burmese title (max 15 words) that creates curiosity
+2. 5-7 relevant trending hashtags for TikTok/YouTube
+
+Story: {story_text[:800]}
+
+Output format EXACTLY:
+[TITLE: your viral Burmese title here]
+[TAGS: #tag1 #tag2 #tag3]"""
+    
+    return call_deepseek_api(prompt, api_key, max_tokens=300, temperature=0.9)
+
+def deepseek_generate_image_prompts(api_key, story_text, style, num_images=5):
+    """DeepSeek နဲ့ Image Generation Prompts ထုတ်မယ်"""
+    prompt = f"""Act as a professional Midjourney Prompt Engineer. 
+Create {num_images} detailed English image generation prompts for chronological scenes from this story.
+
+GLOBAL STYLE: {style}
+RULES: 
+- Include camera angles, lighting, atmosphere
+- Use cinematic, photorealistic descriptions
+- 8k resolution, masterpiece quality
+- NO text or words in the image description
+- Separate each prompt with '|' character
+
+Story: {story_text[:600]}
+
+Output: prompt1 | prompt2 | prompt3 | ..."""
+    
+    return call_deepseek_api(prompt, api_key, max_tokens=1000, temperature=0.8)
+
+def deepseek_analyze_virality(api_key, title, hook):
+    """DeepSeek နဲ့ Viral Score တွက်မယ်"""
+    prompt = f"""Analyze this video for TikTok/YouTube virality potential:
+Title: {title}
+Hook (first 3 seconds): {hook[:200]}
+
+Reply in EXACTLY this format:
+Score: [1-100]
+Reason: [1 short sentence in Burmese]"""
+    
+    return call_deepseek_api(prompt, api_key, max_tokens=150, temperature=0.7)
+
+def deepseek_translate_and_srt(api_key, english_srt, extra_rules=""):
+    """DeepSeek နဲ့ English SRT ကို မြန်မာလို ပြန်ပြီး SRT ထုတ်မယ်"""
+    prompt = f"""Translate and adapt this English SRT into highly engaging, natural spoken Burmese.
+STRICT RULES:
+1. Keep the SRT format with exact same timestamps
+2. Use natural spoken Burmese, NO formal grammar
+3. Add audio tags like [pause=1.0], [excited] where appropriate
+4. NO English transliteration
+{extra_rules}
+
+--- ENGLISH SRT ---
+{english_srt[:6000]}
+
+Output ONLY valid SRT format with Burmese text, keeping original timestamps."""
+    
+    return call_deepseek_api(prompt, api_key, max_tokens=4000, temperature=0.8)
+
 # --- 1. THEME & STYLING ---
 st.set_page_config(page_title="AETHER STUDIO V52", layout="wide", page_icon="🎬")
 
@@ -92,6 +207,7 @@ st.markdown('''
     .stButton>button { background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%) !important; color: #ffffff !important; font-family: 'Montserrat', sans-serif !important; font-weight: 700 !important; font-size: 16px !important; border-radius: 8px !important; border: none !important; width: 100%; padding: 16px !important; transition: all 0.3s ease !important; box-shadow: 0 4px 15px rgba(124, 58, 237, 0.3); }
     .stButton>button:hover { transform: translateY(-3px); box-shadow: 0 8px 25px rgba(124, 58, 237, 0.5); }
     .sub-box { background-color: #1a2235; border: 1px solid rgba(129, 140, 248, 0.3); border-radius: 8px; padding: 20px; margin-top: 15px; margin-bottom: 10px; }
+    .deepseek-badge { background: linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%); color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; display: inline-block; margin-left: 10px; }
     </style>
 ''', unsafe_allow_html=True)
 
@@ -647,9 +763,9 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
         
     with open(output_file, "w", encoding="utf-8-sig") as f:
         for i, (s, e, t) in enumerate(final_parsed, 1):
-            def fmt(sec):
+            def fmt_sec(sec):
                 return f"{int(sec//3600):02d}:{int((sec%3600)//60):02d}:{int(sec%60):02d},{int((sec%1)*1000):03d}"
-            f.write(f"{i}\n{fmt(s)} --> {fmt(e)}\n{t}\n\n")
+            f.write(f"{i}\n{fmt_sec(s)} --> {fmt_sec(e)}\n{t}\n\n")
             
     return final_parsed, " ".join(full_speech)
 
@@ -775,19 +891,43 @@ with st.sidebar:
             st.error("Invalid Project File.")
 
     st.markdown("---")
-    ai_provider = st.selectbox("Choose AI Provider", ["Google Gemini (Flash - Recommended)", "OpenAI (GPT-5.5 Pro)", "Groq API (Fast & Free)"])
+    
+    # 👇 AI PROVIDER SELECTION - DeepSeek added as option
+    ai_provider = st.selectbox(
+        "Choose AI Provider",
+        [
+            "Google Gemini (Flash - Recommended)",
+            "DeepSeek V3 (Free - Best Burmese)",
+            "OpenAI (GPT-5.5 Pro)",
+            "Groq API (Fast & Free)"
+        ]
+    )
+    
     saved_gemini = load_key(API_KEY_FILE)
+    saved_deepseek = load_key(DEEPSEEK_KEY_FILE)
+    saved_groq = load_key(GROQ_KEY_FILE)
+    saved_openai = load_key(OPENAI_KEY_FILE)
+    
     if "Gemini" in ai_provider:
         api_key_input = st.text_input("Gemini Keys (Comma separated)", type="password", value=saved_gemini)
         if api_key_input and api_key_input != saved_gemini:
             save_key(API_KEY_FILE, api_key_input)
+    elif "DeepSeek" in ai_provider:
+        api_key_input = st.text_input(
+            "DeepSeek API Key (Free - Get at platform.deepseek.com)", 
+            type="password", 
+            value=saved_deepseek,
+            help="DeepSeek V3 က အခမဲ့ပါ။ platform.deepseek.com မှာ အကောင့်ဖွင့်ပြီး API Key ယူပါ။"
+        )
+        if api_key_input and api_key_input != saved_deepseek:
+            save_key(DEEPSEEK_KEY_FILE, api_key_input)
+        st.caption('<span class="deepseek-badge">🆓 FREE TIER</span>', unsafe_allow_html=True)
+        st.caption("📊 Daily Limit: 100 requests | Rate: 50/min | Model: deepseek-chat (V3)")
     elif "Groq" in ai_provider:
-        saved_groq = load_key(GROQ_KEY_FILE)
         api_key_input = st.text_input("Groq API Key", type="password", value=saved_groq)
         if api_key_input and api_key_input != saved_groq:
             save_key(GROQ_KEY_FILE, api_key_input)
     else:
-        saved_openai = load_key(OPENAI_KEY_FILE)
         api_key_input = st.text_input("OpenAI API Key", type="password", value=saved_openai)
         if api_key_input and api_key_input != saved_openai:
             save_key(OPENAI_KEY_FILE, api_key_input)
@@ -960,7 +1100,55 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     extra_rules += "\nAt the absolute end of the response, you MUST include these two lines on separate lines:\n[TITLE: (Provide a viral Burmese title here)]\n[TAGS: #tag1 #tag2]"
                     hormozi_rule = " [HORMOZI]: Split the subtitles into chunks of ONLY 1 to 4 words max per block. CRITICAL: DO NOT remove original timestamps." if sub_short else ""
 
-                    if "Gemini" in ai_provider:
+                    # 👇 DEEPSEEK BRANCH - Script Generation
+                    if "DeepSeek" in ai_provider:
+                        # DeepSeek doesn't process video/audio directly, so we use text-based approach
+                        # For "Create Original AI Story" mode
+                        if "Original" in recap_mode:
+                            deepseek_prompt = f"""Create a HIGHLY ENGAGING, completely ORIGINAL storytelling recap in natural spoken Burmese.
+This is for a {fc_duration if 'fc_duration' in locals() else '3'}-minute viral TikTok/YouTube video.
+STYLE: {script_style}
+STRICT RULES:
+1. Use natural spoken Burmese (တယ်, တဲ့, မှာ, ရဲ့). NEVER use formal grammar (၌, ၍, သည်).
+2. Include audio tags like [pause=1.0], [excited], [whisper].
+3. NO English transliteration. PURE BURMESE ONLY.
+4. Write in a Gen-Z friendly, conversational tone.
+{extra_rules}
+{hormozi_rule}
+CRITICAL: Output ONLY valid SRT format with timestamps. Each subtitle should be 1-3 seconds apart. Total duration approximately {get_file_duration(a_extracted):.0f} seconds."""
+                            raw_output_text = deepseek_generate_script(api_key_input, deepseek_prompt)
+                        else:
+                            # "Translate Original Video" mode - use Whisper transcription first
+                            with open(a_extracted, "rb") as file:
+                                if load_key(GROQ_KEY_FILE):
+                                    client_groq_temp = Groq(api_key=load_key(GROQ_KEY_FILE))
+                                    transcription = client_groq_temp.audio.transcriptions.create(
+                                        file=(a_extracted, file.read()),
+                                        model="whisper-large-v3",
+                                        response_format="srt"
+                                    )
+                                    english_srt = transcription if isinstance(transcription, str) else str(transcription)
+                                else:
+                                    # Fallback: use DeepSeek to generate from scratch
+                                    english_srt = "[No transcription available - generating original story]"
+                            
+                            deepseek_prompt = f"""Translate and adapt this SRT into highly engaging, natural spoken Burmese.
+STYLE: {script_style}
+STRICT RULES:
+1. Keep the SRT format with exact same timestamps
+2. Use natural spoken Burmese, NO formal grammar
+3. Add audio tags like [pause=1.0], [excited] where appropriate
+4. NO English transliteration
+{extra_rules}
+{hormozi_rule}
+
+--- SRT TO TRANSLATE ---
+{english_srt[:6000]}
+
+Output ONLY valid SRT format with Burmese text, keeping original timestamps."""
+                            raw_output_text = deepseek_translate_and_srt(api_key_input, english_srt, extra_rules + hormozi_rule)
+                    
+                    elif "Gemini" in ai_provider:
                         keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
                         success_gemini = False
                         last_err = ""
@@ -1014,15 +1202,12 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     marker = chr(96) * 3
                     clean_raw_srt = clean_raw_srt.replace(f"{marker}srt", "").replace(marker, "")
                     
-                    # 👇 USE SMART SYNC PIPELINE for Gemini-generated SRT
+                    # 👇 USE SMART SYNC PIPELINE
                     audio_dur = get_file_duration(a_extracted)
                     script_for_sync = strip_audio_tags(clean_raw_srt)
                     
-                    # If SRT has timestamps (from Gemini video analysis), parse them
-                    # Otherwise use smart sync pipeline
                     if "-->" in clean_raw_srt:
                         parsed_timestamps, speech_text = parse_and_save_real_srt(clean_raw_srt, srt_final, use_fade=False)
-                        # Apply sync offset to parsed timestamps
                         if st.session_state.sync_offset != 0:
                             parsed_timestamps = [
                                 (max(0, s + st.session_state.sync_offset), 
@@ -1030,7 +1215,6 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                                 for s, e, t in parsed_timestamps
                             ]
                     else:
-                        # No timestamps - use smart sync
                         sync_srt, sync_parsed = smart_sync_pipeline(
                             script_for_sync, 
                             a_extracted,
@@ -1093,7 +1277,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     st.error(f"အသံထုတ်လုပ်ခြင်းမအောင်မြင်ပါ: {e}")
                     st.stop()
 
-            # 👇 RE-SYNC after TTS (audio duration may differ)
+            # 👇 RE-SYNC after TTS
             tts_dur = get_file_duration(a_generated)
             if abs(tts_dur - audio_dur) > 2.0 and 'clean_raw_srt' in locals():
                 st.info(f"🔄 TTS ကြာချိန် ({tts_dur:.1f}s) နှင့် မူရင်း ({audio_dur:.1f}s) ကွာနေ၍ Sync ပြန်ညှိပါမည်။")
@@ -1184,7 +1368,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
             st.markdown('</div>', unsafe_allow_html=True)
 
 # =====================================================================
-# 📌 MODE 1.5 - FACELESS Channel Studio
+# 📌 MODE 1.5 - FACELESS Channel Studio (DEEPSEEK INTEGRATED)
 # =====================================================================
 elif app_mode == "🎙️ Faceless Channel Studio":
     st.markdown('<div class="setting-panel"><h3>👻 Fully-Automated Faceless Channel Studio</h3>', unsafe_allow_html=True)
@@ -1248,7 +1432,7 @@ elif app_mode == "🎙️ Faceless Channel Studio":
 
     if st.button("🚀 CREATE FACELESS VIDEO (AUTO-MAGIC)"):
         if not api_key_input:
-            st.error("⚠️ Google Gemini API Key ထည့်သွင်းပေးပါ။ (Sidebar တွင်ထည့်ပါ)")
+            st.error("⚠️ API Key ထည့်သွင်းပေးပါ။ (Sidebar တွင်ထည့်ပါ)")
         elif "Manual" in fc_script_mode and not fc_manual_script.strip():
             st.error("⚠️ Manual ဇာတ်ညွှန်းထည့်သွင်းပေးပါ။")
         elif "Upload" in fc_visual_mode and not fc_uploaded_images:
@@ -1261,14 +1445,16 @@ elif app_mode == "🎙️ Faceless Channel Studio":
             v_final = f"FACELESS_FINAL_{run_id}.mp4"
             st.session_state.final_video_path = v_final
             pbar = st.progress(0, text="🚀 အလိုအလျောက် ဖန်တီးမှုစတင်နေပါပြီ...")
-            keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
+            
+            # Keys for Gemini fallback if needed
+            keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()] if "Gemini" in ai_provider else [api_key_input]
 
             fc_story_text = ""
             if "Manual" in fc_script_mode:
                 pbar.progress(10, text="📝 Manual ဇာတ်ညွှန်းအား ဖတ်ယူနေပါသည်...")
                 fc_story_text = fc_manual_script.strip()
             else:
-                with st.spinner(f"⏳ [အဆင့်၁/၅] Gemini ဖြင့် {fc_duration} မိနစ်စာ ဇာတ်လမ်း ရေးသားနေပါသည်..."):
+                with st.spinner(f"⏳ [အဆင့်၁/၅] {ai_provider} ဖြင့် {fc_duration} မိနစ်စာ ဇာတ်လမ်း ရေးသားနေပါသည်..."):
                     pbar.progress(10, text="📝 ဇာတ်လမ်း ရေးသားနေပါသည်...")
                     target_words = fc_duration * 140
                     
@@ -1278,7 +1464,28 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     tone_rule = "3. EMOTION & TONE: Inject strong emotions and character tones matching the scene.\n" if fc_script_tone else ""
                     cta_rule = "4. CALL TO ACTION: End the script with a strong Call to Action asking a question.\n" if fc_script_cta else ""
 
-                    story_prompt = f"""Act as a YouTube content strategist AND cinematic narrative writer.
+                    # 👇 DEEPSEEK BRANCH - Faceless Story
+                    if "DeepSeek" in ai_provider:
+                        story_prompt = f"""Write an engaging {fc_duration}-minute highly viral script for a {fc_niche} TikTok/YouTube video in natural spoken Burmese. (Around {target_words} words).
+{topic_instruction}
+CRITICAL RULES:
+{hook_rule}{curiosity_rule}{tone_rule}{cta_rule}
+5. NO FORMAL GRAMMAR: STRICTLY PROHIBITED to use formal literary markers (၌,၍, သည့်, သည်, ၏). Use natural spoken endings (တယ်, တဲ့, မှာ, ရဲ့).
+6. POV: Write in second person (မင်း / မင်းရဲ့) if applicable.
+7. AUDIO TAGS: Include tags like [pause=1.0], [excited], [whisper] to guide the voice.
+8. Do not use English transliteration. Use emotionally immersive storytelling. MUST BE IN PURE BURMESE LANGUAGE.
+ 
+Output format:
+Provide the script directly.
+At the absolute end, include these two lines:
+[TITLE: A highly viral, click-worthy Burmese title]
+[TAGS: #tag1 #tag2]"""
+                        fc_story_text = deepseek_generate_script(api_key_input, story_prompt)
+                        if not fc_story_text:
+                            st.error("❌ DeepSeek API Error. ကျေးဇူးပြု၍ API Key စစ်ဆေးပါ သို့မဟုတ် ခဏစောင့်ပြီး ပြန်ကြိုးစားပါ။")
+                            st.stop()
+                    elif "Gemini" in ai_provider:
+                        story_prompt = f"""Act as a YouTube content strategist AND cinematic narrative writer.
 Write an engaging {fc_duration}-minute highly viral script for a {fc_niche} TikTok/YouTube video in natural spoken Burmese. (Around {target_words} words).
 {topic_instruction}
 CRITICAL RULES:
@@ -1293,19 +1500,19 @@ Provide the script directly.
 At the absolute end, include these two lines:
 [TITLE: A highly viral, click-worthy Burmese title]
 [TAGS: #tag1 #tag2]"""
-                    last_err = ""
-                    for key in keys_list:
-                        try:
-                            client = genai.Client(api_key=key)
-                            response = client.models.generate_content(model="gemini-2.5-flash", contents=story_prompt)
-                            fc_story_text = response.text.strip()
-                            break
-                        except Exception as e:
-                            last_err = str(e)
-                            continue
-                    if not fc_story_text:
-                        st.error(f"Story Error: Key အားလုံး Limit ပြည့်နေပါသည်။ {last_err}")
-                        st.stop()
+                        last_err = ""
+                        for key in keys_list:
+                            try:
+                                client = genai.Client(api_key=key)
+                                response = client.models.generate_content(model="gemini-2.5-flash", contents=story_prompt)
+                                fc_story_text = response.text.strip()
+                                break
+                            except Exception as e:
+                                last_err = str(e)
+                                continue
+                        if not fc_story_text:
+                            st.error(f"Story Error: Key အားလုံး Limit ပြည့်နေပါသည်။ {last_err}")
+                            st.stop()
 
             title_match = re.search(r'\[TITLE:\s*(.*?)\]', fc_story_text, re.IGNORECASE)
             tags_match = re.search(r'\[TAGS:\s*(.*?)\]', fc_story_text, re.IGNORECASE)
@@ -1330,13 +1537,13 @@ At the absolute end, include these two lines:
                     ))
                     fc_audio_dur = get_file_duration("fc_audio.wav")
                     if fc_audio_dur < 5.0:
-                        st.error("❌ အသံထုတ်လုပ်ခြင်းမအောင်မြင်ပါ။ API Limit ငြိသွားခြင်း သို့မဟုတ် Network ပြဿနာကြောင့် အသံဖိုင် တိုတောင်းလွန်းနေပါသည်။ ပြန်လည်ကြိုးစားပါ။")
+                        st.error("❌ အသံထုတ်လုပ်ခြင်းမအောင်မြင်ပါ။")
                         st.stop()
                 except Exception as e:
                     st.error(f"Audio Error: {e}")
                     st.stop()
 
-            # 👇 WHISPER PRE-SCAN for accurate Faceless sync
+            # 👇 WHISPER PRE-SCAN
             groq_key_fc_sync = load_key(GROQ_KEY_FILE)
             if groq_key_fc_sync and os.path.exists("fc_audio.wav"):
                 try:
@@ -1348,9 +1555,9 @@ At the absolute end, include these two lines:
                             response_format="verbose_json",
                             timestamp_granularities=["word"]
                         )
-                        st.success("✅ Whisper အသံဖမ်းယူမှု အောင်မြင်ပါသည်။ Sync တိကျမှု ပိုကောင်းပါမည်။")
+                        st.success("✅ Whisper အသံဖမ်းယူမှု အောင်မြင်ပါသည်။")
                 except Exception as e:
-                    st.warning(f"⚠️ Whisper Sync မအောင်မြင်ပါ။ Character-Level Sync ဖြင့် ဆက်လက်မည်။ Error: {str(e)[:100]}")
+                    st.warning(f"⚠️ Whisper Sync မအောင်မြင်ပါ။ Error: {str(e)[:100]}")
 
             with st.spinner("⏳ [အဆင့်၃/၅] Visuals များကို ပြင်ဆင်နေပါသည်..."):
                 pbar.progress(50, text="🎥 Visuals ပြင်ဆင်နေပါသည်...")
@@ -1384,20 +1591,28 @@ At the absolute end, include these two lines:
                         search_keywords = []
                         img_count = max(4, int(fc_audio_dur // 12))
                         
-                        for key in keys_list:
+                        # 👇 DEEPSEEK - Image Prompts
+                        if "DeepSeek" in ai_provider:
                             try:
-                                client = genai.Client(api_key=key)
-                                img_prompt_instruction = f"""Act as a professional Midjourney Prompt Engineer. Based on this story, give me exactly {img_count} highly detailed, epic English image generation prompts for chronological scenes.
+                                prompts_text = deepseek_generate_image_prompts(api_key_input, fc_story_text, current_style, img_count)
+                                search_keywords = [kw.strip() for kw in prompts_text.split('|') if len(kw.strip()) > 5][:img_count]
+                            except Exception:
+                                search_keywords = []
+                        elif "Gemini" in ai_provider:
+                            for key in keys_list:
+                                try:
+                                    client = genai.Client(api_key=key)
+                                    img_prompt_instruction = f"""Act as a professional Midjourney Prompt Engineer. Based on this story, give me exactly {img_count} highly detailed, epic English image generation prompts for chronological scenes.
 GLOBAL STYLE DNA: {current_style}. 
 RULES: Include camera angles, lighting conditions, and extreme details. Avoid explicit/violent words. Do NOT include text or words in the prompt. MUST BE IN PURE ENGLISH.
 CRITICAL FORMAT RULE: Format strictly separated by a pipe '|' with NO newlines. Example: scene 1 | scene 2
 Story: {fc_story_text[:500]}"""
-                                prompt_req = client.models.generate_content(model="gemini-2.5-flash", contents=img_prompt_instruction)
-                                raw_kws = prompt_req.text.replace('\n', '|').split('|')
-                                search_keywords = [kw.strip() for kw in raw_kws if len(kw.strip()) > 5][:img_count]
-                                break
-                            except Exception:
-                                continue
+                                    prompt_req = client.models.generate_content(model="gemini-2.5-flash", contents=img_prompt_instruction)
+                                    raw_kws = prompt_req.text.replace('\n', '|').split('|')
+                                    search_keywords = [kw.strip() for kw in raw_kws if len(kw.strip()) > 5][:img_count]
+                                    break
+                                except Exception:
+                                    continue
                                 
                         if not search_keywords:
                             search_keywords = [f"{current_style}, epic scene {i}" for i in range(img_count)]
@@ -1431,7 +1646,7 @@ Story: {fc_story_text[:500]}"""
                             time.sleep(2)
 
                     if not generated_clips:
-                        st.error("❌ Visual Generation Failed. ပုံရိပ် ဖန်တီးမှု ပြဿနာရှိပါသည်။ Server က Rate Limit ကြောင့် ပိတ်ချလိုက်တာဖြစ်နိုင်ပါတယ်။ API Key ပြောင်းသုံးပါ သို့မဟုတ် ခဏစောင့်ပါ။")
+                        st.error("❌ Visual Generation Failed.")
                         st.stop()
                     
                     pbar.progress(65, text="🎞️ ဗီဒီယိုများကို ပေါင်းစပ်နေပါသည်...")
@@ -1451,7 +1666,6 @@ Story: {fc_story_text[:500]}"""
                 fc_parsed = None
                 last_err = ""
                 
-                # 👇 USE SMART SYNC PIPELINE
                 try:
                     clean_script_for_sync = strip_audio_tags(fc_story_text)
                     sync_srt, fc_parsed = smart_sync_pipeline(
@@ -1474,7 +1688,7 @@ Story: {fc_story_text[:500]}"""
                     last_err = str(e)
                 
                 if not fc_parsed:
-                    st.error(f"SRT Error: ကျေးဇူးပြု၍ API Limit သို့မဟုတ် Key မှန်ကန်မှု စစ်ဆေးပါ။ {last_err}")
+                    st.error(f"SRT Error: {last_err}")
                     st.stop()
 
             with st.spinner("⏳ [အဆင့်၅/၅] အားလုံးကိုပေါင်းစပ်ပြီး Master Video ထုတ်လုပ်နေပါသည်..."):
@@ -1488,7 +1702,7 @@ Story: {fc_story_text[:500]}"""
                         font_path=fc_selected_font
                     )
                     if not success:
-                        st.error(f"❌ Video Generation Output Failure! Internal Engine Log: {err_msg}")
+                        st.error(f"❌ Video Generation Output Failure! {err_msg}")
                         st.stop()
                     
                     if fc_bgm not in ["None (BGM မထည့်ပါ)"]:
@@ -1505,6 +1719,7 @@ Story: {fc_story_text[:500]}"""
                             except Exception:
                                 pass
                     
+                    # Generate thumbnails
                     try:
                         t_A = min(fc_audio_dur * 0.2, 10)
                         t_B = min(fc_audio_dur * 0.5, 20)
@@ -1536,11 +1751,20 @@ Story: {fc_story_text[:500]}"""
                     st.balloons()
                     st.success("🎉 Faceless Video ထုတ်လုပ်မှု အောင်မြင်စွာ ပြီးစီးပါပြီ!")
                     
+                    # 👇 DEEPSEEK - Viral Score Analysis
                     try:
-                        client_viral = genai.Client(api_key=keys_list[0])
-                        v_prompt = f"Analyze this short video for TikTok virality. Title: {st.session_state.viral_title}. Hook: {fc_story_text[:150]}. Reply strictly in this format: \nScore: [1-100]\nReason: [1 short sentence in Burmese]"
-                        v_res = client_viral.models.generate_content(model="gemini-2.5-flash", contents=v_prompt)
-                        st.session_state.viral_score = v_res.text.strip()
+                        if "DeepSeek" in ai_provider:
+                            viral_score_text = deepseek_analyze_virality(
+                                api_key_input, 
+                                st.session_state.viral_title,
+                                fc_story_text[:150]
+                            )
+                            st.session_state.viral_score = viral_score_text
+                        elif "Gemini" in ai_provider:
+                            client_viral = genai.Client(api_key=keys_list[0])
+                            v_prompt = f"Analyze this short video for TikTok virality. Title: {st.session_state.viral_title}. Hook: {fc_story_text[:150]}. Reply strictly in this format: \nScore: [1-100]\nReason: [1 short sentence in Burmese]"
+                            v_res = client_viral.models.generate_content(model="gemini-2.5-flash", contents=v_prompt)
+                            st.session_state.viral_score = v_res.text.strip()
                     except Exception:
                         st.session_state.viral_score = "Score: 90\nReason: အရမ်းကောင်းတဲ့ Hook ပါ။"
                     
@@ -1549,12 +1773,12 @@ Story: {fc_story_text[:500]}"""
                         if os.path.exists(st.session_state.final_video_path):
                             st.video(st.session_state.final_video_path)
                             st.markdown('<div class="setting-panel"><h4>📥 Download Dashboard</h4>', unsafe_allow_html=True)
-                            st.markdown(get_download_link(st.session_state.final_video_path, "Viral_Faceless.mp4", "Download Final Video (No Refresh)"), unsafe_allow_html=True)
+                            st.markdown(get_download_link(st.session_state.final_video_path, "Viral_Faceless.mp4", "Download Final Video"), unsafe_allow_html=True)
                             if os.path.exists("subtitles.srt"):
                                 st.markdown(get_download_link("subtitles.srt", "Faceless_Subs.srt", "Download Subtitles (.SRT)"), unsafe_allow_html=True)
                             st.markdown('</div>', unsafe_allow_html=True)
                         else:
-                            st.error("❌ ဗီဒီယိုဖိုင်ကို ရှာမတွေ့ပါ။ Rendering တွင် ချို့ယွင်းချက် ရှိနိုင်ပါသည်။")
+                            st.error("❌ ဗီဒီယိုဖိုင်ကို ရှာမတွေ့ပါ။")
 
                     with col_f2:
                         st.markdown("### 📝 Generated Story & Assets")
