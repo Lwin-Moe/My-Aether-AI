@@ -355,30 +355,20 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
 def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_bypass=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)", use_mirror=False, use_color=False, use_grain=False, use_fps=False, sub_position="Bottom", sub_color="Yellow", sub_size=28, sub_thickness=2.5, sub_bg=False, use_freeze=False, logo_path=None, font_path="Padauk.ttf"):
     try:
         a_dur = get_file_duration(in_a)
-        
         video = ffmpeg.input(in_v).video
-        
         v_w, v_h = (720, 1280) if "9:16" in ratio else (1280, 720)
         video = ffmpeg.filter(video, 'scale', v_w, v_h, force_original_aspect_ratio='increase').filter('crop', v_w, v_h)
         
-        if use_bypass: 
-            video = ffmpeg.filter(video, 'scale', '2*trunc(iw*1.08/2)', '2*trunc(ih*1.08/2)').filter('crop', 'iw/1.08', 'ih/1.08')
-        if use_mirror: 
-            video = ffmpeg.filter(video, 'hflip')
-        if use_color: 
-            video = ffmpeg.filter(video, 'eq', brightness=0.02, contrast=1.05, saturation=1.1)
-        if use_grain: 
-            video = ffmpeg.filter(video, 'noise', alls=2, allf='t+u')
-        if use_fps: 
-            video = ffmpeg.filter(video, 'fps', fps=24, round='near')
-        if use_freeze: 
-            video = ffmpeg.filter(video, 'minterpolate', fps=12, mi_mode='dup')
+        if use_bypass: video = ffmpeg.filter(video, 'scale', '2*trunc(iw*1.08/2)', '2*trunc(ih*1.08/2)').filter('crop', 'iw/1.08', 'ih/1.08')
+        if use_mirror: video = ffmpeg.filter(video, 'hflip')
+        if use_color: video = ffmpeg.filter(video, 'eq', brightness=0.02, contrast=1.05, saturation=1.1)
+        if use_grain: video = ffmpeg.filter(video, 'noise', alls=2, allf='t+u')
+        if use_fps: video = ffmpeg.filter(video, 'fps', fps=24, round='near')
+        if use_freeze: video = ffmpeg.filter(video, 'minterpolate', fps=12, mi_mode='dup')
         
         audio = ffmpeg.input(in_a).audio
-        if use_blur: 
-            video = ffmpeg.filter(video, 'drawbox', x=0, y='ih-90', w='iw', h=90, color='black@0.95', thickness='fill')
-        if watermark: 
-            video = ffmpeg.filter(video, 'drawtext', text=watermark, x='w-tw-15', y='15', fontsize=30, fontcolor='white@0.5')
+        if use_blur: video = ffmpeg.filter(video, 'drawbox', x=0, y='ih-90', w='iw', h=90, color='black@0.95', thickness='fill')
+        if watermark: video = ffmpeg.filter(video, 'drawtext', text=watermark, x='w-tw-15', y='15', fontsize=30, fontcolor='white@0.5')
         
         if logo_path and os.path.exists(logo_path):
             logo = ffmpeg.input(logo_path)
@@ -390,17 +380,19 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
             safe_font_path = font_path.replace('\\', '/')
             
             for i, (start, end, text) in enumerate(parsed_timestamps):
-                wrapped_text = textwrap.fill(text, width=wrap_width)
+                # 👇 FIX: Perfect Center Alignment using Python strings
+                wrapped_lines = textwrap.wrap(text, width=wrap_width)
+                if not wrapped_lines: wrapped_lines = [text]
+                max_len = max(len(line) for line in wrapped_lines)
+                centered_text = "\n".join(line.center(max_len, " ") for line in wrapped_lines)
+                
                 txt_filename = f"temp_sub_{i}.txt"
                 with open(txt_filename, "w", encoding="utf-8") as tf:
-                    tf.write(wrapped_text)
+                    tf.write(centered_text)
                 
-                if "Center" in sub_position: 
-                    y_expr = "(h-text_h)/2"
-                elif "Top" in sub_position: 
-                    y_expr = "150"
-                else: 
-                    y_expr = "h-text_h-150"
+                if "Center" in sub_position: y_expr = "(h-text_h)/2"
+                elif "Top" in sub_position: y_expr = "150"
+                else: y_expr = "h-text_h-150"
                 
                 c_str = "yellow"
                 if "White" in sub_color: c_str = "white"
@@ -411,10 +403,7 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
                 box_str = 1 if sub_bg else 0
                 box_color = 'black@0.6' if sub_bg else 'black@0.0'
                 
-                escaped_text = wrapped_text.replace("'", "\u2019").replace(":", "\\:")
-
-                # 👇 FIX: Added text_align='C' for perfect multiline centering
-                video = ffmpeg.filter(video, 'drawtext', textfile=txt_filename, fontfile=safe_font_path, fontcolor=c_str, fontsize=sub_size, bordercolor='black', borderw=sub_thickness, box=box_str, boxcolor=box_color, boxborderw=10, x='(w-text_w)/2', y=y_expr, line_spacing=20, text_align='C', enable=f'between(t,{start},{end})')
+                video = ffmpeg.filter(video, 'drawtext', textfile=txt_filename, fontfile=safe_font_path, fontcolor=c_str, fontsize=sub_size, bordercolor='black', borderw=sub_thickness, box=box_str, boxcolor=box_color, boxborderw=10, x='(w-text_w)/2', y=y_expr, line_spacing=20, enable=f'between(t,{start},{end})')
 
         out = ffmpeg.output(video, audio, out_v, vcodec='libx264', pix_fmt='yuv420p', acodec='aac', preset='superfast', crf=23, t=a_dur)
         out.run(cmd=FFMPEG_BINARY, overwrite_output=True, capture_stdout=True, capture_stderr=True)
@@ -554,7 +543,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
             selected_font = st.selectbox("🔤 Font Style", available_fonts, index=0)
             sub_position = st.selectbox("📍 Position", ["Bottom", "Center", "Top"])
             sub_color = st.selectbox("🎨 Color", ["Yellow Text", "White Text", "Neon Green Text", "Red Text", "Gold Text"])
-            sub_size = st.slider("🔠 Font Size", 16, 50, 26)
+            sub_size = st.slider("🔠 Font Size", 16, 50, 28)
             sub_thickness = st.slider("✒️ Outline Thickness", 1.0, 5.0, 2.5)
             col_s1, col_s2 = st.columns(2)
             with col_s1:
@@ -562,7 +551,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                 sub_short = st.checkbox("✂️ Short & Punchy (Hormozi)")
         else:
             st.info("💡 Burn into Video ရွေးထားမှ ချိန်ညှိနိုင်ပါမည်။")
-            selected_font, sub_position, sub_color, sub_size, sub_thickness, sub_bg, sub_short = "Padauk.ttf", "Bottom", "Yellow", 26, 2.5, True, False
+            selected_font, sub_position, sub_color, sub_size, sub_thickness, sub_bg, sub_short = "Padauk.ttf", "Bottom", "Yellow", 28, 2.5, True, False
         st.markdown("</div>", unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -656,9 +645,11 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                             try:
                                 stream = ffmpeg.input(v_input, ss=t_val)
                                 if cb_thumb_text:
-                                    with open("thumb_text.txt", "w", encoding="utf-8") as tf: tf.write(textwrap.fill(st.session_state.viral_title, width=25))
-                                    # 👇 FIX: Added text_align='C' for Movie Dubbing Thumbnails
-                                    if os.path.exists(selected_font): stream = ffmpeg.filter(stream.video, 'drawtext', textfile='thumb_text.txt', fontfile=selected_font.replace('\\','/'), fontcolor='white', fontsize=65, x='(w-text_w)/2', y='(h-text_h)/2', box=1, boxcolor='red@0.9', boxborderw=20, borderw=3, bordercolor='black', line_spacing=15, text_align='C')
+                                    wrapped_lines = textwrap.wrap(st.session_state.viral_title, width=25)
+                                    max_l = max(len(l) for l in wrapped_lines) if wrapped_lines else 0
+                                    c_text = "\n".join(l.center(max_l, " ") for l in wrapped_lines)
+                                    with open("thumb_text.txt", "w", encoding="utf-8") as tf: tf.write(c_text)
+                                    if os.path.exists(selected_font): stream = ffmpeg.filter(stream.video, 'drawtext', textfile='thumb_text.txt', fontfile=selected_font.replace('\\','/'), fontcolor='white', fontsize=65, x='(w-text_w)/2', y='(h-text_h)/2', box=1, boxcolor='red@0.9', boxborderw=20, borderw=3, bordercolor='black', line_spacing=15)
                                 ffmpeg.output(stream, thumb_name, vframes=1).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
                             except Exception: pass
                             if thumb_suffix == "A" and os.path.exists(thumb_name): st.session_state.thumb_path_A = thumb_name
@@ -901,7 +892,8 @@ Story: {fc_story_text[:500]}"""
                                 raw_kws = prompt_req.text.replace('\n', '|').split('|')
                                 search_keywords = [kw.strip() for kw in raw_kws if len(kw.strip()) > 5][:img_count]
                                 break
-                            except Exception: continue
+                            except Exception as e:
+                                last_err = str(e); continue
                                 
                         if not search_keywords: 
                             search_keywords = [f"{current_style}, epic scene {i}" for i in range(img_count)]
@@ -946,7 +938,6 @@ Story: {fc_story_text[:500]}"""
                 last_err = ""
                 groq_key_val = locals().get('groq_key_fc', '').strip()
  
-                # 👇 FIX: Perfect Duration-based Proportional Subtitle Sync
                 if groq_key_val:
                     try:
                         pbar.progress(72, text="📝 Whisper ဖြင့် အသံအား တိကျစွာ ဖြတ်တောက်နေပါသည်...")
@@ -1002,7 +993,6 @@ Story: {fc_story_text[:500]}"""
             with st.spinner("⏳ [အဆင့်၅/၅] အားလုံးကိုပေါင်းစပ်ပြီး Master Video ထုတ်လုပ်နေပါသည်..."):
                 pbar.progress(85, text="🎬 Master Rendering အလုပ်လုပ်နေပါသည်...")
                 try:
-                    # 👇 FIX: Render with new Sub_size, Font, and Centered alignments
                     success, err_msg = render_premium_saas_video("fc_video_loop.mp4", "fc_audio.wav", fc_parsed, v_final, fc_ratio, use_bypass=True, subtitle_mode=fc_subtitle_mode, sub_position=fc_sub_position, sub_color=fc_sub_color, sub_size=fc_sub_size, sub_thickness=2.5, sub_bg=False, font_path=fc_selected_font)
                     if not success: st.error(f"❌ Video Generation Output Failure! Internal Engine Log: {err_msg}"); st.stop()
                     
@@ -1024,9 +1014,11 @@ Story: {fc_story_text[:500]}"""
                             try:
                                 stream = ffmpeg.input(v_final, ss=t_val)
                                 with open("thumb_text.txt", "w", encoding="utf-8") as tf:
-                                    title_text = st.session_state.viral_title if st.session_state.viral_title else "Viral Video"
-                                    tf.write(textwrap.fill(title_text, width=25))
-                                # 👇 FIX: Thumbnail Text is now perfectly Centered using text_align='C'
+                                    wrapped_lines = textwrap.wrap(st.session_state.viral_title if st.session_state.viral_title else "Viral Video", width=25)
+                                    if not wrapped_lines: wrapped_lines = ["Viral Video"]
+                                    max_len = max(len(line) for line in wrapped_lines)
+                                    centered_text = "\n".join(line.center(max_len, " ") for line in wrapped_lines)
+                                    tf.write(centered_text)
                                 if os.path.exists(fc_selected_font):
                                     stream = ffmpeg.filter(stream.video, 'drawtext', textfile='thumb_text.txt', fontfile=fc_selected_font.replace('\\','/'), fontcolor='white', fontsize=65, x='(w-text_w)/2', y='(h-text_h)/2', box=1, boxcolor='red@0.9', boxborderw=20, borderw=3, bordercolor='black', line_spacing=15, text_align='C')
                                 ffmpeg.output(stream, thumb_name, vframes=1).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
