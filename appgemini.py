@@ -352,7 +352,7 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
             
     return final_parsed, " ".join(full_speech)
 
-def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_bypass=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)", use_mirror=False, use_color=False, use_grain=False, use_fps=False, sub_position="Bottom", sub_color="Yellow", sub_size=26, sub_thickness=2.5, sub_bg=False, use_freeze=False, logo_path=None, font_path="Padauk.ttf"):
+def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_bypass=False, use_blur=False, watermark="", subtitle_mode="Both (Burn + SRT)", use_mirror=False, use_color=False, use_grain=False, use_fps=False, sub_position="Bottom", sub_color="Yellow", sub_size=28, sub_thickness=2.5, sub_bg=False, use_freeze=False, logo_path=None, font_path="Padauk.ttf"):
     try:
         a_dur = get_file_duration(in_a)
         
@@ -413,6 +413,7 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
                 
                 escaped_text = wrapped_text.replace("'", "\u2019").replace(":", "\\:")
 
+                # 👇 FIX: Added text_align='C' for perfect multiline centering
                 video = ffmpeg.filter(video, 'drawtext', textfile=txt_filename, fontfile=safe_font_path, fontcolor=c_str, fontsize=sub_size, bordercolor='black', borderw=sub_thickness, box=box_str, boxcolor=box_color, boxborderw=10, x='(w-text_w)/2', y=y_expr, line_spacing=20, text_align='C', enable=f'between(t,{start},{end})')
 
         out = ffmpeg.output(video, audio, out_v, vcodec='libx264', pix_fmt='yuv420p', acodec='aac', preset='superfast', crf=23, t=a_dur)
@@ -656,7 +657,8 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                                 stream = ffmpeg.input(v_input, ss=t_val)
                                 if cb_thumb_text:
                                     with open("thumb_text.txt", "w", encoding="utf-8") as tf: tf.write(textwrap.fill(st.session_state.viral_title, width=25))
-                                    if os.path.exists(selected_font): stream = ffmpeg.filter(stream.video, 'drawtext', textfile='thumb_text.txt', fontfile=selected_font.replace('\\','/'), fontcolor='white', fontsize=65, x='(w-text_w)/2', y='(h-text_h)/2', box=1, boxcolor='red@0.9', boxborderw=20, borderw=3, bordercolor='black', line_spacing=15)
+                                    # 👇 FIX: Added text_align='C' for Movie Dubbing Thumbnails
+                                    if os.path.exists(selected_font): stream = ffmpeg.filter(stream.video, 'drawtext', textfile='thumb_text.txt', fontfile=selected_font.replace('\\','/'), fontcolor='white', fontsize=65, x='(w-text_w)/2', y='(h-text_h)/2', box=1, boxcolor='red@0.9', boxborderw=20, borderw=3, bordercolor='black', line_spacing=15, text_align='C')
                                 ffmpeg.output(stream, thumb_name, vframes=1).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
                             except Exception: pass
                             if thumb_suffix == "A" and os.path.exists(thumb_name): st.session_state.thumb_path_A = thumb_name
@@ -944,6 +946,7 @@ Story: {fc_story_text[:500]}"""
                 last_err = ""
                 groq_key_val = locals().get('groq_key_fc', '').strip()
  
+                # 👇 FIX: Perfect Duration-based Proportional Subtitle Sync
                 if groq_key_val:
                     try:
                         pbar.progress(72, text="📝 Whisper ဖြင့် အသံအား တိကျစွာ ဖြတ်တောက်နေပါသည်...")
@@ -955,21 +958,33 @@ Story: {fc_story_text[:500]}"""
                         
                         def fmt_time(sec): return f"{int(sec//3600):02d}:{int((sec%3600)//60):02d}:{int(sec%60):02d},{int((sec%1)*1000):03d}"
                             
-                        segments = transcription.segments if hasattr(transcription, 'segments') else transcription.get('segments', [])
+                        clean_script_for_sub = re.sub(r'\[.*?\]', '', fc_story_text)
+                        clean_script_for_sub = re.sub(r'\{.*?\}', '', clean_script_for_sub)
+                        burmese_words = clean_script_for_sub.split()
                         
+                        segments = transcription.segments if hasattr(transcription, 'segments') else transcription.get('segments', [])
                         raw_srt_str = ""
                         chunk_idx = 1
                         
-                        for seg in segments:
+                        total_b_words = len(burmese_words)
+                        total_audio_duration = sum((seg.end if hasattr(seg, 'end') else seg['end']) - (seg.start if hasattr(seg, 'start') else seg['start']) for seg in segments)
+                        
+                        word_idx = 0
+                        for i_seg, seg in enumerate(segments):
                             s_start = seg.start if hasattr(seg, 'start') else seg['start']
                             s_end = seg.end if hasattr(seg, 'end') else seg['end']
-                            w_text = seg.text if hasattr(seg, 'text') else seg['text']
+                            seg_duration = s_end - s_start
                             
-                            seg_words = w_text.split()
-                            if not seg_words: continue
+                            num_b_words = max(1, int((seg_duration / max(0.1, total_audio_duration)) * total_b_words))
+                            if i_seg == len(segments) - 1: seg_b_words = burmese_words[word_idx:]
+                            else: seg_b_words = burmese_words[word_idx : word_idx + num_b_words]
+                                
+                            word_idx += num_b_words
+                            if not seg_b_words: continue
                             
                             chunk_size = 3 if fc_sub_short else 12
-                            seg_chunks = [seg_words[i:i + chunk_size] for i in range(0, len(seg_words), chunk_size)]
+                            seg_chunks = [seg_b_words[i:i + chunk_size] for i in range(0, len(seg_b_words), chunk_size)]
+                            if not seg_chunks: continue
                             
                             time_per_chunk = (s_end - s_start) / len(seg_chunks)
                             for j, c_words in enumerate(seg_chunks):
@@ -987,6 +1002,7 @@ Story: {fc_story_text[:500]}"""
             with st.spinner("⏳ [အဆင့်၅/၅] အားလုံးကိုပေါင်းစပ်ပြီး Master Video ထုတ်လုပ်နေပါသည်..."):
                 pbar.progress(85, text="🎬 Master Rendering အလုပ်လုပ်နေပါသည်...")
                 try:
+                    # 👇 FIX: Render with new Sub_size, Font, and Centered alignments
                     success, err_msg = render_premium_saas_video("fc_video_loop.mp4", "fc_audio.wav", fc_parsed, v_final, fc_ratio, use_bypass=True, subtitle_mode=fc_subtitle_mode, sub_position=fc_sub_position, sub_color=fc_sub_color, sub_size=fc_sub_size, sub_thickness=2.5, sub_bg=False, font_path=fc_selected_font)
                     if not success: st.error(f"❌ Video Generation Output Failure! Internal Engine Log: {err_msg}"); st.stop()
                     
@@ -1010,8 +1026,9 @@ Story: {fc_story_text[:500]}"""
                                 with open("thumb_text.txt", "w", encoding="utf-8") as tf:
                                     title_text = st.session_state.viral_title if st.session_state.viral_title else "Viral Video"
                                     tf.write(textwrap.fill(title_text, width=25))
+                                # 👇 FIX: Thumbnail Text is now perfectly Centered using text_align='C'
                                 if os.path.exists(fc_selected_font):
-                                    stream = ffmpeg.filter(stream.video, 'drawtext', textfile='thumb_text.txt', fontfile=fc_selected_font.replace('\\','/'), fontcolor='white', fontsize=65, x='(w-text_w)/2', y='(h-text_h)/2', box=1, boxcolor='red@0.9', boxborderw=20, borderw=3, bordercolor='black', line_spacing=15)
+                                    stream = ffmpeg.filter(stream.video, 'drawtext', textfile='thumb_text.txt', fontfile=fc_selected_font.replace('\\','/'), fontcolor='white', fontsize=65, x='(w-text_w)/2', y='(h-text_h)/2', box=1, boxcolor='red@0.9', boxborderw=20, borderw=3, bordercolor='black', line_spacing=15, text_align='C')
                                 ffmpeg.output(stream, thumb_name, vframes=1).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
                             except Exception: pass
                             
