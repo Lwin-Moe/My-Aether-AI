@@ -81,31 +81,28 @@ def get_download_link(file_path, file_name, link_text):
 
 TIKTOK_HOOK_TEMPLATES = {
     "Horror": [
-        "\u1012\u102e\u1010\u1005\u103a\u1001\u102b\u1010\u1031\u102c\u1037 \u101e\u1031\u101c\u102f\u1019\u1010\u1010\u103a\u1015\u1032...",
-        "\u1012\u102e\u1014\u1031\u101b\u102c\u1000\u102d\u102f \u1018\u101a\u103a\u1010\u1031\u102c\u1037\u1019\u103e \u1019\u101e\u103d\u102c\u1038\u1015\u102b\u1014\u1032\u1037...",
-        "\u100a ၃ \u1014\u102c\u101b\u102e\u1019\u103e\u102c \u1012\u102e\u101c\u102d\u102f\u101c\u102f\u1015\u103a\u101b\u1004\u103a...",
-        "\u1012\u102e\u1007\u102c\u1010\u103a\u101c\u1019\u103a\u1038\u1000 \u1010\u1000\u101a\u1037\u103a\u1016\u103c\u1005\u103a\u101b\u1015\u103a\u1019\u103e\u1014\u103a\u1015\u102b...",
-        "\u1012\u102b\u1000\u102d\u102f\u1000\u103c\u102c\u1038\u101b\u1004\u103a \u1019\u1004\u103a\u1038\u1000\u103c\u1000\u103a\u101e\u102e\u1038\u1011\u1019\u101a\u103a..."
+        "ဒီတစ်ခါတော့ သေလုမတတ်ပဲ...",
+        "ဒီနေရာကို ဘယ်တော့မှ မသွားပါနဲ့...",
+        "ည ၃ နာရီမှာ ဒီလိုလုပ်ရင်...",
+        "ဒီဇာတ်လမ်းက တကယ့်ဖြစ်ရပ်မှန်ပါ...",
+        "ဒါကိုကြားရင် မင်းကြက်သီးထမယ်..."
     ],
     "Motivation": [
-        "\u1012\u102e\u1010\u1005\u103a\u1001\u103b\u1000\u103a\u1000 \u1019\u1004\u103a\u1038\u1018\u101d\u1000\u102d\u102f\u1015\u103c\u1031\u102c\u1004\u103a\u1038\u101c\u1032\u1005\u1031\u1019\u101a\u103a...",
-        "\u1021\u1031\u102c\u1004\u103a\u1019\u103c\u1004\u103a\u1010\u1032\u1037\u101e\u1030\u1010\u102d\u102f\u1004\u103a\u1038 \u1012\u102b\u1000\u102d\u102f\u101c\u102f\u1015\u103a\u1010\u101a\u103a...",
-        "\u1019\u1014\u1000\u103a\u1016\u103c\u1014\u103a\u1000\u1005\u1015\u103c\u102e\u1038 \u1012\u102b\u1000\u102d\u102f\u101c\u102f\u1015\u103a\u1000\u103c\u100a\u1037\u103a..."
+        "ဒီတစ်ချက်က မင်းဘဝကိုပြောင်းလဲစေမယ်...",
+        "အောင်မြင်တဲ့သူတိုင်း ဒါကိုလုပ်တယ်...",
+        "မနက်ဖြန်ကစပြီး ဒါကိုလုပ်ကြည့်..."
     ],
     "Dark Psychology": [
-        "\u101c\u1030\u1010\u103d\u1031\u1000 \u1019\u1004\u103a\u1038\u1000\u102d\u102f \u1012\u102e\u101c\u102d\u102f\u1011\u102d\u1014\u103a\u1038\u1001\u103b\u102f\u1015\u103a\u1014\u1031\u1010\u101a\u103a...",
-        "\u1012\u102e\u1005\u102d\u1010\u103a\u1015\u100a\u102c\u101c\u103e\u100a\u1037\u103a\u1000\u103d\u1000\u103a\u1000 \u1021\u1036\u1037\u1000\u103c\u1005\u101b\u102c\u1015\u1032...",
-        "\u1019\u1004\u103a\u1038\u1019\u101e\u102d\u101c\u102d\u102f\u1000\u103a\u1018\u1032 \u1012\u102b\u1000\u102d\u102f\u101c\u102f\u1015\u103a\u1019\u102d\u1014\u1031\u1010\u101a\u103a..."
+        "လူတွေက မင်းကို ဒီလိုထိန်းချုပ်နေတယ်...",
+        "ဒီစိတ်ပညာလှည့်ကွက်က အံ့ဩစရာပဲ..."
     ],
     "Fun Facts": [
-        "\u1012\u102e\u1021\u1001\u103b\u1000\u103a\u1000\u102d\u102f \u101c\u1030 ၉၉% \u1019\u101e\u102d\u1000\u103c\u1018\u1030\u1038...",
-        "\u1012\u102b\u1000\u102d\u102f\u101e\u102d\u101b\u1004\u103a \u1019\u1004\u103a\u1038\u1021\u1036\u1037\u1000\u103c\u101e\u103d\u102c\u1038\u1019\u101a\u103a...",
-        "\u1010\u1005\u103a\u1000\u1019\u1039\u1002\u102c\u101c\u102f\u1036\u1038 \u1012\u102b\u1000\u102d\u102f\u1019\u103e\u102c\u1038\u101e\u102d\u1014\u1031\u1000\u103c\u1010\u101a\u103a..."
+        "ဒီအချက်ကို လူ ၉၉% မသိကြဘူး...",
+        "ဒါကိုသိရင် မင်းအံ့ဩသွားမယ်..."
     ],
     "History": [
-        "\u1014\u103e\u1005\u103a\u1011\u1031\u102c\u1004\u103a\u1001\u103b\u102e\u1010\u1032\u1037 \u1012\u102e\u101c\u103b\u103e\u102d\u102f\u1037\u101d\u103e\u1000\u103a\u1001\u103b\u1000\u103a\u1000...",
-        "\u101b\u103e\u1031\u1038\u1001\u1031\u1010\u103a\u101c\u1030\u1010\u103d\u1031 \u1012\u102b\u1000\u102d\u102f\u1018\u101a\u103a\u101c\u102d\u102f\u101c\u102f\u1015\u103a\u1001\u1032\u1037\u101e\u101c\u1032...",
-        "\u1012\u102e\u1012\u100f\u1039\u100d\u102c\u101b\u102e\u101b\u1032\u1037\u1014\u1031\u102c\u1000\u103a\u1000\u103c\u101a\u103a\u1000 \u1021\u1019\u103e\u1014\u103a\u1010\u101b\u102c\u1038..."
+        "နှစ်ထောင်ချီတဲ့ ဒီလျှို့ဝှက်ချက်က...",
+        "ရှေးခေတ်လူတွေ ဒါကိုဘယ်လိုလုပ်ခဲ့သလဲ..."
     ]
 }
 
@@ -258,23 +255,18 @@ def get_recommended_fx_for_niche(niche, mode="faceless"):
     fx_map = DUBBING_VOICE_FX_MAP if mode == "dubbing" else NICHE_VOICE_FX_MAP
     if niche in fx_map:
         recommended = fx_map[niche]["primary"]
-        return ["None (\u1019\u1030\u101b\u1004\u103a\u1038\u1021\u101e\u1036)"] + recommended
+        return ["None (မူရင်းအသံ)"] + recommended
     for key in fx_map:
         if key in niche:
             recommended = fx_map[key]["primary"]
-            return ["None (\u1019\u1030\u101b\u1004\u103a\u1038\u1021\u101e\u1036)"] + recommended
-    return ["None (\u1019\u1030\u101b\u1004\u103a\u1038\u1021\u101e\u1036)", "Epic Trailer Voice", "Deep & Chilling (Horror)", "ASMR / Whisper"]
+            return ["None (မူရင်းအသံ)"] + recommended
+    return ["None (မူရင်းအသံ)", "Epic Trailer Voice", "Deep & Chilling (Horror)", "ASMR / Whisper"]
 
 # =====================================================================
 # WHISPER WORD-LEVEL SRT GENERATOR (AUTO SYNC SOLUTION)
 # =====================================================================
 
 def whisper_words_to_srt(whisper_data, script_text, words_per_chunk=6, min_duration=1.0):
-    """
-    Convert Whisper word-level timestamps directly to SRT format.
-    This is the MOST ACCURATE sync method - uses exact word timings from Whisper.
-    """
-    # Extract word data
     whisper_words = []
     if isinstance(whisper_data, dict):
         if whisper_data.get('words'):
@@ -291,9 +283,8 @@ def whisper_words_to_srt(whisper_data, script_text, words_per_chunk=6, min_durat
             whisper_words.extend(seg_words)
     
     if not whisper_words or len(whisper_words) < 3:
-        return None  # Signal to use fallback
+        return None
     
-    # Clean script text (remove audio tags)
     clean_script = re.sub(r'\[.*?\]', '', script_text)
     clean_script = re.sub(r'\{.*?\}', '', clean_script)
     clean_script = re.sub(r'\s+', ' ', clean_script).strip()
@@ -305,7 +296,6 @@ def whisper_words_to_srt(whisper_data, script_text, words_per_chunk=6, min_durat
     if total_sw == 0 or total_ww == 0:
         return None
     
-    # Build SRT entries from Whisper word timestamps
     srt_entries = []
     chunk_index = 1
     
@@ -313,19 +303,15 @@ def whisper_words_to_srt(whisper_data, script_text, words_per_chunk=6, min_durat
         chunk_words = script_words[i:i + words_per_chunk]
         chunk_text = ' '.join(chunk_words)
         
-        # Map script word indices to whisper word indices
         start_script_idx = i
         end_script_idx = min(i + len(chunk_words) - 1, total_sw - 1)
         
-        # Proportional mapping
         start_whisper_idx = int((start_script_idx / total_sw) * total_ww) if total_sw > 0 else 0
         end_whisper_idx = int((end_script_idx / total_sw) * total_ww) if total_sw > 0 else 0
         
-        # Clamp
         start_whisper_idx = max(0, min(start_whisper_idx, total_ww - 1))
         end_whisper_idx = max(0, min(end_whisper_idx, total_ww - 1))
         
-        # Get exact timestamps from Whisper
         w_start = whisper_words[start_whisper_idx]
         w_end = whisper_words[end_whisper_idx]
         
@@ -336,11 +322,9 @@ def whisper_words_to_srt(whisper_data, script_text, words_per_chunk=6, min_durat
             start_time = w_start.start
             end_time = w_end.end
         
-        # Ensure minimum duration
         if end_time - start_time < min_duration:
             end_time = start_time + min_duration
         
-        # Ensure valid range
         start_time = max(0, start_time)
         
         srt_entries.append({
@@ -351,14 +335,12 @@ def whisper_words_to_srt(whisper_data, script_text, words_per_chunk=6, min_durat
         })
         chunk_index += 1
     
-    # Format as SRT string
     srt_text = ""
     for entry in srt_entries:
         srt_text += f"{entry['index']}\n"
         srt_text += f"{fmt_timestamp_sync(entry['start'])} --> {fmt_timestamp_sync(entry['end'])}\n"
         srt_text += f"{entry['text']}\n\n"
     
-    # Return parsed format
     parsed = [(e['start'], e['end'], e['text']) for e in srt_entries]
     return srt_text, parsed
 
@@ -375,7 +357,6 @@ def strip_audio_tags(text):
     return re.sub(r'\s+', ' ', text).strip()
 
 def sync_by_character_mapping(clean_script, audio_duration, words_per_chunk=8, min_chunk_duration=1.2, offset=0.0):
-    """Fallback sync method when Whisper is not available"""
     clean_script = strip_audio_tags(clean_script)
     if not clean_script.strip(): return "", []
     raw_chunks = re.split(r'([။!?\n]+)', clean_script)
@@ -409,30 +390,21 @@ def sync_by_character_mapping(clean_script, audio_duration, words_per_chunk=8, m
     return srt_text, parsed
 
 def auto_sync_srt(script_text, audio_path, whisper_data=None, audio_duration=None, sync_offset=0.0, short_punchy=False):
-    """
-    AUTO SYNC PIPELINE:
-    1. Try Whisper Word-Level first (95% accurate)
-    2. Fallback to Character Mapping if Whisper unavailable
-    """
     if audio_duration is None: audio_duration = get_file_duration(audio_path)
     
-    # Try Whisper Word-Level first
     if whisper_data is not None:
         words_per_chunk = 3 if short_punchy else 6
         min_dur = 0.8 if short_punchy else 1.0
         result = whisper_words_to_srt(whisper_data, script_text, words_per_chunk, min_dur)
         if result is not None:
             srt_text, parsed = result
-            # Apply global offset if needed
             if sync_offset != 0:
                 parsed = [(max(0, s+sync_offset), max(0.8, e+sync_offset), t) for s, e, t in parsed]
-                # Rebuild SRT
                 srt_text = ""
                 for i, (s, e, t) in enumerate(parsed, 1):
                     srt_text += f"{i}\n{fmt_timestamp_sync(s)} --> {fmt_timestamp_sync(e)}\n{t}\n\n"
             return srt_text, parsed
     
-    # Fallback to Character Mapping
     words_per_chunk = 4 if short_punchy else 8
     min_dur = 1.0 if short_punchy else 1.5
     return sync_by_character_mapping(script_text, audio_duration, words_per_chunk, min_dur, sync_offset)
@@ -633,15 +605,40 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
 st.markdown('<div class="main-title">AETHER FILMWORKS</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">AI Studio V52 \u26a1 SaaS Edition</div>', unsafe_allow_html=True)
 
+# =====================================================================
+# STATE INITIALIZATION - MUST BE BEFORE ANY st.session_state ACCESS
+# =====================================================================
+if "render_success" not in st.session_state: st.session_state.render_success = False
+if "generated_script" not in st.session_state: st.session_state.generated_script = ""
+if "original_transcript" not in st.session_state: st.session_state.original_transcript = ""
+if "viral_title" not in st.session_state: st.session_state.viral_title = ""
+if "viral_tags" not in st.session_state: st.session_state.viral_tags = ""
+if "thumb_path_A" not in st.session_state: st.session_state.thumb_path_A = None
+if "thumb_path_B" not in st.session_state: st.session_state.thumb_path_B = None
+if "viral_score" not in st.session_state: st.session_state.viral_score = ""
+if "final_video_path" not in st.session_state: st.session_state.final_video_path = ""
+if "sync_offset" not in st.session_state: st.session_state.sync_offset = 0.0
+if "whisper_data" not in st.session_state: st.session_state.whisper_data = None
+if "script_ready" not in st.session_state: st.session_state.script_ready = False
+if "fc_ready" not in st.session_state: st.session_state.fc_ready = False
+if "fc_hook_text" not in st.session_state: st.session_state.fc_hook_text = ""
+
+# =====================================================================
+# SIDEBAR
+# =====================================================================
 with st.sidebar:
     st.markdown("### \U0001f9ed Navigation Menu")
     app_mode = st.radio("Select Studio Mode:", ["\U0001f399\ufe0f Movie Dubbing Studio", "\U0001f399\ufe0f Faceless Channel Studio", "\U0001f3a5 Veo Video Studio", "\U0001f3b5 Lyria Music Studio"])
     st.markdown("---")
     
-    # SYNC OFFSET (Backup only - Whisper handles 95% auto)
     st.markdown("### \U0001f3af Subtitle Sync Control")
     with st.form("sync_form", clear_on_submit=False):
-        new_offset = st.slider("Sync Offset (Emergency Backup)", min_value=-5.0, max_value=5.0, value=st.session_state.sync_offset, step=0.1, help="Whisper auto-sync မှ 95% တိကျပါတယ်။ လွဲမှသာ ဒီမှာညှိပါ။")
+        new_offset = st.slider(
+            "Sync Offset (Emergency Backup)", 
+            min_value=-5.0, max_value=5.0, 
+            value=st.session_state.get('sync_offset', 0.0),
+            step=0.1
+        )
         col_f1, col_f2 = st.columns(2)
         with col_f1:
             if st.form_submit_button("Apply", use_container_width=True):
@@ -651,12 +648,12 @@ with st.sidebar:
             if st.form_submit_button("Reset", use_container_width=True):
                 st.session_state.sync_offset = 0.0
                 st.rerun()
-    st.caption(f"Active Offset: **{st.session_state.sync_offset:+.1f}s**")
+    st.caption(f"Active Offset: **{st.session_state.get('sync_offset', 0.0):+.1f}s**")
     
     st.markdown("---")
     st.markdown("### \U0001f4be Project Save & Load")
     if st.button("Save Current Project"):
-        proj_data = {"script": st.session_state.generated_script, "title": st.session_state.viral_title, "tags": st.session_state.viral_tags, "sync_offset": st.session_state.sync_offset}
+        proj_data = {"script": st.session_state.generated_script, "title": st.session_state.viral_title, "tags": st.session_state.viral_tags, "sync_offset": st.session_state.get('sync_offset', 0.0)}
         json_str = json.dumps(proj_data, ensure_ascii=False)
         b64 = base64.b64encode(json_str.encode('utf-8')).decode()
         href = f'<a href="data:application/json;base64,{b64}" download="Aether_Project.json" style="color:#38bdf8; font-weight:bold;">\U0001f4e5 Download Project File (.json)</a>'
@@ -767,7 +764,6 @@ if app_mode == "\U0001f399\ufe0f Movie Dubbing Studio":
         st.markdown("</div>", unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # ===== MAIN BUTTON - FULL AUTO =====
     if st.button("START ONE-CLICK WORKFLOW MONETIZE GENERATOR"):
         if not api_key_input: st.error("API Key \u101c\u102d\u102f\u1021\u1015\u103a\u1015\u102b\u101e\u100a\u103a\u104b")
         elif not uploaded_file and not video_url: st.error("\u1017\u102e\u1012\u102e\u101a\u102d\u102f\u1016\u102d\u102f\u1004\u103a\u101e\u102d\u102f\u1037\u1019\u101f\u102f\u1010\u103a Link \u1011\u100a\u1037\u103a\u1015\u1031\u1038\u1015\u102b\u104b")
@@ -781,7 +777,6 @@ if app_mode == "\U0001f399\ufe0f Movie Dubbing Studio":
             
             pbar = st.progress(0, text="\u1021\u101c\u102f\u1015\u103a\u1005\u1010\u1004\u103a\u1014\u1031\u1015\u102b\u1015\u103c\u102e...")
             
-            # Stage 1/6 - Download
             with st.spinner("[Stage 1/6] Downloading video..."):
                 pbar.progress(10, text="[Stage 1/6] \u1017\u102e\u1012\u102e\u101a\u102d\u102f\u1006\u103d\u1032\u101a\u1030\u1014\u1031\u1015\u102b\u101e\u100a\u103a...")
                 try:
@@ -791,7 +786,6 @@ if app_mode == "\U0001f399\ufe0f Movie Dubbing Studio":
                 except Exception as dl_err: st.error(str(dl_err)); st.stop()
                 extract_audio_fast(v_input, a_extracted)
             
-            # WHISPER PRE-SCAN (For Auto Sync)
             groq_key_sync = load_key(GROQ_KEY_FILE)
             if groq_key_sync:
                 try:
@@ -801,7 +795,6 @@ if app_mode == "\U0001f399\ufe0f Movie Dubbing Studio":
                         st.success("Whisper word-level sync ready (95% accurate)!")
                 except Exception as e: st.warning(f"Whisper unavailable - using fallback sync. Error: {str(e)[:100]}")
             
-            # Stage 2/6 - Script
             with st.spinner(f"[Stage 2/6] {ai_provider} generating script..."):
                 pbar.progress(30, text=f"[Stage 2/6] \u1007\u102c\u1010\u103a\u100a\u103d\u103e\u1014\u103a\u1038\u1016\u1014\u103a\u1010\u102e\u1038\u1014\u1031\u1015\u102b\u101e\u100a\u103a...")
                 try:
@@ -852,18 +845,16 @@ if app_mode == "\U0001f399\ufe0f Movie Dubbing Studio":
                     clean_raw_srt = re.sub(r'\[TAGS:.*?\]', '', clean_raw_srt, flags=re.IGNORECASE).strip()
                     clean_raw_srt = clean_raw_srt.replace("```srt", "").replace("```", "")
                     
-                    # AUTO SYNC using Whisper Word-Level
                     audio_dur = get_file_duration(a_extracted)
                     if "-->" in clean_raw_srt:
                         parsed_timestamps, speech_text = parse_and_save_real_srt(clean_raw_srt, srt_final)
                     else:
-                        sync_srt, parsed_timestamps = auto_sync_srt(clean_raw_srt, a_extracted, st.session_state.whisper_data, audio_dur, st.session_state.sync_offset, sub_short)
+                        sync_srt, parsed_timestamps = auto_sync_srt(clean_raw_srt, a_extracted, st.session_state.whisper_data, audio_dur, st.session_state.get('sync_offset', 0.0), sub_short)
                         with open(srt_final, "w", encoding="utf-8-sig") as f: f.write(sync_srt)
                         speech_text = strip_audio_tags(clean_raw_srt)
                     
                     st.session_state.generated_script = clean_raw_srt
                     
-                    # Thumbnails
                     try:
                         t_A = min(get_file_duration(v_input)*0.2, 10); t_B = min(get_file_duration(v_input)*0.5, 20)
                         for ts, tv in [("A", t_A), ("B", t_B)]:
@@ -877,7 +868,6 @@ if app_mode == "\U0001f399\ufe0f Movie Dubbing Studio":
                     pbar.progress(40, text="Script ready!")
                 except Exception as e: st.error(f"Logic Error: {e}"); st.stop()
             
-            # Stage 4/6 - TTS
             with st.spinner("[Stage 4/6] Generating Voice Over..."):
                 pbar.progress(60, text="[Stage 4/6] \u1021\u101e\u1036\u1016\u1014\u103a\u1010\u102e\u1038\u1014\u1031\u1015\u102b\u101e\u100a\u103a...")
                 try:
@@ -887,22 +877,19 @@ if app_mode == "\U0001f399\ufe0f Movie Dubbing Studio":
             tts_dur = get_file_duration(a_generated)
             if abs(tts_dur-audio_dur) > 2.0:
                 st.info("TTS duration differs - re-syncing with Whisper...")
-                # Re-run Whisper on TTS audio
                 if groq_key_sync:
                     try:
                         with open(a_generated, "rb") as file:
                             client_groq2 = Groq(api_key=groq_key_sync)
                             tts_whisper = client_groq2.audio.transcriptions.create(file=(a_generated, file.read()), model="whisper-large-v3", response_format="verbose_json", timestamp_granularities=["word"])
-                            sync_srt, parsed_timestamps = auto_sync_srt(clean_raw_srt, a_generated, tts_whisper, tts_dur, st.session_state.sync_offset, sub_short)
+                            sync_srt, parsed_timestamps = auto_sync_srt(clean_raw_srt, a_generated, tts_whisper, tts_dur, st.session_state.get('sync_offset', 0.0), sub_short)
                     except Exception: pass
             
-            # Stage 5/6 - Render
             with st.spinner("[Stage 5/6] Rendering video..."):
                 pbar.progress(80, text="[Stage 5/6] \u1017\u102e\u1012\u102e\u101a\u102d\u102f\u1014\u103e\u1004\u1037\u103a \u1005\u102c\u1010\u1014\u103a\u1038\u1011\u102d\u102f\u1038\u1015\u1031\u102b\u1004\u103a\u1038\u1005\u1015\u103a\u1014\u1031\u1015\u102b\u101e\u100a\u103a...")
                 success, err_msg = render_premium_saas_video(v_input, a_generated, parsed_timestamps, v_final, video_ratio, cb_bypass, cb_blur, watermark_text, subtitle_mode, cb_mirror, cb_color, cb_grain, cb_fps, sub_position=sub_position, sub_color=sub_color, sub_size=sub_size, sub_thickness=sub_thickness, sub_bg=sub_bg, use_freeze=cb_freeze, logo_path=locals().get('uploaded_logo'), font_path=selected_font)
                 if not success: st.error(f"Render Failed: {err_msg}"); st.stop()
             
-            # Stage 6/6 - BGM
             if success and selected_bgm not in ["None (BGM \u1019\u1011\u100a\u1037\u103a\u1015\u102b)"]:
                 with st.spinner("[Stage 6/6] Adding BGM..."):
                     pbar.progress(95, text="[Stage 6/6] BGM \u1011\u100a\u1037\u103a\u1019\u1036\u1015\u1031\u102b\u1004\u103a\u1038\u1005\u1015\u103a\u1014\u1031\u1015\u102b\u101e\u100a\u103a...")
@@ -920,7 +907,6 @@ if app_mode == "\U0001f399\ufe0f Movie Dubbing Studio":
             st.session_state.render_success = True
             st.rerun()
     
-    # ===== OUTPUT =====
     if st.session_state.render_success:
         st.balloons()
         st.success("Video Complete!")
@@ -966,7 +952,6 @@ elif app_mode == "\U0001f399\ufe0f Faceless Channel Studio":
         fc_ratio = st.selectbox("Video Ratio", ["9:16 (TikTok/Shorts)", "16:9 (YouTube)"], key="fc_ratio")
         fc_duration = st.slider("Story Duration (Minutes)", 1, 10, 3)
         
-        # TikTok Hook
         st.markdown("---")
         st.markdown("<b>TikTok Hook Settings</b>", unsafe_allow_html=True)
         fc_use_hook = st.checkbox("Use Hook Text Overlay (First 3s)", value=True, key="fc_use_hook")
@@ -980,7 +965,6 @@ elif app_mode == "\U0001f399\ufe0f Faceless Channel Studio":
                 if st.button("New Hook", key="fc_new_hook"): st.session_state.fc_hook_text = get_random_hook(fc_niche); st.rerun()
         fc_use_loop = st.checkbox("Add Loop Point", value=True, key="fc_loop")
         
-        # Thumbnail
         st.markdown("---")
         st.markdown("<b>Thumbnail Settings</b>", unsafe_allow_html=True)
         default_thumb = get_thumbnail_style_for_niche(fc_niche)
@@ -1022,7 +1006,6 @@ elif app_mode == "\U0001f399\ufe0f Faceless Channel Studio":
         st.markdown("</div>", unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # ===== MAIN BUTTON - FULL AUTO =====
     if st.button("CREATE FACELESS VIDEO (AUTO-MAGIC)"):
         if not api_key_input: st.error("API Key \u1011\u100a\u1037\u103a\u101e\u103d\u1004\u103a\u1038\u1015\u1031\u1038\u1015\u102b\u104b")
         elif "Manual" in fc_script_mode and not fc_manual_script.strip(): st.error("Manual \u1007\u102c\u1010\u103a\u100a\u103d\u103e\u1014\u103a\u1038\u1011\u100a\u1037\u103a\u101e\u103d\u1004\u103a\u1038\u1015\u1031\u1038\u1015\u102b\u104b")
@@ -1075,7 +1058,6 @@ elif app_mode == "\U0001f399\ufe0f Faceless Channel Studio":
                     if fc_audio_dur < 5.0: st.error("TTS Failed"); st.stop()
                 except Exception as e: st.error(f"Audio Error: {e}"); st.stop()
             
-            # WHISPER PRE-SCAN
             groq_key_fc_sync = load_key(GROQ_KEY_FILE)
             if groq_key_fc_sync and os.path.exists("fc_audio.wav"):
                 try:
@@ -1130,17 +1112,15 @@ elif app_mode == "\U0001f399\ufe0f Faceless Channel Studio":
                     subprocess.run([FFMPEG_BINARY, "-y", "-stream_loop", "-1", "-f", "concat", "-safe", "0", "-i", "fc_concat.txt", "-t", str(fc_audio_dur), "-c", "copy", "fc_video_loop.mp4"], capture_output=True)
                 except Exception as e: st.error(f"Visual Error: {e}"); st.stop()
             
-            # AUTO SYNC using Whisper
             with st.spinner("[Stage 4/5] Auto-syncing subtitles with Whisper..."):
                 pbar.progress(70, text="[Stage 4/5] Auto-syncing with Whisper...")
                 try:
-                    sync_srt, fc_parsed = auto_sync_srt(fc_story, "fc_audio.wav", st.session_state.whisper_data, fc_audio_dur, st.session_state.sync_offset, fc_sub_short)
+                    sync_srt, fc_parsed = auto_sync_srt(fc_story, "fc_audio.wav", st.session_state.whisper_data, fc_audio_dur, st.session_state.get('sync_offset', 0.0), fc_sub_short)
                     with open("subtitles.srt", "w", encoding="utf-8-sig") as f: f.write(sync_srt)
                     if not fc_parsed: st.error("SRT Error"); st.stop()
                     st.success("Auto-sync complete! Whisper word-level timing applied.")
                 except Exception as e: st.error(f"SRT Error: {e}"); st.stop()
             
-            # Stage 5/5 - Render
             with st.spinner("[Stage 5/5] Rendering final video..."):
                 pbar.progress(85, text="[Stage 5/5] Rendering...")
                 temp_r = "temp_base.mp4"
@@ -1161,7 +1141,6 @@ elif app_mode == "\U0001f399\ufe0f Faceless Channel Studio":
                             except Exception: pass
                     st.session_state.final_video_path = v_final
                     st.session_state.render_success = True
-                    # Thumbnails
                     try:
                         for ts, tv in [("A", min(fc_audio_dur*0.2,10)), ("B", min(fc_audio_dur*0.5,20))]:
                             tn = f"thumb_{ts}_{run_id}.jpg"
@@ -1170,7 +1149,6 @@ elif app_mode == "\U0001f399\ufe0f Faceless Channel Studio":
                                 if ts == "A": st.session_state.thumb_path_A = tn
                                 else: st.session_state.thumb_path_B = tn
                     except Exception: pass
-                    # Viral score
                     try:
                         cv2 = genai.Client(api_key=keys_list[0])
                         r = cv2.models.generate_content(model="gemini-2.5-flash", contents=f"Virality score for: {st.session_state.viral_title}. Reply: Score: [1-100]\nReason: [Burmese]")
@@ -1180,7 +1158,6 @@ elif app_mode == "\U0001f399\ufe0f Faceless Channel Studio":
                     st.rerun()
                 else: st.error(f"Failed: {e}")
     
-    # ===== OUTPUT =====
     if st.session_state.render_success:
         st.balloons(); st.success("Faceless Video Complete!")
         col_f1, col_f2 = st.columns(2)
