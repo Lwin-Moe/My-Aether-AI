@@ -285,10 +285,7 @@ def whisper_words_to_srt(whisper_data, script_text, words_per_chunk=6, min_durat
     if not whisper_words or len(whisper_words) < 3:
         return None
     
-    clean_script = re.sub(r'\[.*?\]', '', script_text)
-    clean_script = re.sub(r'\{.*?\}', '', clean_script)
-    clean_script = re.sub(r'\s+', ' ', clean_script).strip()
-    
+    clean_script = strip_audio_tags(script_text)
     script_words = clean_script.split()
     total_sw = len(script_words)
     total_ww = len(whisper_words)
@@ -353,8 +350,19 @@ def fmt_timestamp_sync(seconds):
     return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
 def strip_audio_tags(text):
-    text = re.sub(r'\[.*?\]', '', text); text = re.sub(r'\{.*?\}', '', text)
-    return re.sub(r'\s+', ' ', text).strip()
+    """Remove audio tags AND speaker labels from text"""
+    # Remove audio tags like [pause=1.0], [excited]
+    text = re.sub(r'\[.*?\]', '', text)
+    text = re.sub(r'\{.*?\}', '', text)
+    # Remove speaker labels (SPEAKER_00:, SPEAKER 01:, Speaker 1:, etc.)
+    text = re.sub(r'SPEAKER[_ ]?\d+[:\s]*', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'Speaker[_ ]?\d+[:\s]*', '', text, flags=re.IGNORECASE)
+    # Remove common Whisper artifacts
+    text = re.sub(r'\([^)]*\)', '', text)
+    text = re.sub(r'\u266a.*?\u266a', '', text)
+    # Clean extra spaces
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
 
 def sync_by_character_mapping(clean_script, audio_duration, words_per_chunk=8, min_chunk_duration=1.2, offset=0.0):
     clean_script = strip_audio_tags(clean_script)
@@ -444,7 +452,7 @@ def extract_audio_fast(video_in, audio_out="temp_extracted.mp3"):
 
 async def generate_tts(text, voice_model, output_file, engine="Edge-TTS", ttsmaker_key="", eleven_key="", custom_eleven_id="", gemini_key="", pitch=0, voice_fx="None"):
     if not text.strip(): return
-    if "Synergy" not in engine: text = re.sub(r'\[.*?\]', '', text); text = re.sub(r'\{.*?\}', '', text)
+    if "Synergy" not in engine: text = strip_audio_tags(text)
     parts = re.split(r'([။?!.\n]+)', text)
     sentences = []
     for i in range(0, len(parts)-1, 2): sentences.append(parts[i]+parts[i+1])
@@ -551,8 +559,9 @@ def parse_and_save_real_srt(raw_srt_text, output_file, use_fade=False):
         if start < prev_end: start = prev_end+0.1
         if end-start < 0.8: end = start+0.8
         prev_end = end
-        clean_speech_text = re.sub(r'[^\w\s\u1000-\u109F]', '', txt)
-        if clean_speech_text.strip(): full_speech.append(clean_speech_text)
+        # Clean speaker labels from text
+        txt = strip_audio_tags(txt)
+        if txt.strip(): full_speech.append(txt)
         final_parsed.append((start, end, txt))
     with open(output_file, "w", encoding="utf-8-sig") as f:
         for i, (s, e, t) in enumerate(final_parsed, 1):
@@ -580,6 +589,9 @@ def render_premium_saas_video(in_v, in_a, parsed_timestamps, out_v, ratio, use_b
         if subtitle_mode in ["Burn into Video", "Both (Burn + SRT)"] and parsed_timestamps:
             wrap_width = 25 if "9:16" in ratio else 45; safe_font_path = font_path.replace('\\', '/')
             for i, (start, end, text) in enumerate(parsed_timestamps):
+                # Clean speaker labels before burning
+                text = strip_audio_tags(text)
+                if not text.strip(): continue
                 wrapped_lines = textwrap.wrap(text, width=wrap_width)
                 if not wrapped_lines: wrapped_lines = [text]
                 max_len = max(len(line) for line in wrapped_lines)
@@ -606,7 +618,7 @@ st.markdown('<div class="main-title">AETHER FILMWORKS</div>', unsafe_allow_html=
 st.markdown('<div class="sub-title">AI Studio V52 \u26a1 SaaS Edition</div>', unsafe_allow_html=True)
 
 # =====================================================================
-# STATE INITIALIZATION - MUST BE BEFORE ANY st.session_state ACCESS
+# STATE INITIALIZATION
 # =====================================================================
 if "render_success" not in st.session_state: st.session_state.render_success = False
 if "generated_script" not in st.session_state: st.session_state.generated_script = ""
@@ -691,7 +703,7 @@ with st.sidebar:
         if groq_key_fc and groq_key_fc != saved_groq_fc: save_key(GROQ_KEY_FILE, groq_key_fc)
 
 # =====================================================================
-# MODE 1 - MOVIE DUBBING (AUTO WHISPER SYNC)
+# MODE 1 - MOVIE DUBBING (AUTO WHISPER SYNC + SPEAKER LABEL CLEAN)
 # =====================================================================
 if app_mode == "\U0001f399\ufe0f Movie Dubbing Studio":
     with st.sidebar:
@@ -837,6 +849,9 @@ if app_mode == "\U0001f399\ufe0f Movie Dubbing Studio":
                         comp = client.chat.completions.create(model="llama-3.3-70b-versatile" if "Groq" in ai_provider else "gpt-4o", messages=[{"role": "user", "content": f"{base_prompt} --- SRT --- {tsrt}"}])
                         raw_output_text = comp.choices[0].message.content
                     
+                    # Clean speaker labels from the raw output
+                    raw_output_text = strip_audio_tags(raw_output_text)
+                    
                     title_match = re.search(r'\[TITLE:\s*(.*?)\]', raw_output_text, re.IGNORECASE)
                     tags_match = re.search(r'\[TAGS:\s*(.*?)\]', raw_output_text, re.IGNORECASE)
                     st.session_state.viral_title = re.sub(r'[\[\]]', '', title_match.group(1)).strip() if title_match else "Viral Movie Recap"
@@ -928,7 +943,7 @@ if app_mode == "\U0001f399\ufe0f Movie Dubbing Studio":
             with st.expander("AI Generated Script", expanded=True): st.text_area("Script:", value=st.session_state.generated_script, height=250, disabled=True)
 
 # =====================================================================
-# MODE 1.5 - FACELESS Channel Studio (AUTO WHISPER SYNC)
+# MODE 1.5 - FACELESS Channel Studio (AUTO WHISPER SYNC + SPEAKER LABEL CLEAN)
 # =====================================================================
 elif app_mode == "\U0001f399\ufe0f Faceless Channel Studio":
     st.markdown('<div class="setting-panel"><h3>Faceless Channel Studio</h3>', unsafe_allow_html=True)
@@ -1041,6 +1056,9 @@ elif app_mode == "\U0001f399\ufe0f Faceless Channel Studio":
                             fc_story = response.text.strip(); break
                         except Exception: continue
                     if not fc_story: st.error("Story Error"); st.stop()
+            
+            # Clean speaker labels
+            fc_story = strip_audio_tags(fc_story)
             
             title_match = re.search(r'\[TITLE:\s*(.*?)\]', fc_story, re.IGNORECASE)
             tags_match = re.search(r'\[TAGS:\s*(.*?)\]', fc_story, re.IGNORECASE)
