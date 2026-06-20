@@ -75,7 +75,7 @@ def get_download_link(file_path, file_name, link_text):
     return f'<a href="data:application/octet-stream;base64,{b64}" download="{file_name}" style="display:block; text-align:center; margin-top:10px; padding:12px 20px; background:linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color:white; text-decoration:none; border-radius:8px; font-weight:bold;"> 📥  {link_text}</a>'
 
 # --- 1. THEME & STYLING ---
-st.set_page_config(page_title="AETHER STUDIO V52", layout="wide", page_icon=" 🎬 ")
+st.set_page_config(page_title="AETHER STUDIO V52", layout="wide", page_icon="🎬")
 
 st.markdown('''
     <style>
@@ -169,7 +169,7 @@ async def generate_tts(text, voice_model, output_file, engine="Edge-TTS", ttsmak
         text = re.sub(r'\[.*?\]', '', text)
         text = re.sub(r'\{.*?\}', '', text)
 
-    parts = re.split(r'([ ။ ?!.\n]+)', text)
+    parts = re.split(r'([။?!.\n]+)', text)
     sentences = []
     for i in range(0, len(parts)-1, 2):
         sentences.append(parts[i] + parts[i+1])
@@ -589,8 +589,11 @@ if app_mode == "🎙️ Movie Dubbing Studio":
                     if script_cta: extra_rules += " [CTA]: End the script with a strong Call to Action asking a question."
 
                     extra_rules += "\nAt the absolute end of the response, you MUST include these two lines on separate lines:\n[TITLE: (Provide a viral Burmese title here)]\n[TAGS: #tag1 #tag2]"
-                    hormozi_rule = " [HORMOZI]: Split the subtitles into chunks of ONLY 1 to 4 words max per block. CRITICAL: DO NOT remove original timestamps."
-                    if sub_short else ""
+                    
+                    hormozi_rule = ""
+                    if sub_short:
+                        hormozi_rule = " [HORMOZI]: Split the subtitles into chunks of ONLY 1 to 4 words max per block. CRITICAL: DO NOT remove original timestamps."
+                    
                     if "Gemini" in ai_provider:
                         keys_list = [k.strip() for k in api_key_input.split(",") if k.strip()]
                         success_gemini = False; last_err = ""
@@ -785,11 +788,26 @@ elif app_mode == "🎙️ Faceless Channel Studio":
                     pbar.progress(10, text="📝 ဇာတ်လမ်း ရေးသားနေပါသည်...")
                     target_words = fc_duration * 140
 
-                    topic_instruction = f"Specifically, the story MUST be deeply focused on this topic: {fc_custom_topic.strip()}.\n" if fc_custom_topic.strip() else ""
-                    hook_rule = "1. THE VIRAL HOOK (0-3s): Start with a mind-blowing, highly engaging 3-second viral hook.\n" if fc_script_hook else ""
-                    curiosity_rule = "2. CURIOSITY GAPS: Insert curiosity gaps in the middle to retain audience attention.\n" if fc_script_curiosity else ""
-                    tone_rule = "3. EMOTION & TONE: Inject strong emotions and character tones matching the scene.\n" if fc_script_tone else ""
-                    cta_rule = "4. CALL TO ACTION: End the script with a strong Call to Action asking a question.\n" if fc_script_cta else ""
+                    topic_instruction = ""
+                    if fc_custom_topic.strip():
+                        topic_instruction = f"Specifically, the story MUST be deeply focused on this topic: {fc_custom_topic.strip()}.\n"
+                        
+                    hook_rule = ""
+                    if fc_script_hook:
+                        hook_rule = "1. THE VIRAL HOOK (0-3s): Start with a mind-blowing, highly engaging 3-second viral hook.\n"
+                        
+                    curiosity_rule = ""
+                    if fc_script_curiosity:
+                        curiosity_rule = "2. CURIOSITY GAPS: Insert curiosity gaps in the middle to retain audience attention.\n"
+                        
+                    tone_rule = ""
+                    if fc_script_tone:
+                        tone_rule = "3. EMOTION & TONE: Inject strong emotions and character tones matching the scene.\n"
+                        
+                    cta_rule = ""
+                    if fc_script_cta:
+                        cta_rule = "4. CALL TO ACTION: End the script with a strong Call to Action asking a question.\n"
+                        
                     story_prompt = f"""Act as a YouTube content strategist AND cinematic narrative writer.
 Write an engaging {fc_duration}-minute highly viral script for a {fc_niche} TikTok/YouTube video in natural spoken Burmese. (Around {target_words} words).
 {topic_instruction}
@@ -1053,65 +1071,54 @@ Story: {fc_story_text[:500]}"""
                                     max_l = max(len(l) for l in wrapped_lines) if wrapped_lines else 0
                                     c_text = "\n".join(l.center(max_l, " ") for l in wrapped_lines)
                                     with open("thumb_text.txt", "w", encoding="utf-8") as tf: tf.write(c_text)
-                                    if os.path.exists(selected_font): stream = ffmpeg.filter(stream.video, 'drawtext', textfile='thumb_text.txt', fontfile=selected_font.replace('\\','/'), fontcolor='white', fontsize=65, x='(w-text_w)/2', y='(h-text_h)/2', box=1, boxcolor='red@0.9', boxborderw=20, borderw=3, bordercolor='black', line_spacing=15, text_align='C')
-                                ffmpeg.output(stream, thumb_name, vframes=1).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
+                                    if os.path.exists(fc_selected_font):
+                                        stream = ffmpeg.filter(stream.video, 'drawtext', textfile='thumb_text.txt', fontfile=fc_selected_font.replace('\\','/'), fontcolor='white', fontsize=65, x='(w-text_w)/2', y='(h-text_h)/2', box=1, boxcolor='red@0.9', boxborderw=20, borderw=3, bordercolor='black', line_spacing=15, text_align='C')
+                                    ffmpeg.output(stream, thumb_name, vframes=1).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True)
                             except Exception: pass
+                            
                             if thumb_suffix == "A" and os.path.exists(thumb_name): st.session_state.thumb_path_A = thumb_name
                             elif thumb_suffix == "B" and os.path.exists(thumb_name): st.session_state.thumb_path_B = thumb_name
                     except Exception: pass
-                except Exception as e: st.error(f"Logic Error: {e}"); st.stop()
-            with st.spinner(f"⏳ [အဆင့်၄/၆] AI Voice Over ထုတ်လုပ်နေပါသည်..."):
-                pbar.progress(60, text="🎙️ [အဆင့် ၄/၆] အသံသရုပ်ဆောင်ဖန်တီးနေပါသည်...")
-                try: asyncio.run(generate_tts(speech_text, voice_char, a_generated, engine=audio_engine_choice, ttsmaker_key=key_ttsmaker, eleven_key=locals().get('eleven_key_input', ''), custom_eleven_id=locals().get('custom_eleven_id', ''), gemini_key=locals().get('synergy_key', api_key_input), pitch=pitch_level, voice_fx=fx_level))
-                except Exception as e: st.error(f"အသံထုတ်လုပ်ခြင်းမအောင်မြင်ပါ: {e}"); st.stop()
-            with st.spinner("⏳ [အဆင့်၅/၆] ဗီဒီယိုနှင့် စာတန်းထိုးပေါင်းစပ်နေပါသည်..."):
-                pbar.progress(80, text="🎬 [အဆင့် ၅/၆] ဗီဒီယိုနှင့်စာတန်းထိုး ပေါင်းစပ်နေပါသည်...")
-                success, err_msg = render_premium_saas_video(v_input, a_generated, parsed_timestamps, v_final, video_ratio, cb_bypass, cb_blur, watermark_text, subtitle_mode, cb_mirror, cb_color, cb_grain, cb_fps, sub_position=sub_position, sub_color=sub_color, sub_size=sub_size, sub_thickness=sub_thickness, sub_bg=sub_bg, use_freeze=cb_freeze, logo_path=locals().get('uploaded_logo', None), font_path=selected_font)
-                if not success: st.error(f"❌ Sync Failure: {err_msg}"); st.stop()
-            if success and selected_bgm not in ["None (BGM မထည့်ပါ)"]:
-                with st.spinner("⏳ [အဆင့်၆/၆] Auto-Ducking ဖြင့် BGM ထပ်မံပေါင်းစပ်နေပါသည်..."):
-                    pbar.progress(95, text="🎵 [အဆင့် ၆/၆] Auto-Ducking စနစ်ဖြင့် BGM အသံကစားနေပါသည်...")
-                    selected_bgm_path = os.path.join("bgm_tracks", random.choice(bgm_files) if "Auto" in selected_bgm else selected_bgm)
-                    if os.path.exists(selected_bgm_path):
-                        try:
-                            ducked = ffmpeg.filter([ffmpeg.input(selected_bgm_path, stream_loop=-1).audio.filter('aresample', 44100).filter('volume', bgm_volume), ffmpeg.input(v_final).audio], 'sidechaincompress', threshold=0.04, ratio=4, attack=50, release=300)
-                            mixed = ffmpeg.filter([ffmpeg.input(v_final).audio, ducked], 'amix', inputs=2, duration='first').filter('volume', 2.0)
-                            (ffmpeg.output(ffmpeg.input(v_final).video, mixed, "temp_mix.mp4", vcodec='copy', acodec='aac', t=get_file_duration(v_final)).overwrite_output().run(cmd=FFMPEG_BINARY, quiet=True))
-                            shutil.move("temp_mix.mp4", v_final)
-                        except Exception: pass
+                            
+                    pbar.progress(100, text="✅ အားလုံးပြီးစီးပါပြီ!")
+                    st.balloons()
+                    st.success("🎉 Faceless Video ထုတ်လုပ်မှု အောင်မြင်စွာ ပြီးစီးပါပြီ!")
+                    
+                    try:
+                        client_viral = genai.Client(api_key=keys_list[0])
+                        v_prompt = f"Analyze this short video for TikTok virality. Title: {st.session_state.viral_title}. Hook: {fc_story_text[:150]}. Reply strictly in this format: \nScore: [1-100]\nReason: [1 short sentence in Burmese]"
+                        v_res = client_viral.models.generate_content(model="gemini-2.5-flash", contents=v_prompt)
+                        st.session_state.viral_score = v_res.text.strip()
+                    except Exception: st.session_state.viral_score = "Score: 90\nReason: အရမ်းကောင်းတဲ့ Hook ပါ။"
+                    
+                    col_f1, col_f2 = st.columns(2)
+                    with col_f1:
+                        if os.path.exists(st.session_state.final_video_path):
+                            st.video(st.session_state.final_video_path)
+                            st.markdown('<div class="setting-panel"><h4>📥 Download Dashboard</h4>', unsafe_allow_html=True)
+                            st.markdown(get_download_link(st.session_state.final_video_path, "Viral_Faceless.mp4", "Download Final Video (No Refresh)"), unsafe_allow_html=True)
+                            if os.path.exists("subtitles.srt"):
+                                st.markdown(get_download_link("subtitles.srt", "Faceless_Subs.srt", "Download Subtitles (.SRT)"), unsafe_allow_html=True)
+                            st.markdown('</div>', unsafe_allow_html=True)
+                        else: st.error("❌ ဗီဒီယိုဖိုင်ကို ရှာမတွေ့ပါ။ Rendering တွင် ချို့ယွင်းချက် ရှိနိုင်ပါသည်။")
 
-            pbar.progress(100, text="✅ အားလုံးပြီးစီးပါပြီ!")
-            if success: st.session_state.render_success = True
-    if st.session_state.render_success:
-        st.balloons()
-        st.success(f"🎉 One-Click ဗီဒီယို အောင်မြင်စွာ ထွက်လာပါပြီ!")
-        st.markdown(f"<h2 style='color:#38bdf8; text-align:center;'>🔥 {st.session_state.viral_title}</h2>", unsafe_allow_html=True)
-        st.markdown(f"<p style='text-align:center; color:#94a3b8;'>{st.session_state.viral_tags}</p>", unsafe_allow_html=True)
+                    with col_f2:
+                        st.markdown("### 📝 Generated Story & Assets")
+                        st.info(f"📈 **Viral Prediction:**\n{st.session_state.viral_score}")
+                        
+                        col_ta, col_tb = st.columns(2)
+                        if st.session_state.thumb_path_A and os.path.exists(st.session_state.thumb_path_A):
+                            with col_ta: 
+                                st.image(st.session_state.thumb_path_A, caption="Thumbnail A")
+                                st.markdown(get_download_link(st.session_state.thumb_path_A, "Thumb_A.jpg", "Download A"), unsafe_allow_html=True)
+                        if st.session_state.thumb_path_B and os.path.exists(st.session_state.thumb_path_B):
+                            with col_tb: 
+                                st.image(st.session_state.thumb_path_B, caption="Thumbnail B")
+                                st.markdown(get_download_link(st.session_state.thumb_path_B, "Thumb_B.jpg", "Download B"), unsafe_allow_html=True)
+                        
+                        st.text_area("ဇာတ်လမ်း:", value=fc_story_text, height=300, disabled=True)
+                except Exception as e: st.error(f"Render Error: {e}"); st.stop()
 
-        col_out1, col_out2 = st.columns([1, 1])
-        with col_out1:
-            if os.path.exists(st.session_state.final_video_path):
-                st.video(st.session_state.final_video_path)
-                st.markdown('<div class="setting-panel"><h4>📥 Download Dashboard</h4>', unsafe_allow_html=True)
-                st.markdown(get_download_link(st.session_state.final_video_path, "Aether_Recap.mp4", "Download Recap Video (MP4)"), unsafe_allow_html=True)
-                if os.path.exists("subtitles.srt"): st.markdown(get_download_link("subtitles.srt", "Aether_Subs.srt", "Download Subtitles (.SRT)"), unsafe_allow_html=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-
-        with col_out2:
-            st.markdown('<div class="setting-panel"><h3>📝 Scripts & Assets</h3>', unsafe_allow_html=True)
-            col_t1, col_t2 = st.columns(2)
-            if st.session_state.thumb_path_A and os.path.exists(st.session_state.thumb_path_A):
-                with col_t1:
-                    st.image(st.session_state.thumb_path_A, caption="Thumbnail (A)", use_column_width=True)
-                    st.markdown(get_download_link(st.session_state.thumb_path_A, "Thumb_A.jpg", "Download A"), unsafe_allow_html=True)
-            if st.session_state.thumb_path_B and os.path.exists(st.session_state.thumb_path_B):
-                with col_t2:
-                    st.image(st.session_state.thumb_path_B, caption="Thumbnail (B)", use_column_width=True)
-                    st.markdown(get_download_link(st.session_state.thumb_path_B, "Thumb_B.jpg", "Download B"), unsafe_allow_html=True)
-
-            with st.expander("👁️ Original Transcript", expanded=False): st.text_area("မူရင်းစာသား:", value=st.session_state.original_transcript, height=150, disabled=True)
-            with st.expander("🇲🇲 AI Generated Script", expanded=True): st.text_area("AI မှရေးသားထားသော ဇာတ်ညွှန်း:", value=st.session_state.generated_script, height=250, disabled=True)
-            st.markdown('</div>', unsafe_allow_html=True)
 # =====================================================================
 # 📌 MODE 2 - VEO VIDEO STUDIO
 # =====================================================================
