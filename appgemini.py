@@ -1,5 +1,5 @@
 # =====================================================================
-#  📌  AETHER FILMWORKS AI // STUDIO V52 (SINGLE FILE MASTER CODE)
+# 📌 AETHER FILMWORKS AI // STUDIO V52 (SINGLE FILE MASTER CODE)
 # =====================================================================
 import streamlit as st
 import os
@@ -25,13 +25,13 @@ from google import genai
 from groq import Groq
 import openai
 
-#  👇  FIX: Prioritize system FFmpeg
+# 👇 FIX: Prioritize system FFmpeg
 if shutil.which("ffmpeg"):
     FFMPEG_BINARY = "ffmpeg"
 else:
     FFMPEG_BINARY = imageio_ffmpeg.get_ffmpeg_exe()
 
-#  👇  FIX: Download Default Font
+# 👇 FIX: Download Default Font
 local_font_path = "Padauk.ttf"
 if not os.path.exists(local_font_path):
     try:
@@ -39,7 +39,7 @@ if not os.path.exists(local_font_path):
     except Exception:
         pass
 
-#  👇  FIX: Dynamic Font Scanner
+# 👇 FIX: Dynamic Font Scanner
 def get_available_fonts():
     font_list = ["Padauk.ttf"]
     if os.path.exists("font"):
@@ -72,7 +72,7 @@ def get_download_link(file_path, file_name, link_text):
         return ""
     with open(file_path, "rb") as f:
         b64 = base64.b64encode(f.read()).decode()
-    return f'<a href="data:application/octet-stream;base64,{b64}" download="{file_name}" style="display:block; text-align:center; margin-top:10px; padding:12px 20px; background:linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color:white; text-decoration:none; border-radius:8px; font-weight:bold;"> 📥  {link_text}</a>'
+    return f'<a href="data:application/octet-stream;base64,{b64}" download="{file_name}" style="display:block; text-align:center; margin-top:10px; padding:12px 20px; background:linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color:white; text-decoration:none; border-radius:8px; font-weight:bold;">📥 {link_text}</a>'
 
 # --- 1. THEME & STYLING ---
 st.set_page_config(page_title="AETHER STUDIO V52", layout="wide", page_icon="🎬")
@@ -80,8 +80,7 @@ st.set_page_config(page_title="AETHER STUDIO V52", layout="wide", page_icon="�
 st.markdown('''
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Montserrat:wght@500;700;800;900&display=swap');
-    .stApp { background-color: #0b0f19 !important; background-image: radial-gradient(circle at top, #161b2e 0%, #0b0f19 60%) !important; color: #cbd5e1 !important; font-family: 'Inter', sans-serif;
-    }
+    .stApp { background-color: #0b0f19 !important; background-image: radial-gradient(circle at top, #161b2e 0%, #0b0f19 60%) !important; color: #cbd5e1 !important; font-family: 'Inter', sans-serif; }
     section[data-testid="stSidebar"] { background-color: #0d111c !important; border-right: 1px solid rgba(255, 255, 255, 0.05) !important; }
     h1, h2, h3, h4 { font-family: 'Montserrat', sans-serif !important; color: #f8fafc !important; font-weight: 700 !important; }
     p, span, label, .stRadio label, .stCheckbox label, .stSelectbox label { color: #94a3b8 !important; font-size: 14px; }
@@ -98,7 +97,7 @@ st.markdown('''
     .stButton>button:hover { transform: translateY(-3px); box-shadow: 0 8px 25px rgba(124, 58, 237, 0.5); }
     .sub-box { background-color: #1a2235; border: 1px solid rgba(129, 140, 248, 0.3); border-radius: 8px; padding: 20px; margin-top: 15px; margin-bottom: 10px; }
     </style>
-    ''', unsafe_allow_html=True)
+''', unsafe_allow_html=True)
 
 # State initialization
 if "render_success" not in st.session_state: st.session_state.render_success = False
@@ -706,6 +705,7 @@ if app_mode == "🎙️ Movie Dubbing Studio":
             with st.expander("👁️ Original Transcript", expanded=False): st.text_area("မူရင်းစာသား:", value=st.session_state.original_transcript, height=150, disabled=True)
             with st.expander("🇲🇲 AI Generated Script", expanded=True): st.text_area("AI မှရေးသားထားသော ဇာတ်ညွှန်း:", value=st.session_state.generated_script, height=250, disabled=True)
             st.markdown('</div>', unsafe_allow_html=True)
+
 # =====================================================================
 # 📌 MODE 1.5 - FACELESS Channel Studio (ULTIMATE UPGRADE)
 # =====================================================================
@@ -846,9 +846,16 @@ At the absolute end, include these two lines:
                     clean_story = re.sub(r'\[.*?\]', '', fc_story_text)
                     asyncio.run(generate_tts(fc_story_text if "Synergy" in fc_audio_engine else clean_story, fc_voice_char, "fc_audio.wav", engine=fc_audio_engine, gemini_key=locals().get('fc_synergy_key', api_key_input), voice_fx=fc_fx))
                     fc_audio_dur = get_file_duration("fc_audio.wav")
-                    if fc_audio_dur < 5.0: st.error("❌ အသံထုတ်လုပ်ခြင်းမအောင်မြင်ပါ။ API Limit ငြိသွားခြင်း သို့မဟုတ် Network ပြဿနာကြောင့် အသံဖိုင် တိုတောင်းလွန်းနေပါသည်။ ပြန်လည်ကြိုးစားပါ။");
+                    
+                    # 👇 FIX: Indentation ပြဿနာကို အတိအကျ ဖြေရှင်းပြီး st.stop() အား if block ထဲသို့ ထည့်သွင်းပေးလိုက်ပါပြီ
+                    if fc_audio_dur < 5.0: 
+                        st.error("❌ အသံထုတ်လုပ်ခြင်းမအောင်မြင်ပါ။ API Limit ငြိသွားခြင်း သို့မဟုတ် Network ပြဿနာကြောင့် အသံဖိုင် တိုတောင်းလွန်းနေပါသည်။ ပြန်လည်ကြိုးစားပါ။")
+                        st.stop()
+                        
+                except Exception as e: 
+                    st.error(f"Audio Error: {e}")
                     st.stop()
-                except Exception as e: st.error(f"Audio Error: {e}"); st.stop()
+            
             with st.spinner("⏳ [အဆင့်၃/၅] Visuals များကို ပြင်ဆင်နေပါသည်..."):
                 pbar.progress(50, text="🎥 Visuals ပြင်ဆင်နေပါသည်...")
                 try:
@@ -920,15 +927,20 @@ Story: {fc_story_text[:500]}"""
                             generated_clip = generate_pollinations_image(kw, i)
                             if generated_clip and os.path.exists(generated_clip): generated_clips.append(generated_clip)
                             time.sleep(2)
-                        if not generated_clips: st.error("❌ Visual Generation Failed. ပုံရိပ် ဖန်တီးမှု ပြဿနာရှိပါသည်။ Server က Rate Limit ကြောင့် ပိတ်ချလိုက်တာဖြစ်နိုင်ပါတယ်။ API Key ပြောင်းသုံးပါ သို့မဟုတ် ခဏစောင့်ပါ။");
-                        st.stop()
+                        if not generated_clips: 
+                            st.error("❌ Visual Generation Failed. ပုံရိပ် ဖန်တီးမှု ပြဿနာရှိပါသည်။ Server က Rate Limit ကြောင့် ပိတ်ချလိုက်တာဖြစ်နိုင်ပါတယ်။ API Key ပြောင်းသုံးပါ သို့မဟုတ် ခဏစောင့်ပါ။")
+                            st.stop()
 
                     pbar.progress(65, text="🎞️ ဗီဒီယိုများကို ပေါင်းစပ်နေပါသည်...")
                     with open("fc_concat.txt", "w") as f:
                         for c in generated_clips: f.write(f"file '{c}'\n")
                     res_concat = subprocess.run([FFMPEG_BINARY, "-y", "-stream_loop", "-1", "-f", "concat", "-safe", "0", "-i", "fc_concat.txt", "-t", str(fc_audio_dur), "-c", "copy", "fc_video_loop.mp4"], capture_output=True)
-                    if not os.path.exists("fc_video_loop.mp4"): st.error(f"❌ FFmpeg Concat Error. {res_concat.stderr.decode('utf-8', errors='ignore')}"); st.stop()
-                except Exception as e: st.error(f"Visual Error: {e}"); st.stop()
+                    if not os.path.exists("fc_video_loop.mp4"): 
+                        st.error(f"❌ FFmpeg Concat Error. {res_concat.stderr.decode('utf-8', errors='ignore')}")
+                        st.stop()
+                except Exception as e: 
+                    st.error(f"Visual Error: {e}")
+                    st.stop()
             
             with st.spinner("⏳ [အဆင့်၄/၅] စာတန်းထိုးများကို ချိန်ညှိနေပါသည်..."):
                 pbar.progress(70, text="📝 Timeline ချိန်ညှိနေပါသည်...")
@@ -941,17 +953,15 @@ Story: {fc_story_text[:500]}"""
                         pbar.progress(72, text="📝 Whisper ဖြင့် အသံအား တိကျစွာ ဖြတ်တောက်နေပါသည်...")
                         client_groq = Groq(api_key=groq_key_val)
                         
-                        # 1. Send Audio to Groq Whisper
                         with open("fc_audio.wav", "rb") as file:
                             transcription = client_groq.audio.transcriptions.create(
                                 file=("fc_audio.wav", file.read()),
                                 model="whisper-large-v3",
                                 response_format="verbose_json",
                                 language="my",
-                                timestamp_granularities=["word"] # Word-level timestamps
+                                timestamp_granularities=["word"] 
                             )
 
-                        # Helper function for Time format
                         def fmt_time(seconds): 
                             h = int(seconds // 3600)
                             m = int((seconds % 3600) // 60)
@@ -959,7 +969,6 @@ Story: {fc_story_text[:500]}"""
                             ms = int((seconds % 1) * 1000)
                             return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
-                        # Helper function to thoroughly clean script
                         def strip_audio_tags_pro(text):
                             text = re.sub(r'\[.*?\]', '', text)
                             text = re.sub(r'\{.*?\}', '', text)
@@ -969,7 +978,6 @@ Story: {fc_story_text[:500]}"""
                             text = re.sub(r'\u266a.*?\u266a', '', text)
                             return re.sub(r'\s+', ' ', text).strip()
 
-                        # 2. Extract Word Data from Whisper
                         whisper_words = []
                         if isinstance(transcription, dict):
                             if transcription.get('words'): whisper_words = transcription['words']
@@ -983,7 +991,6 @@ Story: {fc_story_text[:500]}"""
                                 seg_words = getattr(seg, 'words', []) or []
                                 whisper_words.extend(seg_words)
 
-                        # 3. Process the Text
                         clean_script = strip_audio_tags_pro(fc_story_text)
                         script_words = clean_script.split()
                         
@@ -992,10 +999,9 @@ Story: {fc_story_text[:500]}"""
                         raw_srt_str = ""
                         chunk_idx = 1
 
-                        # Check if we have enough data to sync
                         if total_sw > 0 and total_ww >= 3:
-                            chunk_size = 3 if fc_sub_short else 6 # 6 words for normal, 3 for short
-                            min_duration = 1.0 # Standard minimum duration
+                            chunk_size = 3 if fc_sub_short else 6 
+                            min_duration = 1.0 
                             
                             for i in range(0, total_sw, chunk_size):
                                 chunk_words = script_words[i:i + chunk_size]
@@ -1004,7 +1010,6 @@ Story: {fc_story_text[:500]}"""
                                 start_script_idx = i
                                 end_script_idx = min(i + len(chunk_words) - 1, total_sw - 1)
                                 
-                                # Proportional word mapping
                                 start_whisper_idx = int((start_script_idx / total_sw) * total_ww)
                                 end_whisper_idx = int((end_script_idx / total_sw) * total_ww)
                                 
@@ -1021,7 +1026,6 @@ Story: {fc_story_text[:500]}"""
                                     start_time = w_start.start
                                     end_time = w_end.end
                                     
-                                # Ensure Minimum Duration
                                 if end_time - start_time < min_duration:
                                     end_time = start_time + min_duration
                                     
@@ -1047,7 +1051,9 @@ Story: {fc_story_text[:500]}"""
                 pbar.progress(85, text="🎬 Master Rendering အလုပ်လုပ်နေပါသည်...")
                 try:
                     success, err_msg = render_premium_saas_video("fc_video_loop.mp4", "fc_audio.wav", fc_parsed, v_final, fc_ratio, use_bypass=True, subtitle_mode=fc_subtitle_mode, sub_position=fc_sub_position, sub_color=fc_sub_color, sub_size=fc_sub_size, sub_thickness=2.5, sub_bg=False, font_path=fc_selected_font)
-                    if not success: st.error(f"❌ Video Generation Output Failure! Internal Engine Log: {err_msg}"); st.stop()
+                    if not success: 
+                        st.error(f"❌ Video Generation Output Failure! Internal Engine Log: {err_msg}")
+                        st.stop()
 
                     if fc_bgm not in ["None (BGM မထည့်ပါ)"]:
                         bgm_path = os.path.join("bgm_tracks", random.choice(bgm_files) if "Auto" in fc_bgm else fc_bgm)
@@ -1100,7 +1106,8 @@ Story: {fc_story_text[:500]}"""
                             if os.path.exists("subtitles.srt"):
                                 st.markdown(get_download_link("subtitles.srt", "Faceless_Subs.srt", "Download Subtitles (.SRT)"), unsafe_allow_html=True)
                             st.markdown('</div>', unsafe_allow_html=True)
-                        else: st.error("❌ ဗီဒီယိုဖိုင်ကို ရှာမတွေ့ပါ။ Rendering တွင် ချို့ယွင်းချက် ရှိနိုင်ပါသည်။")
+                        else: 
+                            st.error("❌ ဗီဒီယိုဖိုင်ကို ရှာမတွေ့ပါ။ Rendering တွင် ချို့ယွင်းချက် ရှိနိုင်ပါသည်။")
 
                     with col_f2:
                         st.markdown("### 📝 Generated Story & Assets")
@@ -1117,7 +1124,9 @@ Story: {fc_story_text[:500]}"""
                                 st.markdown(get_download_link(st.session_state.thumb_path_B, "Thumb_B.jpg", "Download B"), unsafe_allow_html=True)
                         
                         st.text_area("ဇာတ်လမ်း:", value=fc_story_text, height=300, disabled=True)
-                except Exception as e: st.error(f"Render Error: {e}"); st.stop()
+                except Exception as e: 
+                    st.error(f"Render Error: {e}")
+                    st.stop()
 
 # =====================================================================
 # 📌 MODE 2 - VEO VIDEO STUDIO
